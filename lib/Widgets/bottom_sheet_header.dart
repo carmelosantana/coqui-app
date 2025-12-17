@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Widgets/flexible_text.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Widgets/flexible_text.dart';
 
-class OllamaBottomSheetHeader extends StatelessWidget {
+class BottomSheetHeader extends StatelessWidget {
   final String title;
 
-  const OllamaBottomSheetHeader({super.key, required this.title});
+  const BottomSheetHeader({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,7 @@ class OllamaBottomSheetHeader extends StatelessWidget {
         ),
         FlexibleText(
           title,
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ],
     );

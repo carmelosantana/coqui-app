@@ -1,3 +1,3 @@
-export 'server_settings.dart';
+export 'instance_settings.dart';
 export 'themes_settings.dart';
-export 'reins_settings.dart';
+export 'about_settings.dart';

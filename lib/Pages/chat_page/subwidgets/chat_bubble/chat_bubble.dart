@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'package:reins/Extensions/markdown_stylesheet_extension.dart';
-import 'package:reins/Models/ollama_message.dart';
+import 'package:coqui_app/Extensions/markdown_stylesheet_extension.dart';
+import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'chat_bubble_actions.dart';
-import 'chat_bubble_image.dart';
 import 'chat_bubble_menu.dart';
 import 'chat_bubble_think_block.dart';
 
 class ChatBubble extends StatelessWidget {
-  final OllamaMessage message;
+  final CoquiMessage message;
 
   const ChatBubble({
     super.key,
@@ -27,30 +26,13 @@ class ChatBubble extends StatelessWidget {
       menuChildren: [
         MenuItemButton(
           onPressed: actions.handleCopy,
-          leadingIcon: Icon(Icons.copy_outlined),
+          leadingIcon: const Icon(Icons.copy_outlined),
           child: const Text('Copy'),
         ),
         MenuItemButton(
           onPressed: () => actions.handleSelectText(context),
-          leadingIcon: Icon(Icons.select_all_outlined),
+          leadingIcon: const Icon(Icons.select_all_outlined),
           child: const Text('Select Text'),
-        ),
-        MenuItemButton(
-          onPressed: () => actions.handleRegenerate(context),
-          leadingIcon: Icon(Icons.refresh_outlined),
-          child: const Text('Regenerate'),
-        ),
-        Divider(),
-        MenuItemButton(
-          onPressed: () => actions.handleEdit(context),
-          closeOnActivate: false,
-          leadingIcon: Icon(Icons.edit_outlined),
-          child: const Text('Edit'),
-        ),
-        MenuItemButton(
-          onPressed: () => actions.handleDelete(context),
-          leadingIcon: Icon(Icons.delete_outline),
-          child: const Text('Delete'),
         ),
       ],
       child: _ChatBubbleBody(message: message),
@@ -59,9 +41,9 @@ class ChatBubble extends StatelessWidget {
 }
 
 class _ChatBubbleBody extends StatelessWidget {
-  final OllamaMessage message;
+  final CoquiMessage message;
 
-  const _ChatBubbleBody({super.key, required this.message});
+  const _ChatBubbleBody({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -71,15 +53,6 @@ class _ChatBubbleBody extends StatelessWidget {
         spacing: 8,
         crossAxisAlignment: bubbleAlignment,
         children: [
-          // If the message has an image attachment, display it
-          if (message.images != null && message.images!.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: message.images!
-                  .map((imageFile) => ChatBubbleImage(imageFile: imageFile))
-                  .toList(),
-            ),
           Container(
             padding: isSentFromUser ? const EdgeInsets.all(10.0) : null,
             constraints: BoxConstraints(
@@ -115,23 +88,19 @@ class _ChatBubbleBody extends StatelessWidget {
             ),
           ),
           Text(
-            TimeOfDay.fromDateTime(message.createdAt.toLocal()).format(context),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            TimeOfDay.fromDateTime(message.createdAt.toLocal())
+                .format(context),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  /// Returns true if the message is sent from the user.
-  bool get isSentFromUser => message.role == OllamaMessageRole.user;
+  bool get isSentFromUser => message.role == CoquiMessageRole.user;
 
-  /// Returns the alignment of the bubble.
-  ///
-  /// If the message is sent from the user, the alignment is [Alignment.centerRight].
-  /// Otherwise, the alignment is [Alignment.centerLeft].
   CrossAxisAlignment get bubbleAlignment =>
       isSentFromUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
 }
