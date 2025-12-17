@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-class ChatSelectModelButton extends StatelessWidget {
-  final String? currentModelName;
+class ChatSelectRoleButton extends StatelessWidget {
+  final String? currentRoleName;
   final void Function() onPressed;
 
-  const ChatSelectModelButton({
+  const ChatSelectRoleButton({
     super.key,
-    this.currentModelName,
+    this.currentRoleName,
     required this.onPressed,
   });
 
@@ -14,7 +14,7 @@ class ChatSelectModelButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       icon: const Icon(Icons.auto_awesome_outlined),
-      label: Text(currentModelName ?? 'Select a model to start'),
+      label: Text(currentRoleName ?? 'Select a role to start'),
       iconAlignment: IconAlignment.end,
       onPressed: onPressed,
     );

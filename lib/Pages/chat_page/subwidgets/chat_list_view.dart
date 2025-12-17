@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:reins/Models/ollama_message.dart';
+import 'package:coqui_app/Models/agent_activity_event.dart';
+import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:notification_centre/notification_centre.dart';
 
 import 'chat_bubble/chat_bubble.dart';
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Utils/observe_size.dart';
-import 'package:reins/Utils/retained_position_scroll_physics.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Utils/observe_size.dart';
+import 'package:coqui_app/Utils/retained_position_scroll_physics.dart';
 
 class ChatListView extends StatefulWidget {
-  final List<OllamaMessage> messages;
+  final List<CoquiMessage> messages;
   final bool isAwaitingReply;
   final Widget? error;
   final double? bottomPadding;
+  final List<AgentActivityEvent> agentActivity;
+  final String? turnSummary;
+  final bool isStreaming;
 
   const ChatListView({
     super.key,
@@ -20,6 +24,9 @@ class ChatListView extends StatefulWidget {
     required this.isAwaitingReply,
     this.error,
     this.bottomPadding,
+    this.agentActivity = const [],
+    this.turnSummary,
+    this.isStreaming = false,
   });
 
   @override
@@ -51,11 +58,7 @@ class _ChatListViewState extends State<ChatListView> {
   void didUpdateWidget(covariant ChatListView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Add to the post frame callback to ensure that the scroll offset is
-    // read after the widget has been updated.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Update the button visibility when the user switches chats,
-      // regenerates a message or delete a message.
       _updateScrollToBottomButtonVisibility();
     });
   }
@@ -90,10 +93,17 @@ class _ChatListViewState extends State<ChatListView> {
               SliverToBoxAdapter(
                 child: widget.error,
               ),
+            // Agent activity panel (shown during streaming)
+            if (widget.isStreaming && widget.agentActivity.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _AgentActivityPanel(
+                  activity: widget.agentActivity,
+                  turnSummary: widget.turnSummary,
+                ),
+              ),
             if (widget.isAwaitingReply)
               SliverToBoxAdapter(
                 child: Shimmer.fromColors(
-                  // TODO: Play with the colors to make it look better
                   baseColor: Theme.of(context).colorScheme.onPrimary,
                   highlightColor: Theme.of(context).colorScheme.onSurface,
                   period: const Duration(milliseconds: 2500),
@@ -102,6 +112,23 @@ class _ChatListViewState extends State<ChatListView> {
                       padding: EdgeInsets.all(10.0),
                       child: Text("Thinking"),
                     ),
+                  ),
+                ),
+              ),
+            // Turn summary (shown after streaming completes)
+            if (!widget.isStreaming && widget.turnSummary != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 25.0,
+                    vertical: 4.0,
+                  ),
+                  child: Text(
+                    widget.turnSummary!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -165,5 +192,123 @@ class _ChatListViewState extends State<ChatListView> {
       duration: const Duration(milliseconds: 150),
       curve: Curves.easeOut,
     );
+  }
+}
+
+/// Displays real-time agent activity during streaming.
+class _AgentActivityPanel extends StatelessWidget {
+  final List<AgentActivityEvent> activity;
+  final String? turnSummary;
+
+  const _AgentActivityPanel({
+    required this.activity,
+    this.turnSummary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Agent Activity',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...activity.map((event) => _ActivityEventRow(event: event)),
+          if (turnSummary != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text(
+                turnSummary!,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityEventRow extends StatelessWidget {
+  final AgentActivityEvent event;
+
+  const _ActivityEventRow({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            _iconForType(event.type),
+            size: 14,
+            color: _colorForType(context, event.type),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              event.description,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForType(AgentActivityType type) {
+    return switch (type) {
+      AgentActivityType.start => Icons.play_arrow_rounded,
+      AgentActivityType.iteration => Icons.loop_rounded,
+      AgentActivityType.toolCall => Icons.build_rounded,
+      AgentActivityType.toolResult => Icons.check_circle_outline,
+      AgentActivityType.childStart => Icons.account_tree_rounded,
+      AgentActivityType.childEnd => Icons.account_tree_rounded,
+      AgentActivityType.error => Icons.error_outline,
+      AgentActivityType.info => Icons.info_outline,
+    };
+  }
+
+  Color _colorForType(BuildContext context, AgentActivityType type) {
+    return switch (type) {
+      AgentActivityType.error => Theme.of(context).colorScheme.error,
+      AgentActivityType.toolCall => Theme.of(context).colorScheme.tertiary,
+      AgentActivityType.toolResult => Theme.of(context).colorScheme.primary,
+      _ => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
   }
 }

@@ -1,6 +1,5 @@
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter/material.dart';
-import 'package:reins/Models/settings_route_arguments.dart';
 
 class ChatWelcome extends StatelessWidget {
   final CrossFadeState showingState;
@@ -30,7 +29,7 @@ class ChatWelcome extends StatelessWidget {
         scale: secondChildScale,
         duration: const Duration(milliseconds: 100),
         onEnd: onSecondChildScaleEnd,
-        child: _ChatConfigureServerAddressButton(),
+        child: _ChatConfigureServerButton(),
       ),
       layoutBuilder: (topChild, topChildKey, bottomChild, bottomChildKey) {
         return Stack(
@@ -39,14 +38,14 @@ class ChatWelcome extends StatelessWidget {
             Positioned(
               key: topChildKey,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: topChild,
               ),
             ),
             Positioned(
               key: bottomChildKey,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: bottomChild,
               ),
             ),
@@ -67,24 +66,24 @@ class _ChatWelcomeText extends StatelessWidget {
     return AnimatedTextKit(
       animatedTexts: [
         TyperAnimatedText(
-          'Welcome to Reins!',
+          'Welcome to Coqui!',
           speed: const Duration(milliseconds: 100),
         ),
         TyperAnimatedText(
-          'Configure a server address to start.',
+          'Add a server to get started.',
           speed: const Duration(milliseconds: 100),
         ),
       ],
       displayFullTextOnTap: true,
       isRepeatingAnimation: false,
-      pause: Duration(milliseconds: 1500),
+      pause: const Duration(milliseconds: 1500),
       stopPauseOnTap: true,
       onFinished: onFinished,
     );
   }
 }
 
-class _ChatConfigureServerAddressButton extends StatelessWidget {
+class _ChatConfigureServerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
@@ -92,14 +91,10 @@ class _ChatConfigureServerAddressButton extends StatelessWidget {
         Icons.warning_amber_rounded,
         color: Colors.amber,
       ),
-      label: Text('Tap to configure a server address'),
+      label: const Text('Tap to add a Coqui server'),
       iconAlignment: IconAlignment.start,
       onPressed: () {
-        Navigator.pushNamed(
-          context,
-          '/settings',
-          arguments: SettingsRouteArguments(autoFocusServerAddress: true),
-        );
+        Navigator.pushNamed(context, '/settings');
       },
     );
   }

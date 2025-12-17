@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Widgets/chat_configure_bottom_sheet.dart';
-import 'package:reins/Widgets/ollama_bottom_sheet_header.dart';
-import 'package:reins/Widgets/selection_bottom_sheet.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 import 'package:provider/provider.dart';
-import 'package:reins/Providers/chat_provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
 class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -20,16 +19,16 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Column(
         children: [
           Text(AppConstants.appName, style: GoogleFonts.pacifico()),
-          if (chatProvider.currentChat != null)
+          if (chatProvider.currentSession != null)
             InkWell(
               onTap: () {
-                _handleModelSelectionButton(context);
+                _handleRoleSelectionButton(context);
               },
-              customBorder: StadiumBorder(),
+              customBorder: const StadiumBorder(),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: Text(
-                  chatProvider.currentChat!.model,
+                  chatProvider.currentSession!.modelRole,
                   style: GoogleFonts.kodeMono(
                     textStyle: Theme.of(context).textTheme.labelSmall,
                   ),
@@ -39,58 +38,66 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.tune),
-          onPressed: () {
-            _handleConfigureButton(context);
-          },
-        ),
+        if (chatProvider.currentSession != null)
+          IconButton(
+            icon: const Icon(Icons.tune),
+            onPressed: () {
+              _handleConfigureButton(context);
+            },
+          ),
       ],
       forceMaterialTransparency: !ResponsiveBreakpoints.of(context).isMobile,
     );
   }
 
-  Future<void> _handleModelSelectionButton(BuildContext context) async {
+  Future<void> _handleRoleSelectionButton(BuildContext context) async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    final selectedModelName = await showSelectionBottomSheet(
-      key: ValueKey("${Hive.box('settings').get('serverAddress')}-string"),
+    await showSelectionBottomSheet<CoquiRole>(
       context: context,
-      header: OllamaBottomSheetHeader(title: "Change The Model"),
+      header: const BottomSheetHeader(title: "Available Roles"),
       fetchItems: () async {
-        final models = await chatProvider.fetchAvailableModels();
-
-        return models.map((model) => model.name).toList();
+        return await chatProvider.fetchAvailableRoles();
       },
-      currentSelection: chatProvider.currentChat!.model,
+      currentSelection: null,
     );
-
-    await chatProvider.updateCurrentChat(newModel: selectedModelName);
   }
 
   Future<void> _handleConfigureButton(BuildContext context) async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    final arguments = chatProvider.currentChatConfiguration;
-
-    final ChatConfigureBottomSheetAction? action = await showModalBottomSheet(
+    final action = await showModalBottomSheet<String>(
       context: context,
-      isScrollControlled: true,
       builder: (BuildContext context) {
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets,
-          child: ChatConfigureBottomSheet(arguments: arguments),
+        return SafeArea(
+          minimum: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const BottomSheetHeader(title: 'Session Options'),
+              const Divider(),
+              if (chatProvider.lastTurnSummary != null)
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('Last Turn'),
+                  subtitle: Text(chatProvider.lastTurnSummary!),
+                ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete Session'),
+                textColor: Theme.of(context).colorScheme.error,
+                iconColor: Theme.of(context).colorScheme.error,
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+            ],
+          ),
         );
       },
     );
 
-    // If the user deletes the chat, we don't need to update the chat.
-    if (action == ChatConfigureBottomSheetAction.delete) return;
-
-    await chatProvider.updateCurrentChat(
-      newSystemPrompt: arguments.systemPrompt,
-      newOptions: arguments.chatOptions,
-    );
+    if (action == 'delete') {
+      await chatProvider.deleteCurrentSession();
+    }
   }
 
   @override

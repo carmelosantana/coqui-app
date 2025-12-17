@@ -1,458 +1,447 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:notification_centre/notification_centre.dart';
 
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Models/chat_configure_arguments.dart';
-import 'package:reins/Models/ollama_chat.dart';
-import 'package:reins/Models/ollama_exception.dart';
-import 'package:reins/Models/ollama_message.dart';
-import 'package:reins/Models/ollama_model.dart';
-import 'package:reins/Services/database_service.dart';
-import 'package:reins/Services/ollama_service.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/agent_activity_event.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
+import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/sse_event.dart';
+import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Services/database_service.dart';
 
+/// Central state manager for chat interactions with the Coqui API.
+///
+/// Manages sessions, messages, SSE streaming, and real-time agent activity.
 class ChatProvider extends ChangeNotifier {
-  final OllamaService _ollamaService;
+  final CoquiApiService _apiService;
   final DatabaseService _databaseService;
 
-  List<OllamaMessage> _messages = [];
-  List<OllamaMessage> get messages => _messages;
+  // ── Session state ───────────────────────────────────────────────────
 
-  List<OllamaChat> _chats = [];
-  List<OllamaChat> get chats => _chats;
+  List<CoquiSession> _sessions = [];
+  List<CoquiSession> get sessions => _sessions;
 
-  int _currentChatIndex = -1;
-  int get selectedDestination => _currentChatIndex + 1;
+  int _currentSessionIndex = -1;
+  int get selectedDestination => _currentSessionIndex + 1;
 
-  OllamaChat? get currentChat =>
-      _currentChatIndex == -1 ? null : _chats[_currentChatIndex];
+  CoquiSession? get currentSession =>
+      _currentSessionIndex == -1 ? null : _sessions[_currentSessionIndex];
 
-  final Map<String, OllamaMessage?> _activeChatStreams = {};
+  // ── Message state ───────────────────────────────────────────────────
 
-  bool get isCurrentChatStreaming =>
-      _activeChatStreams.containsKey(currentChat?.id);
+  List<CoquiMessage> _messages = [];
+  List<CoquiMessage> get messages => _messages;
 
-  bool get isCurrentChatThinking =>
-      currentChat != null &&
-      _activeChatStreams.containsKey(currentChat?.id) &&
-      _activeChatStreams[currentChat?.id] == null;
+  /// Displayable messages (excludes tool messages).
+  List<CoquiMessage> get displayMessages =>
+      _messages.where((m) => m.isDisplayable).toList();
 
-  /// A map of chat errors, indexed by chat ID.
-  final Map<String, OllamaException> _chatErrors = {};
+  // ── Streaming state ────────────────────────────────────────────────
 
-  /// The current chat error. This is the error associated with the current chat.
-  /// If there is no error, this will be `null`.
-  ///
-  /// This is used to display error messages in the chat view.
-  OllamaException? get currentChatError => _chatErrors[currentChat?.id];
+  final Set<String> _activeStreams = {};
 
-  /// The current chat configuration.
-  ChatConfigureArguments get currentChatConfiguration {
-    if (currentChat == null) {
-      return _emptyChatConfiguration ?? ChatConfigureArguments.defaultArguments;
-    } else {
-      return ChatConfigureArguments(
-        systemPrompt: currentChat!.systemPrompt,
-        chatOptions: currentChat!.options,
-      );
-    }
-  }
+  bool get isCurrentSessionStreaming =>
+      _activeStreams.contains(currentSession?.id);
 
-  /// The chat configuration for the empty chat.
-  ChatConfigureArguments? _emptyChatConfiguration;
+  bool get isCurrentSessionThinking =>
+      currentSession != null &&
+      _activeStreams.contains(currentSession?.id) &&
+      _streamingContent[currentSession?.id] == null;
+
+  /// Content being accumulated from SSE 'done' event.
+  final Map<String, String> _streamingContent = {};
+
+  /// Whether a stream was cancelled by the user.
+  final Set<String> _cancelledStreams = {};
+
+  // ── Agent activity state ───────────────────────────────────────────
+
+  final List<AgentActivityEvent> _currentTurnActivity = [];
+  List<AgentActivityEvent> get currentTurnActivity => _currentTurnActivity;
+
+  int _currentIteration = 0;
+  int get currentIteration => _currentIteration;
+
+  /// Summary from the last completed turn.
+  String? _lastTurnSummary;
+  String? get lastTurnSummary => _lastTurnSummary;
+
+  // ── Error state ────────────────────────────────────────────────────
+
+  final Map<String, CoquiException> _sessionErrors = {};
+
+  CoquiException? get currentSessionError =>
+      _sessionErrors[currentSession?.id];
+
+  // ── Constructor ────────────────────────────────────────────────────
 
   ChatProvider({
-    required OllamaService ollamaService,
+    required CoquiApiService apiService,
     required DatabaseService databaseService,
-  })  : _ollamaService = ollamaService,
+  })  : _apiService = apiService,
         _databaseService = databaseService {
     _initialize();
   }
 
   Future<void> _initialize() async {
-    _updateOllamaServiceAddress();
-
-    await _databaseService.open("ollama_chat.db");
-    _chats = await _databaseService.getAllChats();
+    await _databaseService.open('coqui_app.db');
+    // Load cached sessions
+    _sessions = await _databaseService.getSessions();
     notifyListeners();
   }
 
-  void destinationChatSelected(int destination) {
-    _currentChatIndex = destination - 1;
+  // ── Navigation ────────────────────────────────────────────────────
+
+  void destinationSelected(int destination) {
+    _currentSessionIndex = destination - 1;
 
     if (destination == 0) {
       _resetChat();
     } else {
-      _loadCurrentChat();
+      _loadCurrentSession();
     }
 
     notifyListeners();
   }
 
   void _resetChat() {
-    _currentChatIndex = -1;
+    _currentSessionIndex = -1;
+    _messages.clear();
+    _currentTurnActivity.clear();
+    _currentIteration = 0;
+    _lastTurnSummary = null;
+    notifyListeners();
+  }
+
+  // ── Session management ────────────────────────────────────────────
+
+  /// Load sessions from the server and sync to local cache.
+  Future<void> refreshSessions() async {
+    try {
+      final serverSessions = await _apiService.listSessions(limit: 100);
+
+      // Preserve local titles
+      for (final session in serverSessions) {
+        final cached = await _databaseService.getSession(session.id);
+        if (cached?.title != null) {
+          session.title = cached!.title;
+        }
+      }
+
+      _sessions = serverSessions;
+
+      // Cache all sessions
+      for (final session in serverSessions) {
+        await _databaseService.upsertSession(session);
+      }
+
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors['global'] = e;
+      notifyListeners();
+    } catch (_) {
+      // Fall back to cached sessions
+    }
+  }
+
+  /// Create a new session with the given role.
+  Future<void> createNewSession(CoquiRole role) async {
+    final session = await _apiService.createSession(modelRole: role.name);
+
+    _sessions.insert(0, session);
+    _currentSessionIndex = 0;
+
+    await _databaseService.upsertSession(session);
 
     _messages.clear();
+    _currentTurnActivity.clear();
 
     notifyListeners();
   }
 
-  Future<void> _loadCurrentChat() async {
-    _messages = await _databaseService.getMessages(currentChat!.id);
-
-    // Add the streaming message to the chat if it exists
-    final streamingMessage = _activeChatStreams[currentChat!.id];
-    if (streamingMessage != null) {
-      _messages.add(streamingMessage);
-    }
-
-    // Unfocus the text field to dismiss the keyboard
-    FocusManager.instance.primaryFocus?.unfocus();
-
-    notifyListeners();
-  }
-
-  Future<void> createNewChat(OllamaModel model) async {
-    final chat = await _databaseService.createChat(model.name);
-
-    _chats.insert(0, chat);
-    _currentChatIndex = 0;
-
-    if (_emptyChatConfiguration != null) {
-      await updateCurrentChat(
-        newSystemPrompt: _emptyChatConfiguration!.systemPrompt,
-        newOptions: _emptyChatConfiguration!.chatOptions,
-      );
-
-      _emptyChatConfiguration = null;
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> updateCurrentChat({
-    String? newModel,
-    String? newTitle,
-    String? newSystemPrompt,
-    OllamaChatOptions? newOptions,
-  }) async {
-    await updateChat(
-      currentChat,
-      newModel: newModel,
-      newTitle: newTitle,
-      newSystemPrompt: newSystemPrompt,
-      newOptions: newOptions,
-    );
-  }
-
-  /// Updates the chat with the given parameters.
-  ///
-  /// If the chat is `null`, it updates the empty chat configuration.
-  Future<void> updateChat(
-    OllamaChat? chat, {
-    String? newModel,
-    String? newTitle,
-    String? newSystemPrompt,
-    OllamaChatOptions? newOptions,
-  }) async {
-    if (chat == null) {
-      final chatOptions = newOptions ?? _emptyChatConfiguration?.chatOptions;
-      _emptyChatConfiguration = ChatConfigureArguments(
-        systemPrompt: newSystemPrompt ?? _emptyChatConfiguration?.systemPrompt,
-        chatOptions: chatOptions ?? OllamaChatOptions(),
-      );
-    } else {
-      await _databaseService.updateChat(
-        chat,
-        newModel: newModel,
-        newTitle: newTitle,
-        newSystemPrompt: newSystemPrompt,
-        newOptions: newOptions,
-      );
-
-      final chatIndex = _chats.indexWhere((c) => c.id == chat.id);
-
-      if (chatIndex != -1) {
-        _chats[chatIndex] = (await _databaseService.getChat(chat.id))!;
-        notifyListeners();
-      } else {
-        throw OllamaException("Chat not found.");
-      }
-    }
-  }
-
-  Future<void> deleteCurrentChat() async {
-    final chat = currentChat;
-    if (chat == null) return;
+  /// Delete the current session.
+  Future<void> deleteCurrentSession() async {
+    final session = currentSession;
+    if (session == null) return;
 
     _resetChat();
-
-    _chats.remove(chat);
-    _activeChatStreams.remove(chat.id);
-
-    await _databaseService.deleteChat(chat.id);
-  }
-
-  Future<void> sendPrompt(String text, {List<File>? images}) async {
-    // Save the chat where the prompt was sent
-    final associatedChat = currentChat!;
-
-    // Create a user prompt message and add it to the chat
-    final prompt = OllamaMessage(
-      text.trim(),
-      images: images,
-      role: OllamaMessageRole.user,
-    );
-    _messages.add(prompt);
-
-    notifyListeners();
-
-    // Save the user prompt to the database
-    await _databaseService.addMessage(prompt, chat: associatedChat);
-
-    // Initialize the chat stream with the messages in the chat
-    await _initializeChatStream(associatedChat);
-  }
-
-  Future<void> _initializeChatStream(OllamaChat associatedChat) async {
-    // Send a notification to inform generation begin
-    NotificationCenter().postNotification(NotificationNames.generationBegin);
-
-    // Clear the active chat streams to cancel the previous stream
-    _activeChatStreams.remove(associatedChat.id);
-
-    // Clear the error message associated with the chat
-    if (_chatErrors.remove(associatedChat.id) != null) {
-      notifyListeners();
-      // Wait for a short time to show the user that the error message is cleared
-      await Future.delayed(Duration(milliseconds: 250));
-    }
-
-    // Update the chat list to show the latest chat at the top
-    _moveCurrentChatToTop();
-
-    // Add the chat to the active chat streams to show the thinking indicator
-    _activeChatStreams[associatedChat.id] = null;
-    // Notify the listeners to show the thinking indicator
-    notifyListeners();
-
-    // Stream the Ollama message
-    OllamaMessage? ollamaMessage;
+    _sessions.remove(session);
 
     try {
-      ollamaMessage = await _streamOllamaMessage(associatedChat);
-    } on OllamaException catch (error) {
-      _chatErrors[associatedChat.id] = error;
+      await _apiService.deleteSession(session.id);
+    } catch (_) {
+      // Session may already be deleted server-side
+    }
+
+    await _databaseService.deleteSession(session.id);
+  }
+
+  // ── Message loading ───────────────────────────────────────────────
+
+  Future<void> _loadCurrentSession() async {
+    if (currentSession == null) return;
+
+    try {
+      // Fetch messages from server
+      final serverMessages = await _apiService.listMessages(currentSession!.id);
+      _messages = serverMessages;
+
+      // Cache locally
+      await _databaseService.upsertMessages(
+        serverMessages,
+        sessionId: currentSession!.id,
+      );
+    } catch (_) {
+      // Fall back to cached messages
+      _messages = await _databaseService.getMessages(currentSession!.id);
+    }
+
+    _currentTurnActivity.clear();
+    _currentIteration = 0;
+    _lastTurnSummary = null;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    notifyListeners();
+  }
+
+  // ── Prompt submission ─────────────────────────────────────────────
+
+  Future<void> sendPrompt(String text) async {
+    final session = currentSession;
+    if (session == null) return;
+
+    // Add optimistic user message
+    final userMessage = CoquiMessage(
+      id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
+      content: text,
+      role: CoquiMessageRole.user,
+    );
+    _messages.add(userMessage);
+    notifyListeners();
+
+    // Generate title from first prompt if needed
+    if (session.title == null || session.title!.isEmpty) {
+      session.title = CoquiSession.generateTitle(text);
+      await _databaseService.updateSessionTitle(session.id, session.title!);
+      notifyListeners();
+    }
+
+    // Start streaming
+    await _initializeStream(session, text);
+  }
+
+  Future<void> _initializeStream(CoquiSession session, String prompt) async {
+    NotificationCenter().postNotification(NotificationNames.generationBegin);
+
+    // Cancel any existing stream for this session
+    _cancelStream(session.id);
+
+    // Clear errors
+    _sessionErrors.remove(session.id);
+
+    // Move session to top
+    _moveCurrentSessionToTop();
+
+    // Set thinking state
+    _activeStreams.add(session.id);
+    _currentTurnActivity.clear();
+    _currentIteration = 0;
+    _lastTurnSummary = null;
+    notifyListeners();
+
+    try {
+      await _processStream(session, prompt);
+    } on CoquiException catch (e) {
+      _sessionErrors[session.id] = e;
     } on SocketException catch (_) {
-      _chatErrors[associatedChat.id] = OllamaException(
+      _sessionErrors[session.id] = CoquiException(
         'Network connection lost. Check your server address or internet connection.',
       );
-    } catch (error) {
-      _chatErrors[associatedChat.id] = OllamaException("Something went wrong.");
+    } catch (e) {
+      _sessionErrors[session.id] = CoquiException('Something went wrong: $e');
     } finally {
-      // Remove the chat from the active chat streams
-      _activeChatStreams.remove(associatedChat.id);
+      _activeStreams.remove(session.id);
+      _streamingContent.remove(session.id);
+      _cancelledStreams.remove(session.id);
       notifyListeners();
-    }
-
-    // Save the Ollama message to the database
-    if (ollamaMessage != null) {
-      await _databaseService.addMessage(ollamaMessage, chat: associatedChat);
     }
   }
 
-  Future<OllamaMessage?> _streamOllamaMessage(OllamaChat associatedChat) async {
-    if (_messages.isEmpty) return null;
+  Future<void> _processStream(CoquiSession session, String prompt) async {
+    final stream = _apiService.sendPrompt(session.id, prompt);
 
-    final stream = _ollamaService.chatStream(_messages, chat: associatedChat);
+    String accumulatedContent = '';
+    CoquiMessage? assistantMessage;
 
-    OllamaMessage? streamingMessage;
-    OllamaMessage? receivedMessage;
-
-    await for (receivedMessage in stream) {
-      // If the chat id is not in the active chat streams, it means the stream
-      // is cancelled by the user. So, we need to break the loop.
-      if (_activeChatStreams.containsKey(associatedChat.id) == false) {
-        streamingMessage?.createdAt = DateTime.now();
-        return streamingMessage;
+    await for (final event in stream) {
+      // Check if stream was cancelled
+      if (_cancelledStreams.contains(session.id)) {
+        break;
       }
 
-      // Ignore empty initial messages, preventing disruption of the thinking indicator
-      if (receivedMessage.content.isEmpty && streamingMessage == null) {
-        continue;
-      }
+      switch (event.type) {
+        case SseEventType.agentStart:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
 
-      if (streamingMessage == null) {
-        // Keep the first received message to add the content of the following messages
-        streamingMessage = receivedMessage;
+        case SseEventType.iteration:
+          _currentIteration = event.iterationNumber;
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
 
-        // Update the active chat streams key with the ollama message
-        // to be able to show the stream in the chat.
-        // We also use this when the user switches between chats while streaming.
-        _activeChatStreams[associatedChat.id] = streamingMessage;
+        case SseEventType.toolCall:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
 
-        // Be sure the user is in the same chat while the initial message is received
-        if (associatedChat.id == currentChat?.id) {
-          _messages.add(streamingMessage);
-        }
-      } else {
-        streamingMessage.content += receivedMessage.content;
+        case SseEventType.toolResult:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
+
+        case SseEventType.childStart:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
+
+        case SseEventType.childEnd:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          break;
+
+        case SseEventType.done:
+          accumulatedContent = event.content;
+          _streamingContent[session.id] = accumulatedContent;
+
+          if (assistantMessage == null) {
+            assistantMessage = CoquiMessage(
+              id: 'stream_${DateTime.now().millisecondsSinceEpoch}',
+              content: accumulatedContent,
+              role: CoquiMessageRole.assistant,
+            );
+            _messages.add(assistantMessage);
+          } else {
+            // Update existing message content
+            final index = _messages.indexOf(assistantMessage);
+            if (index >= 0) {
+              _messages[index] = CoquiMessage(
+                id: assistantMessage.id,
+                content: accumulatedContent,
+                role: CoquiMessageRole.assistant,
+                createdAt: assistantMessage.createdAt,
+              );
+              assistantMessage = _messages[index];
+            }
+          }
+          break;
+
+        case SseEventType.error:
+          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          _sessionErrors[session.id] = CoquiException(event.errorMessage);
+          break;
+
+        case SseEventType.complete:
+          // Build turn summary
+          final parts = <String>[];
+          final iterations = event.data['iterations'] as int? ?? 0;
+          final tools = event.toolsUsed;
+          final childCount = event.data['child_agent_count'] as int? ?? 0;
+          final tokens = event.totalTokens;
+          final duration = event.durationMs;
+
+          if (iterations > 0) parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
+          if (tools.isNotEmpty) parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
+          if (childCount > 0) parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
+          if (tokens > 0) parts.add('$tokens tokens');
+          if (duration > 0) {
+            final secs = (duration / 1000).toStringAsFixed(1);
+            parts.add('${secs}s');
+          }
+          _lastTurnSummary = parts.join(' · ');
+          break;
+
+        case SseEventType.unknown:
+          break;
       }
 
       notifyListeners();
     }
 
-    if (receivedMessage != null) {
-      // Update the metadata of the streaming message with the last received message
-      streamingMessage?.updateMetadataFrom(receivedMessage);
+    // After stream completes, re-fetch messages from server to get real IDs
+    try {
+      final serverMessages = await _apiService.listMessages(session.id);
+      _messages = serverMessages;
+      await _databaseService.upsertMessages(serverMessages, sessionId: session.id);
+    } catch (_) {
+      // Keep the streaming messages if re-fetch fails
     }
 
-    // Update created at time to the current time when the stream is finished
-    streamingMessage?.createdAt = DateTime.now();
-
-    return streamingMessage;
-  }
-
-  Future<void> regenerateMessage(OllamaMessage message) async {
-    final associatedChat = currentChat!;
-
-    final messageIndex = _messages.indexOf(message);
-    if (messageIndex == -1) return;
-
-    final includeMessage = (message.role == OllamaMessageRole.user ? 1 : 0);
-
-    final stayedMessages = _messages.sublist(0, messageIndex + includeMessage);
-    final removeMessages = _messages.sublist(messageIndex + includeMessage);
-
-    _messages = stayedMessages;
     notifyListeners();
-
-    await _databaseService.deleteMessages(removeMessages);
-
-    // Reinitialize the chat stream with the messages in the chat
-    await _initializeChatStream(associatedChat);
   }
 
+  /// Retry the last prompt.
   Future<void> retryLastPrompt() async {
-    if (_messages.isEmpty) return;
+    if (_messages.isEmpty || currentSession == null) return;
 
-    final associatedChat = currentChat!;
-
-    if (_messages.last.role == OllamaMessageRole.assistant) {
-      final message = _messages.removeLast();
-      await _databaseService.deleteMessage(message.id);
+    // Find the last user message
+    CoquiMessage? lastUserMessage;
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      if (_messages[i].role == CoquiMessageRole.user) {
+        lastUserMessage = _messages[i];
+        break;
+      }
     }
 
-    // Reinitialize the chat stream with the messages in the chat
-    await _initializeChatStream(associatedChat);
+    if (lastUserMessage == null) return;
 
-    notifyListeners();
+    // Clear errors
+    _sessionErrors.remove(currentSession!.id);
+
+    // Re-send the prompt
+    await _initializeStream(currentSession!, lastUserMessage.content);
   }
 
-  Future<void> updateMessage(
-    OllamaMessage message, {
-    String? newContent,
-  }) async {
-    message.content = newContent ?? message.content;
-    notifyListeners();
-
-    await _databaseService.updateMessage(message, newContent: newContent);
-  }
-
-  Future<void> deleteMessage(OllamaMessage message) async {
-    await _databaseService.deleteMessage(message.id);
-
-    // If the message is in the chat, remove it from the chat
-    if (_messages.remove(message)) {
-      notifyListeners();
-    }
-  }
-
+  /// Cancel the current streaming operation.
   void cancelCurrentStreaming() {
-    _activeChatStreams.remove(currentChat?.id);
-    notifyListeners();
-  }
-
-  void _moveCurrentChatToTop() {
-    if (_currentChatIndex == 0) return;
-
-    final chat = _chats.removeAt(_currentChatIndex);
-    _chats.insert(0, chat);
-    _currentChatIndex = 0;
-  }
-
-  Future<List<OllamaModel>> fetchAvailableModels() async {
-    return await _ollamaService.listModels();
-  }
-
-  void _updateOllamaServiceAddress() {
-    final settingsBox = Hive.box('settings');
-    _ollamaService.baseUrl = settingsBox.get('serverAddress');
-
-    settingsBox.listenable(keys: ["serverAddress"]).addListener(() {
-      _ollamaService.baseUrl = settingsBox.get('serverAddress');
-
-      // This will update empty chat state to dismiss "Tap to configure server address" message
+    if (currentSession != null) {
+      _cancelStream(currentSession!.id);
       notifyListeners();
-    });
+    }
   }
 
-  Future<void> saveAsNewModel(String modelName) async {
-    final associatedChat = currentChat;
-    if (associatedChat == null) {
-      // TODO: Empty chat should be saved as a new model.
-      throw OllamaException("No chat is selected.");
-    }
-
-    await _ollamaService.createModel(
-      modelName,
-      chat: associatedChat,
-      messages: _messages.toList(),
-    );
+  void _cancelStream(String sessionId) {
+    _cancelledStreams.add(sessionId);
+    _activeStreams.remove(sessionId);
+    _streamingContent.remove(sessionId);
   }
 
-  Future<void> generateTitleForCurrentChat() async {
-    final associatedChat = currentChat;
-    final message = _messages.firstOrNull;
-    if (associatedChat == null || message == null) return;
+  // ── Session navigation helpers ────────────────────────────────────
 
-    // Create a temp chat with necessary system prompt
-    final chat = OllamaChat(
-      model: associatedChat.model,
-      systemPrompt: GenerateTitleConstants.systemPrompt,
-    );
+  void _moveCurrentSessionToTop() {
+    if (_currentSessionIndex <= 0) return;
 
-    // Generate a title for the message
-    final stream = _ollamaService.generateStream(
-      GenerateTitleConstants.prompt + message.content,
-      chat: chat,
-    );
+    final session = _sessions.removeAt(_currentSessionIndex);
+    _sessions.insert(0, session);
+    _currentSessionIndex = 0;
+  }
 
-    var title = "";
-    await for (final titleMessage in stream) {
-      // Ignore empty initial messages, preventing empty title
-      if (title.isEmpty && titleMessage.content.isEmpty) {
-        continue;
-      }
+  // ── Roles ─────────────────────────────────────────────────────────
 
-      title += titleMessage.content;
+  /// Fetch available roles from the server.
+  Future<List<CoquiRole>> fetchAvailableRoles() async {
+    return await _apiService.getRoles();
+  }
 
-      // If <think> tag exists, do not stream chat title
-      if (title.startsWith("<think>")) {
-        await updateChat(associatedChat, newTitle: "Thinking for a title...");
-      } else {
-        await updateChat(associatedChat, newTitle: title);
-      }
-    }
+  // ── Instance switching ────────────────────────────────────────────
 
-    // Remove <think> tag and its content
-    if (title.startsWith("<think>")) {
-      title = title.replaceAll(RegExp(r'<think>.*?</think>', dotAll: true), '');
-    }
+  /// Called when the active instance changes.
+  Future<void> onInstanceChanged() async {
+    _resetChat();
+    _sessions.clear();
+    _sessionErrors.clear();
+    notifyListeners();
 
-    // Save the title as the chat title
-    await updateChat(associatedChat, newTitle: title.trim());
+    await refreshSessions();
   }
 }
