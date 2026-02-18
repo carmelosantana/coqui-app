@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/request_state.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Services/coqui_api_service.dart';
 
 class InstanceSettings extends StatefulWidget {
   const InstanceSettings({super.key});
@@ -133,9 +133,7 @@ class _InstanceTile extends StatelessWidget {
     return ListTile(
       leading: Icon(
         instance.isActive ? Icons.cloud_done : Icons.cloud_outlined,
-        color: instance.isActive
-            ? Theme.of(context).colorScheme.primary
-            : null,
+        color: instance.isActive ? Theme.of(context).colorScheme.primary : null,
       ),
       title: Text(instance.name),
       subtitle: Text(instance.baseUrl),
@@ -187,6 +185,7 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
 
   RequestState _connectionState = RequestState.uninitialized;
   String? _connectionError;
+  String? _apiKeyError;
 
   @override
   void initState() {
@@ -244,9 +243,10 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
             TextField(
               controller: _apiKeyController,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'API Key (optional)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'API Key',
+                border: const OutlineInputBorder(),
+                errorText: _apiKeyError,
               ),
             ),
             const SizedBox(height: 16),
@@ -308,31 +308,25 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
       return;
     }
 
+    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _apiKeyError = 'API key is required.';
+        _connectionState = RequestState.error;
+      });
+      return;
+    }
+
     setState(() {
       _connectionState = RequestState.loading;
       _connectionError = null;
+      _apiKeyError = null;
     });
 
     try {
-      final uri = Uri.parse(url);
-      final healthUri = uri.replace(path: '/health');
-
-      final request = http.Request('GET', healthUri);
-      final apiKey = _apiKeyController.text.trim();
-      if (apiKey.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $apiKey';
-      }
-
-      final response = await http.Client()
-          .send(request)
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        _connectionState = RequestState.success;
-      } else {
-        _connectionState = RequestState.error;
-        _connectionError = 'Server returned status ${response.statusCode}';
-      }
+      final testService = CoquiApiService(baseUrl: url, apiKey: apiKey);
+      await testService.healthCheck();
+      _connectionState = RequestState.success;
     } on SocketException catch (_) {
       _connectionState = RequestState.error;
       _connectionError = 'Could not connect to server.';
@@ -347,10 +341,16 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
   void _handleSave() {
     final name = _nameController.text.trim();
     final url = _urlController.text.trim();
+    final apiKey = _apiKeyController.text.trim();
 
     if (name.isEmpty || url.isEmpty) return;
 
-    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _apiKeyError = 'API key is required.';
+      });
+      return;
+    }
 
     final instance = CoquiInstance(
       id: widget.existing?.id ?? const Uuid().v4(),

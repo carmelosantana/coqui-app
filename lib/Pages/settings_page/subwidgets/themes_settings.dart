@@ -58,10 +58,6 @@ class _ThemesSettingsState extends State<ThemesSettings> {
           runSpacing: 10,
           children: [
             _ThemeButton(
-              seedColor: Colors.red,
-              onPressed: () => _settingsBox.put("color", Colors.red),
-            ),
-            _ThemeButton(
               seedColor: Colors.green,
               onPressed: () => _settingsBox.put("color", Colors.green),
             ),
@@ -76,6 +72,10 @@ class _ThemesSettingsState extends State<ThemesSettings> {
             _ThemeButton(
               seedColor: Colors.orange,
               onPressed: () => _settingsBox.put("color", Colors.orange),
+            ),
+            _ThemeButton(
+              seedColor: Colors.red,
+              onPressed: () => _settingsBox.put("color", Colors.red),
             ),
             _ThemeButton(
               seedColor: Colors.grey,
