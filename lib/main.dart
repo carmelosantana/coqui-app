@@ -80,7 +80,7 @@ class CoquiApp extends StatelessWidget {
               brightness:
                   _brightness ?? MediaQuery.platformBrightnessOf(context),
               dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-              seedColor: box.get('color', defaultValue: Colors.grey),
+              seedColor: box.get('color', defaultValue: Colors.green),
             ),
             appBarTheme: const AppBarTheme(centerTitle: true),
             useMaterial3: true,

@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:notification_centre/notification_centre.dart';
 
-import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/agent_activity_event.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
@@ -75,8 +73,7 @@ class ChatProvider extends ChangeNotifier {
 
   final Map<String, CoquiException> _sessionErrors = {};
 
-  CoquiException? get currentSessionError =>
-      _sessionErrors[currentSession?.id];
+  CoquiException? get currentSessionError => _sessionErrors[currentSession?.id];
 
   // ── Constructor ────────────────────────────────────────────────────
 
@@ -236,8 +233,6 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> _initializeStream(CoquiSession session, String prompt) async {
-    NotificationCenter().postNotification(NotificationNames.generationBegin);
-
     // Cancel any existing stream for this session
     _cancelStream(session.id);
 
@@ -350,9 +345,12 @@ class ChatProvider extends ChangeNotifier {
           final tokens = event.totalTokens;
           final duration = event.durationMs;
 
-          if (iterations > 0) parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
-          if (tools.isNotEmpty) parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
-          if (childCount > 0) parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
+          if (iterations > 0)
+            parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
+          if (tools.isNotEmpty)
+            parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
+          if (childCount > 0)
+            parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
           if (tokens > 0) parts.add('$tokens tokens');
           if (duration > 0) {
             final secs = (duration / 1000).toStringAsFixed(1);
@@ -372,7 +370,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       final serverMessages = await _apiService.listMessages(session.id);
       _messages = serverMessages;
-      await _databaseService.upsertMessages(serverMessages, sessionId: session.id);
+      await _databaseService.upsertMessages(serverMessages,
+          sessionId: session.id);
     } catch (_) {
       // Keep the streaming messages if re-fetch fails
     }

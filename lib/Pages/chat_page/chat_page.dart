@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/chat_preset.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -22,6 +23,9 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   // Selected role for new session creation
   CoquiRole? _selectedRole;
+
+  // Cached preset suggestions — only regenerated on new conversation
+  List<ChatPreset> _presets = ChatPresets.randomPresets;
 
   // Text field controller for the chat prompt
   final _textFieldController = TextEditingController();
@@ -49,8 +53,7 @@ class _ChatPageState extends State<ChatPage> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (!ResponsiveBreakpoints.of(context).isMobile)
-              const ChatAppBar(),
+            if (!ResponsiveBreakpoints.of(context).isMobile) const ChatAppBar(),
             Expanded(
               child: Stack(
                 alignment: Alignment.bottomLeft,
@@ -126,11 +129,10 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildChatFooter(ChatProvider chatProvider) {
     if (chatProvider.displayMessages.isEmpty &&
         chatProvider.currentSession == null) {
-      final presets = ChatPresets.randomPresets;
       return ChatAttachmentRow(
-        itemCount: presets.length,
+        itemCount: _presets.length,
         itemBuilder: (context, index) {
-          final preset = presets[index];
+          final preset = _presets[index];
           return ChatAttachmentPreset(
             preset: preset,
             onPressed: () async {
@@ -165,6 +167,11 @@ class _ChatPageState extends State<ChatPage> {
     } else {
       return null;
     }
+  }
+
+  void _resetChat() {
+    _selectedRole = null;
+    _presets = ChatPresets.randomPresets;
   }
 
   Future<void> _handleSendButton(ChatProvider chatProvider) async {

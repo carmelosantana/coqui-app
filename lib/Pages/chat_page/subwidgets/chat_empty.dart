@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:coqui_app/Constants/constants.dart';
 
 class ChatEmpty extends StatelessWidget {
   final Widget child;
@@ -15,13 +13,10 @@ class ChatEmpty extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset(
-              AppConstants.appIconSvg,
+            Image.asset(
+              'assets/images/coqui.png',
               height: 48,
-              colorFilter: ColorFilter.mode(
-                Theme.of(context).colorScheme.onSurface,
-                BlendMode.srcIn,
-              ),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             child,
           ],
