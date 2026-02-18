@@ -7,11 +7,18 @@ class SelectionBottomSheet<T> extends StatefulWidget {
   final Future<List<T>> Function() fetchItems;
   final T? currentSelection;
 
+  /// Optional custom item builder. When provided, replaces the default
+  /// [RadioListTile] rendering. The builder receives the item, whether
+  /// it is currently selected, and a callback to call when selected.
+  final Widget Function(T item, bool selected, ValueChanged<T?> onSelected)?
+      itemBuilder;
+
   const SelectionBottomSheet({
     super.key,
     required this.header,
     required this.fetchItems,
     required this.currentSelection,
+    this.itemBuilder,
   });
 
   @override
@@ -130,22 +137,34 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
         onRefresh: () async {
           _fetchOperation = CancelableOperation.fromFuture(_fetchItems());
         },
-        child: ListView.builder(
-          itemCount: _items.length,
-          itemBuilder: (context, index) {
-            final item = _items[index];
-
-            return RadioListTile(
-              title: Text(item.toString()),
-              value: item,
-              groupValue: _selectedItem,
-              onChanged: (value) {
-                setState(() {
-                  _selectedItem = value;
-                });
-              },
-            );
+        child: RadioGroup<T>(
+          groupValue: _selectedItem,
+          onChanged: (value) {
+            setState(() {
+              _selectedItem = value;
+            });
           },
+          child: ListView.builder(
+            itemCount: _items.length,
+            itemBuilder: (context, index) {
+              final item = _items[index];
+              final isSelected = item == _selectedItem;
+
+              if (widget.itemBuilder != null) {
+                return widget.itemBuilder!(item, isSelected, (value) {
+                  setState(() {
+                    _selectedItem = value;
+                  });
+                });
+              }
+
+              return RadioListTile<T>(
+                title: Text(item.toString()),
+                value: item,
+                isThreeLine: false,
+              );
+            },
+          ),
         ),
       );
     } else {
@@ -160,6 +179,8 @@ Future<T?> showSelectionBottomSheet<T>({
   required Widget header,
   required Future<List<T>> Function() fetchItems,
   required T? currentSelection,
+  Widget Function(T item, bool selected, ValueChanged<T?> onSelected)?
+      itemBuilder,
 }) async {
   return await showModalBottomSheet<T>(
     context: context,
@@ -169,6 +190,7 @@ Future<T?> showSelectionBottomSheet<T>({
         header: header,
         fetchItems: fetchItems,
         currentSelection: currentSelection,
+        itemBuilder: itemBuilder,
       );
     },
     isDismissible: false,

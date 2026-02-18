@@ -96,6 +96,9 @@ class SseEvent {
   /// Total tokens from a 'complete' event.
   int get totalTokens => data['total_tokens'] as int? ?? 0;
 
+  /// Session title from a 'title' event.
+  String get titleText => data['title'] as String? ?? '';
+
   /// Duration in ms from a 'complete' event.
   int get durationMs => data['duration_ms'] as int? ?? 0;
 
@@ -120,6 +123,7 @@ enum SseEventType {
   done,
   error,
   complete,
+  title,
   unknown;
 
   factory SseEventType.fromString(String type) {
@@ -133,6 +137,7 @@ enum SseEventType {
       'done' => SseEventType.done,
       'error' => SseEventType.error,
       'complete' => SseEventType.complete,
+      'title' => SseEventType.title,
       _ => SseEventType.unknown,
     };
   }

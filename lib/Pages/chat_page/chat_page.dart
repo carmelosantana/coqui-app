@@ -8,6 +8,7 @@ import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Widgets/chat_app_bar.dart';
+import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
@@ -218,6 +219,13 @@ class _ChatPageState extends State<ChatPage> {
       header: const BottomSheetHeader(title: "Select a Role"),
       fetchItems: chatProvider.fetchAvailableRoles,
       currentSelection: _selectedRole,
+      itemBuilder: (role, selected, onSelected) {
+        return RoleListTile(
+          role: role,
+          selected: selected,
+          onSelected: onSelected,
+        );
+      },
     );
 
     if (selectedRole != null) {

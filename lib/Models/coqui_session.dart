@@ -2,6 +2,8 @@
 ///
 /// Sessions are persistent server-side and identified by a 32-char hex ID.
 /// Each session has a model role that determines which LLM model is used.
+/// Session titles are generated server-side after the first turn and
+/// delivered via an SSE `title` event.
 class CoquiSession {
   final String id;
   final String modelRole;
@@ -10,8 +12,7 @@ class CoquiSession {
   final DateTime updatedAt;
   final int tokenCount;
 
-  /// Client-side title, derived from the first user prompt.
-  /// The Coqui API does not store session titles.
+  /// Server-generated session title, delivered via SSE `title` event.
   String? title;
 
   CoquiSession({
@@ -45,10 +46,8 @@ class CoquiSession {
       id: map['id'] as String,
       modelRole: map['model_role'] as String,
       model: map['model'] as String? ?? '',
-      createdAt:
-          DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
-      updatedAt:
-          DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
       tokenCount: map['token_count'] as int? ?? 0,
       title: map['title'] as String?,
     );
@@ -64,13 +63,6 @@ class CoquiSession {
       'token_count': tokenCount,
       'title': title,
     };
-  }
-
-  /// Generate a title from the first user prompt.
-  static String generateTitle(String firstPrompt) {
-    final cleaned = firstPrompt.trim();
-    if (cleaned.length <= 50) return cleaned;
-    return '${cleaned.substring(0, 47)}...';
   }
 
   @override

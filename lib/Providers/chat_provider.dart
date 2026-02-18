@@ -122,11 +122,14 @@ class ChatProvider extends ChangeNotifier {
     try {
       final serverSessions = await _apiService.listSessions(limit: 100);
 
-      // Preserve local titles
+      // Prefer server-provided titles; fall back to cached title for
+      // older sessions created before server-side title generation.
       for (final session in serverSessions) {
-        final cached = await _databaseService.getSession(session.id);
-        if (cached?.title != null) {
-          session.title = cached!.title;
+        if (session.title == null || session.title!.isEmpty) {
+          final cached = await _databaseService.getSession(session.id);
+          if (cached?.title != null) {
+            session.title = cached!.title;
+          }
         }
       }
 
@@ -220,13 +223,6 @@ class ChatProvider extends ChangeNotifier {
     );
     _messages.add(userMessage);
     notifyListeners();
-
-    // Generate title from first prompt if needed
-    if (session.title == null || session.title!.isEmpty) {
-      session.title = CoquiSession.generateTitle(text);
-      await _databaseService.updateSessionTitle(session.id, session.title!);
-      notifyListeners();
-    }
 
     // Start streaming
     await _initializeStream(session, text);
@@ -345,18 +341,29 @@ class ChatProvider extends ChangeNotifier {
           final tokens = event.totalTokens;
           final duration = event.durationMs;
 
-          if (iterations > 0)
+          if (iterations > 0) {
             parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
-          if (tools.isNotEmpty)
+          }
+          if (tools.isNotEmpty) {
             parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
-          if (childCount > 0)
+          }
+          if (childCount > 0) {
             parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
+          }
           if (tokens > 0) parts.add('$tokens tokens');
           if (duration > 0) {
             final secs = (duration / 1000).toStringAsFixed(1);
             parts.add('${secs}s');
           }
           _lastTurnSummary = parts.join(' · ');
+          break;
+
+        case SseEventType.title:
+          final title = event.titleText;
+          if (title.isNotEmpty) {
+            session.title = title;
+            await _databaseService.updateSessionTitle(session.id, title);
+          }
           break;
 
         case SseEventType.unknown:
