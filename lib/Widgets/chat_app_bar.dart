@@ -4,6 +4,7 @@ import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -60,6 +61,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         return await chatProvider.fetchAvailableRoles();
       },
       currentSelection: null,
+      itemBuilder: (role, selected, onSelected) {
+        return RoleListTile(
+          role: role,
+          selected: selected,
+          onSelected: onSelected,
+        );
+      },
     );
   }
 

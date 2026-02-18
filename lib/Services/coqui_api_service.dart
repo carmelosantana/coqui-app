@@ -108,7 +108,8 @@ class CoquiApiService {
   }
 
   /// Create a new session with the given role.
-  Future<CoquiSession> createSession({String modelRole = 'orchestrator'}) async {
+  Future<CoquiSession> createSession(
+      {String modelRole = 'orchestrator'}) async {
     final response = await http.post(
       _url('/api/sessions'),
       headers: _headers,
@@ -138,6 +139,20 @@ class CoquiApiService {
       headers: _headers,
     );
     _parseResponse(response);
+  }
+
+  /// Update a session (e.g. title).
+  Future<CoquiSession> updateSession(String id, {String? title}) async {
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+
+    final response = await http.patch(
+      _url('/api/sessions/$id'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    final data = _parseResponse(response);
+    return CoquiSession.fromJson(data);
   }
 
   // ── Messages ────────────────────────────────────────────────────────
@@ -276,7 +291,7 @@ class CoquiApiService {
     return _parseResponse(response);
   }
 
-  /// Get available roles and their model mappings.
+  /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
       _url('/api/config/roles'),
@@ -284,12 +299,81 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final roles = <CoquiRole>[];
-    final mappings = body['roles'] as Map<String, dynamic>? ?? {};
-    for (final entry in mappings.entries) {
-      roles.add(CoquiRole.fromJson(entry.key, entry.value as String));
-    }
-    return roles;
+    final roles = body['roles'] as List? ?? [];
+    return roles
+        .map((r) => CoquiRole.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get a single role with full details including instructions.
+  Future<CoquiRole> getRole(String name) async {
+    final response = await http.get(
+      _url('/api/config/roles/$name'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiRole.fromJson(body);
+  }
+
+  /// Create a new custom role.
+  Future<CoquiRole> createRole({
+    required String name,
+    required String instructions,
+    String? displayName,
+    String? description,
+    String accessLevel = 'readonly',
+    String? model,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'instructions': instructions,
+      'access_level': accessLevel,
+    };
+    if (displayName != null) payload['display_name'] = displayName;
+    if (description != null) payload['description'] = description;
+    if (model != null) payload['model'] = model;
+
+    final response = await http.post(
+      _url('/api/config/roles'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiRole.fromJson(body);
+  }
+
+  /// Update an existing role.
+  Future<CoquiRole> updateRole(
+    String name, {
+    String? displayName,
+    String? description,
+    String? accessLevel,
+    String? model,
+    String? instructions,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (displayName != null) payload['display_name'] = displayName;
+    if (description != null) payload['description'] = description;
+    if (accessLevel != null) payload['access_level'] = accessLevel;
+    if (model != null) payload['model'] = model;
+    if (instructions != null) payload['instructions'] = instructions;
+
+    final response = await http.patch(
+      _url('/api/config/roles/$name'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiRole.fromJson(body);
+  }
+
+  /// Delete a custom role.
+  Future<void> deleteRole(String name) async {
+    final response = await http.delete(
+      _url('/api/config/roles/$name'),
+      headers: _headers,
+    );
+    _parseResponse(response);
   }
 
   /// List all available models from all providers.

@@ -4,6 +4,7 @@ import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Utils/material_color_adapter.dart';
 import 'package:provider/provider.dart';
@@ -55,6 +56,11 @@ void main() async {
           create: (_) => ChatProvider(
             apiService: apiService,
             databaseService: databaseService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => RoleProvider(
+            apiService: apiService,
           ),
         ),
       ],
