@@ -15,6 +15,10 @@ class ChatListView extends StatefulWidget {
   final String? turnSummary;
   final bool isStreaming;
 
+  /// Full unfiltered message list (includes tool-role messages) for matching
+  /// tool results to tool calls.
+  final List<CoquiMessage> allMessages;
+
   const ChatListView({
     super.key,
     required this.messages,
@@ -24,6 +28,7 @@ class ChatListView extends StatefulWidget {
     this.agentActivity = const [],
     this.turnSummary,
     this.isStreaming = false,
+    this.allMessages = const [],
   });
 
   @override
@@ -144,11 +149,17 @@ class _ChatListViewState extends State<ChatListView> {
                   return ObserveSize(
                     key: Key(message.id),
                     onSizeChanged: _onMessageSizeChanged,
-                    child: ChatBubble(message: message),
+                    child: ChatBubble(
+                      message: message,
+                      allMessages: widget.allMessages,
+                    ),
                   );
                 }
 
-                return ChatBubble(message: message);
+                return ChatBubble(
+                  message: message,
+                  allMessages: widget.allMessages,
+                );
               },
             ),
           ],

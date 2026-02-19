@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'subwidgets/subwidgets.dart';
 
@@ -10,7 +9,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Settings', style: GoogleFonts.pacifico()),
+        title: const Text('Settings'),
       ),
       body: const SafeArea(
         child: _SettingsPageContent(),
@@ -29,6 +28,8 @@ class _SettingsPageContent extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: const [
         ThemesSettings(),
+        SizedBox(height: 16),
+        GeneralSettings(),
         SizedBox(height: 16),
         InstanceSettings(),
         SizedBox(height: 16),

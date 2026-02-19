@@ -52,11 +52,15 @@ void main() async {
             apiService: apiService,
           ),
         ),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<InstanceProvider, ChatProvider>(
           create: (_) => ChatProvider(
             apiService: apiService,
             databaseService: databaseService,
           ),
+          update: (_, instanceProvider, chatProvider) {
+            chatProvider!.listenToInstanceChanges(instanceProvider);
+            return chatProvider;
+          },
         ),
         ChangeNotifierProvider(
           create: (_) => RoleProvider(

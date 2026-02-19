@@ -10,6 +10,7 @@ import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/sse_event.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
 
@@ -398,7 +399,37 @@ class ChatProvider extends ChangeNotifier {
       // Keep the streaming messages if re-fetch fails
     }
 
+    // Title polling fallback: if we never received a title event during
+    // streaming, check the server after a short delay to allow the
+    // TitleGenerator to finish its async LLM call.
+    if (session.title == null || session.title!.isEmpty) {
+      // First check immediately — title may already be generated
+      await _pollForTitle(session);
+
+      // If still missing, try once more after a delay
+      if (session.title == null || session.title!.isEmpty) {
+        await Future.delayed(const Duration(seconds: 3));
+        await _pollForTitle(session);
+      }
+    }
+
     notifyListeners();
+  }
+
+  /// Poll the server for a session title and update local state if found.
+  Future<void> _pollForTitle(CoquiSession session) async {
+    try {
+      final refreshed = await _apiService.getSession(session.id);
+      if (refreshed != null &&
+          refreshed.title != null &&
+          refreshed.title!.isNotEmpty) {
+        session.title = refreshed.title;
+        await _databaseService.updateSessionTitle(session.id, refreshed.title!);
+        notifyListeners();
+      }
+    } catch (_) {
+      // Best-effort title polling — don't interrupt the flow
+    }
   }
 
   /// Retry the last prompt.
@@ -456,6 +487,21 @@ class ChatProvider extends ChangeNotifier {
 
   // ── Instance switching ────────────────────────────────────────────
 
+  /// Track the last active instance ID to detect changes.
+  String? _lastActiveInstanceId;
+
+  /// Called by ChangeNotifierProxyProvider when InstanceProvider updates.
+  /// Only triggers a refresh when the active instance actually changes.
+  void listenToInstanceChanges(InstanceProvider instanceProvider) {
+    final newId = instanceProvider.activeInstance?.id;
+    if (newId != _lastActiveInstanceId) {
+      _lastActiveInstanceId = newId;
+      if (newId != null) {
+        onInstanceChanged();
+      }
+    }
+  }
+
   /// Called when the active instance changes.
   Future<void> onInstanceChanged() async {
     _resetChat();
@@ -464,5 +510,26 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     await refreshSessions();
+  }
+
+  // ── Session rename ────────────────────────────────────────────────
+
+  /// Rename a session via the API and update local state.
+  Future<void> renameSession(String sessionId, String newTitle) async {
+    try {
+      await _apiService.updateSession(sessionId, title: newTitle);
+
+      // Update local state
+      final index = _sessions.indexWhere((s) => s.id == sessionId);
+      if (index >= 0) {
+        _sessions[index].title = newTitle;
+      }
+
+      await _databaseService.updateSessionTitle(sessionId, newTitle);
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
   }
 }

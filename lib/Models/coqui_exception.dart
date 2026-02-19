@@ -53,6 +53,48 @@ class CoquiException implements Exception {
   /// Whether this error indicates payload was too large.
   bool get isPayloadTooLarge => code == 'payload_too_large';
 
+  /// Whether this error indicates a resource was not found.
+  bool get isNotFound => code == 'not_found';
+
+  /// Whether this error indicates the session was not found.
+  bool get isSessionNotFound => code == 'session_not_found';
+
+  /// Whether this error indicates the turn was not found.
+  bool get isTurnNotFound => code == 'turn_not_found';
+
+  /// Whether this error indicates the role was not found.
+  bool get isRoleNotFound => code == 'role_not_found';
+
+  /// Whether this error indicates a credential was not found.
+  bool get isCredentialNotFound => code == 'credential_not_found';
+
+  /// Whether this error indicates a validation error.
+  bool get isValidationError => code == 'validation_error';
+
+  /// Whether this error indicates a required field is missing.
+  bool get isMissingField => code == 'missing_field';
+
+  /// Whether this error indicates an invalid format.
+  bool get isInvalidFormat => code == 'invalid_format';
+
+  /// Whether this error indicates a resource conflict.
+  bool get isConflict => code == 'conflict';
+
+  /// Whether this error indicates the role is built-in and cannot be modified.
+  bool get isRoleBuiltin => code == 'role_builtin';
+
+  /// Whether this error indicates the role name is reserved.
+  bool get isRoleReserved => code == 'role_reserved';
+
+  /// Whether this error indicates forbidden access.
+  bool get isForbidden => code == 'forbidden';
+
+  /// Whether this error indicates an unsupported media type.
+  bool get isUnsupportedMediaType => code == 'unsupported_media_type';
+
+  /// Whether this error indicates an internal server error.
+  bool get isInternalError => code == 'internal_error';
+
   @override
   String toString() => message;
 }
