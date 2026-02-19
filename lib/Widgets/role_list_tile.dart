@@ -51,7 +51,19 @@ class RoleListTile extends StatelessWidget {
           spacing: 6,
           children: [
             _AccessLevelChip(accessLevel: role.accessLevel),
-            if (role.isBuiltin)
+            if (role.isSystem)
+              Chip(
+                label: Text(
+                  'System',
+                  style: theme.textTheme.labelSmall,
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                backgroundColor: colorScheme.tertiaryContainer,
+              )
+            else if (role.isBuiltin)
               Chip(
                 label: Text(
                   'Built-in',
