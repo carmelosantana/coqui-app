@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// A message within a Coqui session.
 ///
 /// Messages have a role (user, assistant, or tool) and content.
@@ -39,8 +41,7 @@ class CoquiMessage {
       role: CoquiMessageRole.fromString(map['role'] as String),
       toolCalls: map['tool_calls'] as String?,
       toolCallId: map['tool_call_id'] as String?,
-      createdAt:
-          DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
     );
   }
 
@@ -55,9 +56,40 @@ class CoquiMessage {
     };
   }
 
+  /// Whether this message has tool call data.
+  bool get hasToolCalls =>
+      toolCalls != null && toolCalls!.isNotEmpty && toolCalls != '[]';
+
+  /// Parse the tool_calls JSON string into a list of tool call maps.
+  ///
+  /// Each map has: `id`, `name`, `arguments` (Map<String, dynamic>).
+  List<Map<String, dynamic>> get parsedToolCalls {
+    if (!hasToolCalls) return [];
+    try {
+      final decoded = jsonDecode(toolCalls!);
+      if (decoded is List) {
+        return decoded.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Whether this message should be displayed in the chat UI.
-  /// Tool messages are typically hidden from the user view.
-  bool get isDisplayable => role != CoquiMessageRole.tool;
+  ///
+  /// Tool-role messages (tool results) are hidden from the main chat view.
+  /// Assistant messages with empty content and no tool calls are hidden
+  /// (these are intermediate system messages).
+  bool get isDisplayable {
+    if (role == CoquiMessageRole.tool) return false;
+    if (role == CoquiMessageRole.assistant &&
+        content.trim().isEmpty &&
+        !hasToolCalls) {
+      return false;
+    }
+    return true;
+  }
 
   @override
   String toString() => '${role.name}: $content';

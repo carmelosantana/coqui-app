@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -114,6 +115,7 @@ class _ChatPageState extends State<ChatPage> {
       return ChatListView(
         key: PageStorageKey<String>(chatProvider.currentSession?.id ?? 'empty'),
         messages: chatProvider.displayMessages,
+        allMessages: chatProvider.messages,
         isAwaitingReply: chatProvider.isCurrentSessionThinking,
         error: chatProvider.currentSessionError != null
             ? ChatError(
@@ -184,41 +186,49 @@ class _ChatPageState extends State<ChatPage> {
       setState(() => _crossFadeState = CrossFadeState.showSecond);
       setState(() => _scale = _scale == 1.0 ? 1.05 : 1.0);
     } else if (chatProvider.currentSession == null) {
-      if (_selectedRole == null) {
-        await _showRoleSelectionBottomSheet(context);
+      // Use selected role, or resolve from default preference
+      CoquiRole? roleToUse = _selectedRole;
+
+      if (roleToUse == null) {
+        final defaultRoleName = Hive.box('settings')
+            .get('default_role', defaultValue: 'orchestrator') as String;
+
+        // Use the default role without showing the picker
+        roleToUse = CoquiRole(
+          name: defaultRoleName,
+          model: '', // Server resolves the model
+        );
       }
 
-      if (_selectedRole != null) {
-        try {
-          await chatProvider.createNewSession(_selectedRole!);
-        } on CoquiException catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(e.message),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
-          }
-          return;
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to create session: $e'),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
-          }
-          return;
+      try {
+        await chatProvider.createNewSession(roleToUse);
+      } on CoquiException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
         }
-
-        chatProvider.sendPrompt(_textFieldController.text);
-
-        setState(() {
-          _textFieldController.clear();
-        });
+        return;
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to create session: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+        return;
       }
+
+      chatProvider.sendPrompt(_textFieldController.text);
+
+      setState(() {
+        _textFieldController.clear();
+      });
     } else {
       chatProvider.sendPrompt(_textFieldController.text);
 

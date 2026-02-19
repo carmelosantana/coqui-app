@@ -71,6 +71,11 @@ class ChatError extends StatelessWidget {
           'Authentication failed. Check your API key in Settings.',
           false,
         ),
+      'forbidden' => (
+          Icons.block_rounded,
+          'Access denied. You do not have permission for this action.',
+          false,
+        ),
       'payload_too_large' => (
           Icons.warning_amber_rounded,
           'Message is too long. Maximum size is 100 KB.',
@@ -80,6 +85,46 @@ class ChatError extends StatelessWidget {
           Icons.search_off_rounded,
           'Session not found. It may have been deleted.',
           false,
+        ),
+      'not_found' || 'turn_not_found' => (
+          Icons.search_off_rounded,
+          'The requested resource was not found.',
+          false,
+        ),
+      'role_not_found' => (
+          Icons.person_off_rounded,
+          'Role not found. It may have been deleted.',
+          false,
+        ),
+      'credential_not_found' => (
+          Icons.key_off_rounded,
+          'Required credential not found. Check Settings.',
+          false,
+        ),
+      'validation_error' || 'missing_field' || 'invalid_format' => (
+          Icons.edit_off_rounded,
+          error.message,
+          false,
+        ),
+      'conflict' => (
+          Icons.sync_problem_rounded,
+          error.message,
+          true,
+        ),
+      'role_builtin' || 'role_reserved' => (
+          Icons.lock_person_rounded,
+          error.message,
+          false,
+        ),
+      'unsupported_media_type' => (
+          Icons.broken_image_rounded,
+          'Unsupported content type.',
+          false,
+        ),
+      'internal_error' => (
+          Icons.cloud_off_rounded,
+          'Server error. Please try again later.',
+          true,
         ),
       _ => (
           Icons.error_outline_rounded,
