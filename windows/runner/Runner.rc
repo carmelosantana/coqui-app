@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "dev.ibrahimcetin" "\0"
-            VALUE "FileDescription", "reins" "\0"
+            VALUE "FileDescription", "Coqui" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "reins" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2024 dev.ibrahimcetin. All rights reserved." "\0"
-            VALUE "OriginalFilename", "reins.exe" "\0"
-            VALUE "ProductName", "reins" "\0"
+            VALUE "InternalName", "coqui" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2024 Coqui Bot. All rights reserved." "\0"
+            VALUE "OriginalFilename", "coqui.exe" "\0"
+            VALUE "ProductName", "Coqui" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

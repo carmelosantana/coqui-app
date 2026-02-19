@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Providers/chat_provider.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -42,12 +43,15 @@ class ChatNavigationDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final instanceProvider = Provider.of<InstanceProvider>(context);
+    final activeInstance = instanceProvider.activeInstance;
+
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
         return NavigationDrawer(
           selectedIndex: chatProvider.selectedDestination,
           onDestinationSelected: (destination) {
-            chatProvider.destinationChatSelected(destination);
+            chatProvider.destinationSelected(destination);
 
             if (ResponsiveBreakpoints.of(context).isMobile) {
               Navigator.pop(context);
@@ -61,23 +65,21 @@ class ChatNavigationDrawer extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
-            const NavigationDrawerDestination(
-              icon: CircleAvatar(
-                backgroundImage: AssetImage(AppConstants.ollamaIconPng),
-                radius: 16,
-              ),
-              label: Text("Ollama"),
+            NavigationDrawerDestination(
+              icon: const Icon(Icons.smart_toy_outlined),
+              selectedIcon: const Icon(Icons.smart_toy),
+              label: Text(activeInstance?.name ?? 'No Server'),
             ),
             const Padding(
               padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
-              child: TitleDivider(title: "Chats"),
+              child: TitleDivider(title: "Sessions"),
             ),
-            ...chatProvider.chats.map((chat) {
+            ...chatProvider.sessions.map((session) {
               return NavigationDrawerDestination(
                 icon: const Icon(Icons.chat_outlined),
                 label: Expanded(
                   child: Text(
-                    chat.title,
+                    session.title ?? 'Untitled',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
