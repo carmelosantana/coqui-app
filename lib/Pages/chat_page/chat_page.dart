@@ -1,20 +1,19 @@
-import 'dart:io';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Models/chat_preset.dart';
-import 'package:reins/Models/ollama_model.dart';
-import 'package:reins/Providers/chat_provider.dart';
-import 'package:reins/Widgets/chat_app_bar.dart';
-import 'package:reins/Widgets/ollama_bottom_sheet_header.dart';
-import 'package:reins/Widgets/selection_bottom_sheet.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/chat_preset.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
+import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Widgets/chat_app_bar.dart';
+import 'package:coqui_app/Widgets/role_list_tile.dart';
+import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
-import 'chat_page_view_model.dart';
 import 'subwidgets/subwidgets.dart';
 
 class ChatPage extends StatefulWidget {
@@ -25,51 +24,29 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  late final ChatPageViewModel _viewModel;
+  // Selected role for new session creation
+  CoquiRole? _selectedRole;
 
-  // This is for empty chat state to select a model
-  OllamaModel? _selectedModel;
-
-  // This is for the image attachment
-  final List<File> _imageFiles = [];
-
-  // This is for the chat presets
+  // Cached preset suggestions — only regenerated on new conversation
   List<ChatPreset> _presets = ChatPresets.randomPresets;
 
   // Text field controller for the chat prompt
   final _textFieldController = TextEditingController();
   bool get _isTextFieldHasText => _textFieldController.text.trim().isNotEmpty;
 
-  // These are for the welcome screen animation
+  // Welcome screen animation state
   var _crossFadeState = CrossFadeState.showFirst;
   double _scale = 1.0;
-
-  // This is for the exit request listener
-  late final AppLifecycleListener _appLifecycleListener;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize the view model
-    _viewModel = Provider.of<ChatPageViewModel>(context, listen: false);
-
-    // If the server address changes, reset the selected model
-    Hive.box('settings').watch(key: 'serverAddress').listen((event) {
-      _selectedModel = null;
+    // Refresh sessions on launch
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      chatProvider.refreshSessions();
     });
-
-    // Listen exit request to delete the unused attached images
-    _appLifecycleListener = AppLifecycleListener(onExitRequested: () async {
-      await _viewModel.deleteImages(_imageFiles);
-      return AppExitResponse.exit;
-    });
-  }
-
-  @override
-  void dispose() {
-    _appLifecycleListener.dispose();
-    super.dispose();
   }
 
   @override
@@ -79,8 +56,7 @@ class _ChatPageState extends State<ChatPage> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (!ResponsiveBreakpoints.of(context).isMobile)
-              ChatAppBar(), // If the screen is large, show the app bar
+            if (!ResponsiveBreakpoints.of(context).isMobile) const ChatAppBar(),
             Expanded(
               child: Stack(
                 alignment: Alignment.bottomLeft,
@@ -90,18 +66,13 @@ class _ChatPageState extends State<ChatPage> {
                 ],
               ),
             ),
-            // TODO: Wrap with ConstrainedBox to limit the height
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: ChatTextField(
-                key: ValueKey(chatProvider.currentChat?.id),
+                key: ValueKey(chatProvider.currentSession?.id),
                 controller: _textFieldController,
                 onChanged: (_) => setState(() {}),
                 onEditingComplete: () => _handleOnEditingComplete(chatProvider),
-                prefixIcon: IconButton(
-                  icon: Icon(Icons.add),
-                  onPressed: _handleAttachmentButton,
-                ),
                 suffixIcon: _buildTextFieldSuffixIcon(chatProvider),
               ),
             ),
@@ -112,9 +83,12 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildChatBody(ChatProvider chatProvider) {
-    if (chatProvider.messages.isEmpty) {
-      if (chatProvider.currentChat == null) {
-        if (Hive.box('settings').get('serverAddress') == null) {
+    if (chatProvider.displayMessages.isEmpty) {
+      if (chatProvider.currentSession == null) {
+        final instanceProvider =
+            Provider.of<InstanceProvider>(context, listen: false);
+
+        if (instanceProvider.activeInstance == null) {
           return ChatEmpty(
             child: ChatWelcome(
               showingState: _crossFadeState,
@@ -126,47 +100,39 @@ class _ChatPageState extends State<ChatPage> {
           );
         } else {
           return ChatEmpty(
-            child: ChatSelectModelButton(
-              currentModelName: _selectedModel?.name,
-              onPressed: () => _showModelSelectionBottomSheet(context),
+            child: ChatSelectRoleButton(
+              currentRoleName: _selectedRole?.name,
+              onPressed: () => _showRoleSelectionBottomSheet(context),
             ),
           );
         }
       } else {
-        return ChatEmpty(
+        return const ChatEmpty(
           child: Text('No messages yet!'),
         );
       }
     } else {
       return ChatListView(
-        key: PageStorageKey<String>(chatProvider.currentChat?.id ?? 'empty'),
-        messages: chatProvider.messages,
-        isAwaitingReply: chatProvider.isCurrentChatThinking,
-        error: chatProvider.currentChatError != null
+        key: PageStorageKey<String>(chatProvider.currentSession?.id ?? 'empty'),
+        messages: chatProvider.displayMessages,
+        allMessages: chatProvider.messages,
+        isAwaitingReply: chatProvider.isCurrentSessionThinking,
+        error: chatProvider.currentSessionError != null
             ? ChatError(
-                message: chatProvider.currentChatError!.message,
+                error: chatProvider.currentSessionError!,
                 onRetry: () => chatProvider.retryLastPrompt(),
               )
             : null,
-        bottomPadding: _imageFiles.isNotEmpty
-            ? MediaQuery.of(context).size.height * 0.15
-            : null, // TODO: Calculate the height of attachments row
+        agentActivity: chatProvider.currentTurnActivity,
+        turnSummary: chatProvider.lastTurnSummary,
+        isStreaming: chatProvider.isCurrentSessionStreaming,
       );
     }
   }
 
   Widget _buildChatFooter(ChatProvider chatProvider) {
-    if (_imageFiles.isNotEmpty) {
-      return ChatAttachmentRow(
-        itemCount: _imageFiles.length,
-        itemBuilder: (context, index) {
-          return ChatAttachmentImage(
-            imageFile: _imageFiles[index],
-            onRemove: _handleImageDelete,
-          );
-        },
-      );
-    } else if (chatProvider.messages.isEmpty) {
+    if (chatProvider.displayMessages.isEmpty &&
+        chatProvider.currentSession == null) {
       return ChatAttachmentRow(
         itemCount: _presets.length,
         itemBuilder: (context, index) {
@@ -186,7 +152,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget? _buildTextFieldSuffixIcon(ChatProvider chatProvider) {
-    if (chatProvider.isCurrentChatStreaming) {
+    if (chatProvider.isCurrentSessionStreaming) {
       return IconButton(
         icon: const Icon(Icons.stop_rounded),
         color: Theme.of(context).colorScheme.onSurface,
@@ -207,94 +173,98 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  void _resetChat() {
+    _selectedRole = null;
+    _presets = ChatPresets.randomPresets;
+  }
+
   Future<void> _handleSendButton(ChatProvider chatProvider) async {
-    if (Hive.box('settings').get('serverAddress') == null) {
+    final instanceProvider =
+        Provider.of<InstanceProvider>(context, listen: false);
+
+    if (instanceProvider.activeInstance == null) {
       setState(() => _crossFadeState = CrossFadeState.showSecond);
       setState(() => _scale = _scale == 1.0 ? 1.05 : 1.0);
-    } else if (chatProvider.currentChat == null) {
-      if (_selectedModel == null) {
-        await _showModelSelectionBottomSheet(context);
-      }
+    } else if (chatProvider.currentSession == null) {
+      // Use selected role, or resolve from default preference
+      CoquiRole? roleToUse = _selectedRole;
 
-      if (_selectedModel != null) {
-        await chatProvider.createNewChat(_selectedModel!);
+      if (roleToUse == null) {
+        final defaultRoleName = Hive.box('settings')
+            .get('default_role', defaultValue: 'orchestrator') as String;
 
-        chatProvider.sendPrompt(
-          _textFieldController.text,
-          images: _imageFiles.toList(),
+        // Use the default role without showing the picker
+        roleToUse = CoquiRole(
+          name: defaultRoleName,
+          model: '', // Server resolves the model
         );
-
-        chatProvider.generateTitleForCurrentChat();
-
-        setState(() {
-          _textFieldController.clear();
-          _imageFiles.clear();
-          _presets = ChatPresets.randomPresets;
-        });
       }
-    } else {
-      chatProvider.sendPrompt(
-        _textFieldController.text,
-        images: _imageFiles.toList(),
-      );
+
+      try {
+        await chatProvider.createNewSession(roleToUse);
+      } on CoquiException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to create session: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+        return;
+      }
+
+      chatProvider.sendPrompt(_textFieldController.text);
 
       setState(() {
         _textFieldController.clear();
-        _imageFiles.clear();
+      });
+    } else {
+      chatProvider.sendPrompt(_textFieldController.text);
+
+      setState(() {
+        _textFieldController.clear();
       });
     }
   }
 
   Future<void> _handleOnEditingComplete(ChatProvider chatProvider) async {
-    if (_isTextFieldHasText && chatProvider.isCurrentChatStreaming == false) {
+    if (_isTextFieldHasText && !chatProvider.isCurrentSessionStreaming) {
       await _handleSendButton(chatProvider);
     }
   }
 
-  Future<void> _showModelSelectionBottomSheet(BuildContext context) async {
+  Future<void> _showRoleSelectionBottomSheet(BuildContext context) async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    final selectedModel = await showSelectionBottomSheet(
-      key: ValueKey(Hive.box('settings').get('serverAddress')),
+    final selectedRole = await showSelectionBottomSheet<CoquiRole>(
       context: context,
-      header: OllamaBottomSheetHeader(title: "Select a LLM Model"),
-      fetchItems: chatProvider.fetchAvailableModels,
-      currentSelection: _selectedModel,
-    );
-
-    setState(() {
-      _selectedModel = selectedModel;
-    });
-  }
-
-  Future<void> _handleAttachmentButton() async {
-    final images = await _viewModel.pickImages(
-      onPermissionDenied: _showPhotosDeniedAlert,
-    );
-
-    setState(() => _imageFiles.addAll(images));
-  }
-
-  Future<void> _showPhotosDeniedAlert() async {
-    await showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text('Photos Permission Denied'),
-          content: const Text('Please allow access to photos in the settings.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+      header: const BottomSheetHeader(title: "Select a Role"),
+      fetchItems: chatProvider.fetchAvailableRoles,
+      currentSelection: _selectedRole,
+      itemBuilder: (role, selected, onSelected) {
+        return RoleListTile(
+          role: role,
+          selected: selected,
+          onSelected: onSelected,
         );
       },
     );
-  }
 
-  Future<void> _handleImageDelete(File imageFile) async {
-    await _viewModel.deleteImage(imageFile);
-    setState(() => _imageFiles.remove(imageFile));
+    if (selectedRole != null) {
+      setState(() {
+        _selectedRole = selectedRole;
+      });
+    }
   }
 }

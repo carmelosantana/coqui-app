@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:in_app_review/in_app_review.dart';
-import 'package:reins/Constants/constants.dart';
-import 'package:reins/Models/settings_route_arguments.dart';
-import 'package:reins/Pages/chat_page/chat_page_view_model.dart';
-import 'package:reins/Pages/main_page.dart';
-import 'package:reins/Pages/settings_page/settings_page.dart';
-import 'package:reins/Providers/chat_provider.dart';
-import 'package:reins/Services/services.dart';
-import 'package:reins/Utils/material_color_adapter.dart';
+import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Pages/main_page.dart';
+import 'package:coqui_app/Pages/settings_page/settings_page.dart';
+import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Services/services.dart';
+import 'package:coqui_app/Utils/material_color_adapter.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:reins/Utils/request_review_helper.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'dart:io' show Platform;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -37,45 +35,46 @@ void main() async {
 
   await Hive.openBox('settings');
 
-  // Initialize RequestReviewHelper and request review if needed
-  final reviewHelper = await RequestReviewHelper.initialize();
-
-  await reviewHelper.incrementCount(isLaunch: true);
-
-  final inAppReview = InAppReview.instance;
-  if (await inAppReview.isAvailable() && reviewHelper.shouldRequestReview()) {
-    await inAppReview.requestReview();
-  }
+  // Create services
+  final apiService = CoquiApiService();
+  final databaseService = DatabaseService();
+  final instanceService = InstanceService();
 
   runApp(
     MultiProvider(
       providers: [
-        Provider(create: (_) => OllamaService()),
-        Provider(create: (_) => DatabaseService()),
-        Provider(create: (_) => PermissionService()),
-        Provider(create: (_) => ImageService()),
+        Provider.value(value: apiService),
+        Provider.value(value: databaseService),
+        Provider.value(value: instanceService),
         ChangeNotifierProvider(
-          create: (context) => ChatProvider(
-            ollamaService: context.read(),
-            databaseService: context.read(),
+          create: (_) => InstanceProvider(
+            instanceService: instanceService,
+            apiService: apiService,
           ),
         ),
-        Provider(
-          create: (context) => ChatPageViewModel(
-            ollamaService: context.read(),
-            databaseService: context.read(),
-            permissionService: context.read(),
-            imageService: context.read(),
+        ChangeNotifierProxyProvider<InstanceProvider, ChatProvider>(
+          create: (_) => ChatProvider(
+            apiService: apiService,
+            databaseService: databaseService,
+          ),
+          update: (_, instanceProvider, chatProvider) {
+            chatProvider!.listenToInstanceChanges(instanceProvider);
+            return chatProvider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) => RoleProvider(
+            apiService: apiService,
           ),
         ),
       ],
-      child: const ReinsApp(),
+      child: const CoquiApp(),
     ),
   );
 }
 
-class ReinsApp extends StatelessWidget {
-  const ReinsApp({super.key});
+class CoquiApp extends StatelessWidget {
+  const CoquiApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -88,9 +87,10 @@ class ReinsApp extends StatelessWidget {
           title: AppConstants.appName,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              brightness: _brightness ?? MediaQuery.platformBrightnessOf(context),
+              brightness:
+                  _brightness ?? MediaQuery.platformBrightnessOf(context),
               dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-              seedColor: box.get('color', defaultValue: Colors.grey),
+              seedColor: box.get('color', defaultValue: Colors.green),
             ),
             appBarTheme: const AppBarTheme(centerTitle: true),
             useMaterial3: true,
@@ -107,15 +107,13 @@ class ReinsApp extends StatelessWidget {
           onGenerateRoute: (settings) {
             if (settings.name == '/') {
               return MaterialPageRoute(
-                builder: (context) => const ReinsMainPage(),
+                builder: (context) => const CoquiMainPage(),
               );
             }
 
             if (settings.name == '/settings') {
-              final args = settings.arguments as SettingsRouteArguments?;
-
               return MaterialPageRoute(
-                builder: (context) => SettingsPage(arguments: args),
+                builder: (context) => const SettingsPage(),
               );
             }
 

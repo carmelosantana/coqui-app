@@ -1,5 +1,5 @@
-name: reins
-description: "Best-in-class chat experience for Ollama."
+name: coqui_app
+description: "GUI client for Coqui AI agent."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.3.3+1
+version: 0.1.0+1
 
 environment:
   sdk: ^3.5.4
@@ -32,14 +32,14 @@ dependencies:
     sdk: flutter
 
   # HTTP package for making network requests
-  http: ^1.2.2
-  async: ^2.11.0
+  http: ^1.3.0
+  async: ^2.12.0
 
   # State management solution
-  provider: ^6.1.2
+  provider: ^6.1.5
 
   # SQLite plugin for Flutter
-  sqflite: ^2.4.1
+  sqflite: ^2.4.2
   sqflite_common_ffi: ^2.3.4
   uuid: ^4.5.1
 
@@ -53,12 +53,8 @@ dependencies:
   # Google Fonts package for custom fonts
   google_fonts: ^6.2.1
 
-  # SVG rendering and widget library
-  flutter_svg: ^2.0.14
-
   # Animation package
   animated_text_kit: ^4.2.2
-  shimmer: ^3.0.0
 
   # Responsive framework
   responsive_framework: ^1.5.1
@@ -68,20 +64,8 @@ dependencies:
   markdown: any
   url_launcher: ^6.3.1
 
-  # Image support
-  image_picker: ^1.1.2
+  # Path provider for app data
   path_provider: ^2.1.5
-  flutter_image_compress: ^2.3.0
-  image_compression: ^1.0.5
-  photo_view: ^0.15.0
-  permission_handler: ^11.3.1
-
-  # In-app review
-  in_app_review: ^2.0.10
-
-  share_plus: ^12.0.1
-
-  notification_centre: ^0.0.3
 
 dev_dependencies:
   flutter_test:
@@ -142,15 +126,15 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  image_path: "assets/images/icons/reins.png"
+  image_path: "assets/images/icons/coqui.png"
   android: true
   ios: true
   macos:
     generate: true
-    image_path: "assets/images/icons/reins-macos.png"
+    image_path: "assets/images/icons/coqui-macos.png"
   windows:
     generate: true
-    image_path: "assets/images/icons/reins-windows.png"
+    image_path: "assets/images/icons/coqui-windows.png"
     icon_size: 256
 
 flutter_native_splash:

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:reins/Constants/constants.dart';
+import 'package:coqui_app/Constants/constants.dart';
 
 class ThemesSettings extends StatefulWidget {
   const ThemesSettings({super.key});
@@ -58,10 +58,6 @@ class _ThemesSettingsState extends State<ThemesSettings> {
           runSpacing: 10,
           children: [
             _ThemeButton(
-              seedColor: Colors.red,
-              onPressed: () => _settingsBox.put("color", Colors.red),
-            ),
-            _ThemeButton(
               seedColor: Colors.green,
               onPressed: () => _settingsBox.put("color", Colors.green),
             ),
@@ -76,6 +72,10 @@ class _ThemesSettingsState extends State<ThemesSettings> {
             _ThemeButton(
               seedColor: Colors.orange,
               onPressed: () => _settingsBox.put("color", Colors.orange),
+            ),
+            _ThemeButton(
+              seedColor: Colors.red,
+              onPressed: () => _settingsBox.put("color", Colors.red),
             ),
             _ThemeButton(
               seedColor: Colors.grey,
