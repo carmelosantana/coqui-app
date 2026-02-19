@@ -62,7 +62,7 @@ class RoleProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on CoquiException catch (e) {
-      _error = e.message;
+      _error = _roleErrorMessage(e);
       notifyListeners();
       return false;
     }
@@ -93,7 +93,7 @@ class RoleProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on CoquiException catch (e) {
-      _error = e.message;
+      _error = _roleErrorMessage(e);
       notifyListeners();
       return false;
     }
@@ -107,10 +107,23 @@ class RoleProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on CoquiException catch (e) {
-      _error = e.message;
+      _error = _roleErrorMessage(e);
       notifyListeners();
       return false;
     }
+  }
+
+  /// Map API error codes to user-friendly messages for role operations.
+  String _roleErrorMessage(CoquiException e) {
+    return switch (e.code) {
+      'role_builtin' =>
+        'This role is managed by the system and cannot be modified.',
+      'role_reserved' => 'This role name is reserved and cannot be used.',
+      'conflict' => 'A role with this name already exists.',
+      'missing_field' => e.message,
+      'validation_error' => e.message,
+      _ => e.message,
+    };
   }
 
   /// Clear the current error.

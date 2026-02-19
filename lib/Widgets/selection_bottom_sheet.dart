@@ -30,6 +30,7 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
 
   T? _selectedItem;
   List<T> _items = [];
+  String? _errorMessage;
 
   var _state = RequestState.uninitialized;
   late CancelableOperation _fetchOperation;
@@ -53,6 +54,7 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
   Future<void> _fetchItems() async {
     setState(() {
       _state = RequestState.loading;
+      _errorMessage = null;
     });
 
     try {
@@ -64,6 +66,7 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
       }
     } catch (e) {
       _state = RequestState.error;
+      _errorMessage = e.toString();
     }
 
     if (mounted) {
@@ -118,10 +121,39 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
   Widget _buildBody(BuildContext context) {
     if (_state == RequestState.error) {
       return Center(
-        child: Text(
-          'An error occurred while fetching the items.'
-          '\nCheck your server connection and try again.',
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: Theme.of(context).colorScheme.error,
+                size: 32,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage ?? 'An error occurred.',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Check your server connection and try again.',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _fetchOperation =
+                      CancelableOperation.fromFuture(_fetchItems());
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     } else if (_state == RequestState.loading && _items.isEmpty) {

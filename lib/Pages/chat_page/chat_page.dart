@@ -4,6 +4,7 @@ import 'package:responsive_framework/responsive_framework.dart';
 
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/chat_preset.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -116,7 +117,7 @@ class _ChatPageState extends State<ChatPage> {
         isAwaitingReply: chatProvider.isCurrentSessionThinking,
         error: chatProvider.currentSessionError != null
             ? ChatError(
-                message: chatProvider.currentSessionError!.message,
+                error: chatProvider.currentSessionError!,
                 onRetry: () => chatProvider.retryLastPrompt(),
               )
             : null,
@@ -188,7 +189,29 @@ class _ChatPageState extends State<ChatPage> {
       }
 
       if (_selectedRole != null) {
-        await chatProvider.createNewSession(_selectedRole!);
+        try {
+          await chatProvider.createNewSession(_selectedRole!);
+        } on CoquiException catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(e.message),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          }
+          return;
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to create session: $e'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          }
+          return;
+        }
 
         chatProvider.sendPrompt(_textFieldController.text);
 

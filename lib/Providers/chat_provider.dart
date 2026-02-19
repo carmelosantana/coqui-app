@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -211,9 +212,23 @@ class ChatProvider extends ChangeNotifier {
 
   // ── Prompt submission ─────────────────────────────────────────────
 
+  /// Maximum prompt size in bytes (matches server's MAX_PROMPT_BYTES).
+  static const int _maxPromptBytes = 102400; // 100 KB
+
   Future<void> sendPrompt(String text) async {
     final session = currentSession;
     if (session == null) return;
+
+    // Client-side prompt length guard
+    if (utf8.encode(text).length > _maxPromptBytes) {
+      _sessionErrors[session.id] = CoquiException(
+        'Message is too long. Maximum size is 100 KB.',
+        code: 'payload_too_large',
+        statusCode: 413,
+      );
+      notifyListeners();
+      return;
+    }
 
     // Add optimistic user message
     final userMessage = CoquiMessage(

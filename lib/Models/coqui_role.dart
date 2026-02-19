@@ -9,6 +9,8 @@ class CoquiRole {
   final int version;
   final String accessLevel;
   final bool isBuiltin;
+  final bool isSystem;
+  final bool editable;
   final String model;
   final String? titleModel;
   final String? instructions;
@@ -21,6 +23,8 @@ class CoquiRole {
     this.version = 1,
     this.accessLevel = 'readonly',
     this.isBuiltin = false,
+    this.isSystem = false,
+    this.editable = true,
     this.titleModel,
     this.instructions,
   });
@@ -33,6 +37,8 @@ class CoquiRole {
       version: json['version'] as int? ?? 1,
       accessLevel: json['access_level'] as String? ?? 'readonly',
       isBuiltin: json['is_builtin'] as bool? ?? false,
+      isSystem: json['is_system'] as bool? ?? false,
+      editable: json['editable'] as bool? ?? true,
       model: json['model'] as String? ?? '',
       titleModel: json['title_model'] as String?,
       instructions: json['instructions'] as String?,
@@ -47,7 +53,7 @@ class CoquiRole {
       'description': description,
       'access_level': accessLevel,
       if (instructions != null) 'instructions': instructions,
-      if (titleModel != null) 'model': titleModel,
+      if (model.isNotEmpty) 'model': model,
     };
   }
 
@@ -58,6 +64,8 @@ class CoquiRole {
     int? version,
     String? accessLevel,
     bool? isBuiltin,
+    bool? isSystem,
+    bool? editable,
     String? model,
     String? titleModel,
     String? instructions,
@@ -69,6 +77,8 @@ class CoquiRole {
       version: version ?? this.version,
       accessLevel: accessLevel ?? this.accessLevel,
       isBuiltin: isBuiltin ?? this.isBuiltin,
+      isSystem: isSystem ?? this.isSystem,
+      editable: editable ?? this.editable,
       model: model ?? this.model,
       titleModel: titleModel ?? this.titleModel,
       instructions: instructions ?? this.instructions,

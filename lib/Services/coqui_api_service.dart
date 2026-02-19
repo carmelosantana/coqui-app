@@ -46,7 +46,10 @@ class CoquiApiService {
 
   /// Standard headers for JSON requests with auth.
   Map<String, String> get _headers {
-    final headers = {'Content-Type': 'application/json'};
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
     if (_apiKey.isNotEmpty) {
       headers['Authorization'] = 'Bearer $_apiKey';
     }
@@ -54,15 +57,58 @@ class CoquiApiService {
   }
 
   /// Parse a JSON response body, throwing on errors.
+  ///
+  /// Handles non-JSON responses (proxy errors, empty bodies) gracefully
+  /// and parses the unified error envelope `{"error": "...", "code": "..."}` .
   Map<String, dynamic> _parseResponse(http.Response response) {
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> body;
+
+    try {
+      body = jsonDecode(response.body) as Map<String, dynamic>;
+    } on FormatException {
+      // Non-JSON response (proxy HTML pages, empty body, etc.)
+      if (response.statusCode >= 400) {
+        throw CoquiException(
+          'Server error (${response.statusCode})',
+          statusCode: response.statusCode,
+          code: 'internal_error',
+        );
+      }
+      throw CoquiException(
+        'Invalid response from server',
+        statusCode: response.statusCode,
+        code: 'internal_error',
+      );
+    }
 
     if (response.statusCode >= 400) {
-      final error = body['error'] as String? ?? 'Unknown error';
-      throw CoquiException(error, statusCode: response.statusCode);
+      throw CoquiException.fromJson(body, statusCode: response.statusCode);
     }
 
     return body;
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────
+
+  /// Read a streamed error response body and throw a [CoquiException].
+  ///
+  /// Attempts to parse the unified error envelope from the response.
+  /// Falls back to a generic status-based message if parsing fails.
+  Future<Never> _throwStreamedError(http.StreamedResponse response) async {
+    final rawBody = await response.stream.bytesToString();
+
+    try {
+      final body = jsonDecode(rawBody) as Map<String, dynamic>;
+      throw CoquiException.fromJson(body, statusCode: response.statusCode);
+    } on CoquiException {
+      rethrow;
+    } catch (_) {
+      throw CoquiException(
+        'Server error (${response.statusCode})',
+        statusCode: response.statusCode,
+        code: 'internal_error',
+      );
+    }
   }
 
   // ── Health ──────────────────────────────────────────────────────────
@@ -191,22 +237,9 @@ class CoquiApiService {
       throw CoquiException('Connection failed: ${e.message}');
     }
 
-    if (response.statusCode == 404) {
-      throw CoquiException('Session not found', statusCode: 404);
-    } else if (response.statusCode == 409) {
-      throw CoquiException(
-        'Session already has an active agent run',
-        statusCode: 409,
-      );
-    } else if (response.statusCode == 400) {
-      throw CoquiException('Invalid prompt', statusCode: 400);
-    } else if (response.statusCode == 401) {
-      throw CoquiException('Authentication failed', statusCode: 401);
-    } else if (response.statusCode != 200) {
-      throw CoquiException(
-        'Server error (${response.statusCode})',
-        statusCode: response.statusCode,
-      );
+    // For non-200 responses, read the body and parse the error envelope
+    if (response.statusCode != 200) {
+      await _throwStreamedError(response);
     }
 
     // Parse the SSE stream
@@ -391,15 +424,17 @@ class CoquiApiService {
   // ── Credentials ────────────────────────────────────────────────────
 
   /// List stored credential keys (values are never exposed).
-  Future<List<String>> listCredentials() async {
+  ///
+  /// Returns a list of maps with `key` and `is_set` fields.
+  Future<List<Map<String, dynamic>>> listCredentials() async {
     final response = await http.get(
       _url('/api/credentials'),
       headers: _headers,
     );
     final body = _parseResponse(response);
 
-    final keys = body['credentials'] as List? ?? [];
-    return keys.cast<String>();
+    final creds = body['credentials'] as List? ?? [];
+    return creds.cast<Map<String, dynamic>>();
   }
 
   /// Set a credential.

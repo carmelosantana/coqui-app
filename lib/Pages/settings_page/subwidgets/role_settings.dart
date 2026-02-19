@@ -90,9 +90,8 @@ class _RoleSettingsState extends State<RoleSettings> {
                     return RoleListTile(
                       role: role,
                       selectable: false,
-                      trailing: role.isBuiltin
-                          ? null
-                          : PopupMenuButton<String>(
+                      trailing: role.editable
+                          ? PopupMenuButton<String>(
                               onSelected: (value) {
                                 if (value == 'edit') {
                                   _showEditRoleDialog(context, role);
@@ -128,10 +127,11 @@ class _RoleSettingsState extends State<RoleSettings> {
                                   ),
                                 ),
                               ],
-                            ),
-                      onSelected: role.isBuiltin
-                          ? null
-                          : (_) => _showEditRoleDialog(context, role),
+                            )
+                          : null,
+                      onSelected: role.editable
+                          ? (_) => _showEditRoleDialog(context, role)
+                          : null,
                     );
                   }),
               ],
