@@ -126,26 +126,27 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  image_path: "assets/images/icons/coqui.png"
+  image_path: "assets/images/coqui-icon.png"
   android: true
   ios: true
+  image_path_ios: "assets/images/coqui-icon.png"
   macos:
     generate: true
-    image_path: "assets/images/icons/coqui-macos.png"
+    image_path: "assets/images/coqui-icon.png"
   windows:
     generate: true
-    image_path: "assets/images/icons/coqui-windows.png"
+    image_path: "assets/images/coqui-icon.png"
     icon_size: 256
 
 flutter_native_splash:
-  color: "#ffffff"
+  color: "#000000"
   color_dark: "#000000"
-  image: assets/images/splash/splash_light.png
-  image_dark: assets/images/splash/splash_dark.png
+  image: assets/images/coqui-bw-icon.png
+  image_dark: assets/images/coqui-bw-icon.png
 
   android_12:
-    image: assets/images/splash/splash_light_android12.png
-    image_dark: assets/images/splash/splash_dark_android12.png
+    image: assets/images/coqui-bw-icon.png
+    image_dark: assets/images/coqui-bw-icon.png
 
   android: true
   ios: true
