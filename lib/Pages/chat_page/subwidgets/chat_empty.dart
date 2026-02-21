@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:coqui_app/Constants/constants.dart';
 
 class ChatEmpty extends StatelessWidget {
   final Widget child;
@@ -13,10 +14,13 @@ class ChatEmpty extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/coqui.png',
-              height: 48,
-              color: Theme.of(context).colorScheme.onSurface,
+            ClipOval(
+              child: Image.asset(
+                AppConstants.appIconPng,
+                height: 48,
+                width: 48,
+                fit: BoxFit.cover,
+              ),
             ),
             child,
           ],
