@@ -70,6 +70,61 @@ Notes:
 - Windows desktop builds require a Windows host (or CI runner). Wine cross-build is not a reliable Flutter desktop release path.
 - Use `--no-icons` to skip icon padding + launcher icon generation.
 
+## Testing Android APK
+
+Build Android debug APK:
+
+```bash
+./scripts/build.sh --platform android --mode debug --no-icons
+```
+
+Start emulator:
+
+```bash
+~/Library/Android/sdk/emulator/emulator -list-avds
+~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36.1
+```
+
+Install APK to emulator/device:
+
+```bash
+~/Library/Android/sdk/platform-tools/adb devices
+~/Library/Android/sdk/platform-tools/adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
+Launch app from terminal:
+
+```bash
+~/Library/Android/sdk/platform-tools/adb shell monkey -p ai.coquibot.app.debug -c android.intent.category.LAUNCHER 1
+```
+
+Tip: you can also drag `build/app/outputs/flutter-apk/app-debug.apk` onto a running emulator window.
+
+## Testing iOS Build / IPA
+
+Debug iOS app build (device-signed):
+
+```bash
+./scripts/build.sh --platform ios --mode debug --no-icons
+```
+
+This outputs `build/ios/iphoneos/Runner.app`.
+To test on a physical iPhone, connect device and install via Xcode (`Window` → `Devices and Simulators`) or run directly with Flutter/Xcode.
+
+Release IPA build:
+
+```bash
+./scripts/build.sh --platform ios --mode release --no-icons
+```
+
+This outputs to `build/ios/ipa`.
+
+IPA testing options:
+- Upload to TestFlight (recommended): use Transporter or Xcode Organizer, then install via TestFlight.
+- Direct device install (ad hoc/dev signed IPA): use Apple Configurator 2.
+
+Note: IPA files do not run on iOS Simulator.
+
 ## Icon Padding Script
 
 Use [scripts/pad-icon.sh](scripts/pad-icon.sh) to shrink artwork inside a PNG canvas (transparent padding around it).
