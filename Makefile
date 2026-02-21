@@ -1,6 +1,7 @@
 .PHONY: help setup deps icons splash pods-ios pods-macos pods clean \
        ios-debug ios-release ios-ipa ios-open \
-       macos-debug macos-release macos-open \
+	macos-debug macos-release macos-open \
+	android-debug android-release android-install android-launch android-avds android-emulator \
        doctor test
 
 # Default target
@@ -62,6 +63,30 @@ macos-release: ## Build macOS release
 
 macos-open: ## Open macOS project in Xcode
 	open macos/Runner.xcworkspace
+
+# ─── Android Builds & Device Helpers ────────────────────────────────────
+
+android-debug: ## Build Android debug APK
+	flutter build apk --debug
+
+android-release: ## Build Android release App Bundle (.aab)
+	flutter build appbundle --release
+
+android-install: ## Install debug APK to connected Android device/emulator
+	~/Library/Android/sdk/platform-tools/adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
+android-launch: ## Launch app on connected Android device/emulator
+	~/Library/Android/sdk/platform-tools/adb shell monkey -p ai.coquibot.app.debug -c android.intent.category.LAUNCHER 1
+
+android-avds: ## List available Android emulators (AVDs)
+	~/Library/Android/sdk/emulator/emulator -list-avds
+
+android-emulator: ## Start Android emulator (set AVD=<name>)
+	@if [ -z "$(AVD)" ]; then \
+		echo "Usage: make android-emulator AVD=<name>"; \
+		exit 1; \
+	fi
+	~/Library/Android/sdk/emulator/emulator -avd $(AVD)
 
 # ─── Testing ────────────────────────────────────────────────────────────
 

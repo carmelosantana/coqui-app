@@ -146,6 +146,25 @@ info() {
   echo "[info] $1"
 }
 
+resolveAndroidSdkPath() {
+  if [[ -n "${ANDROID_HOME:-}" && -d "${ANDROID_HOME}" ]]; then
+    echo "$ANDROID_HOME"
+    return
+  fi
+
+  if [[ -n "${ANDROID_SDK_ROOT:-}" && -d "${ANDROID_SDK_ROOT}" ]]; then
+    echo "$ANDROID_SDK_ROOT"
+    return
+  fi
+
+  if [[ -d "$HOME/Library/Android/sdk" ]]; then
+    echo "$HOME/Library/Android/sdk"
+    return
+  fi
+
+  echo ""
+}
+
 cleanupOldArtifact() {
   local target="$1"
   local targetMode="$2"
@@ -268,6 +287,20 @@ buildTarget() {
       openPath "$projectRoot/build/linux"
       ;;
     android)
+      local sdkPath
+      sdkPath="$(resolveAndroidSdkPath)"
+      if [[ -z "$sdkPath" ]]; then
+        if [[ "$platform" == 'all' ]]; then
+          warn "Skipping Android build: Android SDK not found. Install Android Studio + SDK and set ANDROID_HOME/ANDROID_SDK_ROOT."
+          return
+        fi
+
+        echo "Error: Android SDK not found." >&2
+        echo "Install Android Studio and SDK, then set ANDROID_HOME (or ANDROID_SDK_ROOT)," >&2
+        echo "or run: flutter config --android-sdk <path-to-sdk>" >&2
+        exit 1
+      fi
+
       cleanupOldArtifact "android" "$targetMode"
       if [[ "$targetMode" == 'debug' ]]; then
         runCmd "cd '$projectRoot' && flutter build apk --debug"
