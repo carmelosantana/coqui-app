@@ -44,6 +44,24 @@ flutter build apk
 flutter build ios
 ```
 
+## Icon Padding Script
+
+Use [scripts/pad-icon.sh](scripts/pad-icon.sh) to shrink artwork inside a PNG canvas (transparent padding around it).
+
+```bash
+# Keep 84% inner artwork size and overwrite image
+./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 84%
+
+# Or set explicit padding per side and keep a backup
+./scripts/pad-icon.sh --image assets/images/coqui-icon.png --padding 10 --backup
+```
+
+After padding, regenerate app icons:
+
+```bash
+flutter pub run flutter_launcher_icons
+```
+
 ## License
 
 GPL-3.0
