@@ -13,9 +13,13 @@ class BottomSheetHeader extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: Image.asset(AppConstants.appIconPng, height: 48),
+          child: ClipOval(
+            child: Image.asset(
+              AppConstants.appIconPng,
+              height: 48,
+              width: 48,
+              fit: BoxFit.cover,
+            ),
           ),
         ),
         FlexibleText(
