@@ -2,6 +2,29 @@
 
 This guide covers final checks and release steps for iOS, Android, macOS, and Windows.
 
+## 0) Unified Builder (Recommended)
+
+Use [scripts/build.sh](scripts/build.sh) to standardize icon prep + build + open steps.
+
+```bash
+# macOS debug
+./scripts/build.sh --platform macos --mode debug
+
+# iOS release (IPA)
+./scripts/build.sh --platform ios --mode release
+
+# Android release (AAB)
+./scripts/build.sh --platform android --mode release
+
+# All possible targets on current host
+./scripts/build.sh --platform all --mode debug
+```
+
+Notes:
+- `build.sh` removes previous platform artifact outputs before rebuilding to avoid stale executable confusion.
+- `--platform all` skips unsupported targets on the current host with warnings.
+- Windows desktop builds should run on a Windows host (or Windows CI runner). Wine automation is not a reliable Flutter desktop release path.
+
 ## 1) Repo Cleanup Before Release
 
 Run these commands from project root:
@@ -58,6 +81,35 @@ flutter build ipa --release
 
 Notes:
 - If icon validation fails due alpha channel, set `remove_alpha_ios: true` in `flutter_launcher_icons` config and regenerate icons.
+
+## 3.1) Apple Security & Compliance Checklist
+
+Before uploading to TestFlight/App Store, verify:
+
+- **Signing and identity**
+   - Distribution certificate and provisioning profiles are valid.
+   - Bundle identifier and Team ID match App Store Connect app record.
+
+- **Privacy and permissions**
+   - `Info.plist` usage strings are present for every permission your app touches.
+   - App Privacy answers in App Store Connect match actual data behavior.
+
+- **Binary hardening and integrity**
+   - Release build only (`flutter build ipa --release`).
+   - No debug flags/logging toggles enabled for production.
+   - Dependencies are up-to-date and from trusted sources.
+
+- **App icon / asset validation**
+   - No alpha channel in iOS app icons if App Store validation rejects it (`remove_alpha_ios: true`).
+   - Launch screen assets render correctly on light/dark mode.
+
+- **Runtime trust and warnings**
+   - For App Store distribution, Apple signing avoids Gatekeeper warnings on user devices.
+   - For direct macOS distribution outside App Store, sign with Developer ID and notarize (`notarytool`) to avoid security warnings.
+
+- **Submission hygiene**
+   - TestFlight smoke test on real devices before review submission.
+   - Crash-free startup and core chat flow validated.
 
 ## 4) Android Release (Play Store)
 
