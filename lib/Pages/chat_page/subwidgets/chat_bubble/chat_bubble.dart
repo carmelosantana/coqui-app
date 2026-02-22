@@ -113,6 +113,16 @@ class _ChatBubbleBody extends StatelessWidget {
                 onTapLink: (text, href, title) => launchUrlString(href!),
               ),
             ),
+          // Attached file chips (user messages only)
+          if (isSentFromUser && message.attachedFileNames.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              alignment: WrapAlignment.end,
+              children: message.attachedFileNames
+                  .map((name) => _AttachedFileChip(name: name))
+                  .toList(),
+            ),
           Text(
             TimeOfDay.fromDateTime(message.createdAt.toLocal()).format(context),
             style: TextStyle(
@@ -157,4 +167,47 @@ class _ChatBubbleBody extends StatelessWidget {
 
   CrossAxisAlignment get bubbleAlignment =>
       isSentFromUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+}
+
+/// A small read-only chip showing an attached file name in a sent message.
+class _AttachedFileChip extends StatelessWidget {
+  final String name;
+
+  const _AttachedFileChip({required this.name});
+
+  String get _truncated {
+    const max = 22;
+    if (name.length <= max) return name;
+    final dot = name.lastIndexOf('.');
+    final ext = dot >= 0 ? name.substring(dot) : '';
+    return '${name.substring(0, max - ext.length - 1)}\u2026$ext';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.attach_file, size: 12, color: colorScheme.primary),
+          const SizedBox(width: 4),
+          Text(
+            _truncated,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onPrimaryContainer,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
 }

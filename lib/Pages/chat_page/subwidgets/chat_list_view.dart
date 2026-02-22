@@ -150,6 +150,7 @@ class _ChatListViewState extends State<ChatListView> {
                     key: Key(message.id),
                     onSizeChanged: _onMessageSizeChanged,
                     child: ChatBubble(
+                      key: ValueKey(message.id),
                       message: message,
                       allMessages: widget.allMessages,
                     ),
@@ -157,6 +158,7 @@ class _ChatListViewState extends State<ChatListView> {
                 }
 
                 return ChatBubble(
+                  key: ValueKey(message.id),
                   message: message,
                   allMessages: widget.allMessages,
                 );

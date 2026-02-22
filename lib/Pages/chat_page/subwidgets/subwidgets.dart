@@ -7,3 +7,4 @@ export 'chat_error.dart';
 
 export 'chat_attachment/chat_attachment_row.dart';
 export 'chat_attachment/chat_attachment_preset.dart';
+export 'chat_attachment/chat_file_chip.dart';

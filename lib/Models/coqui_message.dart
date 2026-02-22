@@ -12,6 +12,12 @@ class CoquiMessage {
   final String? toolCallId;
   final DateTime createdAt;
 
+  /// Local-only: names of files attached to this user message.
+  ///
+  /// Not persisted to the server or database — set on the optimistic user
+  /// message and carried forward when server messages replace it.
+  final List<String> attachedFileNames;
+
   CoquiMessage({
     required this.id,
     required this.content,
@@ -19,6 +25,7 @@ class CoquiMessage {
     this.toolCalls,
     this.toolCallId,
     DateTime? createdAt,
+    this.attachedFileNames = const [],
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory CoquiMessage.fromJson(Map<String, dynamic> json) {

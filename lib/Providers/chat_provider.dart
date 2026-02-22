@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:coqui_app/Models/agent_activity_event.dart';
@@ -10,6 +11,7 @@ import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/sse_event.dart';
+import 'package:coqui_app/Models/uploaded_file.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
@@ -37,9 +39,16 @@ class ChatProvider extends ChangeNotifier {
   List<CoquiMessage> _messages = [];
   List<CoquiMessage> get messages => _messages;
 
-  /// Displayable messages (excludes tool messages).
-  List<CoquiMessage> get displayMessages =>
-      _messages.where((m) => m.isDisplayable).toList();
+  /// Displayable messages (excludes tool messages). Cached to avoid
+  /// recomputing on every widget build.
+  List<CoquiMessage> _displayMessages = [];
+  List<CoquiMessage> get displayMessages => _displayMessages;
+
+  /// Rebuild the cached [displayMessages] list. Must be called after every
+  /// mutation of [_messages].
+  void _updateDisplayMessages() {
+    _displayMessages = _messages.where((m) => m.isDisplayable).toList();
+  }
 
   // ── Streaming state ────────────────────────────────────────────────
 
@@ -77,6 +86,16 @@ class ChatProvider extends ChangeNotifier {
 
   CoquiException? get currentSessionError => _sessionErrors[currentSession?.id];
 
+  // ── File attachment state ──────────────────────────────────────────
+
+  final List<UploadedFile> _pendingFiles = [];
+
+  /// Files selected by the user that are pending or ready to attach to the
+  /// next prompt. Each file transitions from [UploadedFileStatus.uploading]
+  /// to [UploadedFileStatus.uploaded] (or [UploadedFileStatus.error]) once
+  /// the server upload completes.
+  List<UploadedFile> get pendingFiles => List.unmodifiable(_pendingFiles);
+
   // ── Constructor ────────────────────────────────────────────────────
 
   ChatProvider({
@@ -111,9 +130,11 @@ class ChatProvider extends ChangeNotifier {
   void _resetChat() {
     _currentSessionIndex = -1;
     _messages.clear();
+    _updateDisplayMessages();
     _currentTurnActivity.clear();
     _currentIteration = 0;
     _lastTurnSummary = null;
+    _pendingFiles.clear();
     notifyListeners();
   }
 
@@ -161,6 +182,7 @@ class ChatProvider extends ChangeNotifier {
     await _databaseService.upsertSession(session);
 
     _messages.clear();
+    _updateDisplayMessages();
     _currentTurnActivity.clear();
 
     notifyListeners();
@@ -192,6 +214,7 @@ class ChatProvider extends ChangeNotifier {
       // Fetch messages from server
       final serverMessages = await _apiService.listMessages(currentSession!.id);
       _messages = serverMessages;
+      _updateDisplayMessages();
 
       // Cache locally
       await _databaseService.upsertMessages(
@@ -201,11 +224,13 @@ class ChatProvider extends ChangeNotifier {
     } catch (_) {
       // Fall back to cached messages
       _messages = await _databaseService.getMessages(currentSession!.id);
+      _updateDisplayMessages();
     }
 
     _currentTurnActivity.clear();
     _currentIteration = 0;
     _lastTurnSummary = null;
+    _pendingFiles.clear();
 
     FocusManager.instance.primaryFocus?.unfocus();
     notifyListeners();
@@ -231,20 +256,38 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    // Add optimistic user message
+    // Collect IDs and names of successfully uploaded files, then clear the
+    // pending list before starting the stream so the UI resets immediately.
+    final uploadedFiles = _pendingFiles
+        .where((f) =>
+            f.status == UploadedFileStatus.uploaded && f.serverId != null)
+        .toList();
+    final fileIds = uploadedFiles.map((f) => f.serverId!).toList();
+    final fileNames = uploadedFiles.map((f) => f.name).toList();
+    _pendingFiles.clear();
+
+    // Add optimistic user message, carrying the file names so the bubble
+    // can render chips even after server messages replace this instance.
     final userMessage = CoquiMessage(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       content: text,
       role: CoquiMessageRole.user,
+      attachedFileNames: fileNames,
     );
     _messages.add(userMessage);
+    _updateDisplayMessages();
     notifyListeners();
 
     // Start streaming
-    await _initializeStream(session, text);
+    await _initializeStream(session, text, fileIds, fileNames);
   }
 
-  Future<void> _initializeStream(CoquiSession session, String prompt) async {
+  Future<void> _initializeStream(
+    CoquiSession session,
+    String prompt,
+    List<String> fileIds,
+    List<String> fileNames,
+  ) async {
     // Cancel any existing stream for this session
     _cancelStream(session.id);
 
@@ -262,7 +305,7 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _processStream(session, prompt);
+      await _processStream(session, prompt, fileIds, fileNames);
     } on CoquiException catch (e) {
       _sessionErrors[session.id] = e;
     } on SocketException catch (_) {
@@ -279,8 +322,13 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _processStream(CoquiSession session, String prompt) async {
-    final stream = _apiService.sendPrompt(session.id, prompt);
+  Future<void> _processStream(
+    CoquiSession session,
+    String prompt,
+    List<String> fileIds,
+    List<String> fileNames,
+  ) async {
+    final stream = _apiService.sendPrompt(session.id, prompt, fileIds: fileIds);
 
     String accumulatedContent = '';
     CoquiMessage? assistantMessage;
@@ -341,6 +389,7 @@ class ChatProvider extends ChangeNotifier {
               assistantMessage = _messages[index];
             }
           }
+          _updateDisplayMessages();
           break;
 
         case SseEventType.error:
@@ -389,12 +438,48 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // After stream completes, re-fetch messages from server to get real IDs
+    // After stream completes, re-fetch messages from server to get real IDs.
+    // Preserve any local attachedFileNames by matching on user-message index
+    // (positional) so duplicate-content messages don't share file names.
     try {
       final serverMessages = await _apiService.listMessages(session.id);
-      _messages = serverMessages;
-      await _databaseService.upsertMessages(serverMessages,
-          sessionId: session.id);
+
+      // Build a positional lookup: Nth user message → its file names.
+      final Map<int, List<String>> fileNamesByIndex = {};
+      int userIdx = 0;
+      for (final m in _messages) {
+        if (m.role == CoquiMessageRole.user) {
+          if (m.attachedFileNames.isNotEmpty) {
+            fileNamesByIndex[userIdx] = m.attachedFileNames;
+          }
+          userIdx++;
+        }
+      }
+
+      // Re-attach file names to the corresponding Nth user message from
+      // the server response.
+      userIdx = 0;
+      _messages = serverMessages.map((m) {
+        if (m.role == CoquiMessageRole.user) {
+          final names = fileNamesByIndex[userIdx];
+          userIdx++;
+          if (names != null && names.isNotEmpty) {
+            return CoquiMessage(
+              id: m.id,
+              content: m.content,
+              role: m.role,
+              toolCalls: m.toolCalls,
+              toolCallId: m.toolCallId,
+              createdAt: m.createdAt,
+              attachedFileNames: names,
+            );
+          }
+        }
+        return m;
+      }).toList();
+      _updateDisplayMessages();
+
+      await _databaseService.upsertMessages(_messages, sessionId: session.id);
     } catch (_) {
       // Keep the streaming messages if re-fetch fails
     }
@@ -451,7 +536,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionErrors.remove(currentSession!.id);
 
     // Re-send the prompt
-    await _initializeStream(currentSession!, lastUserMessage.content);
+    await _initializeStream(currentSession!, lastUserMessage.content, const [], const []);
   }
 
   /// Cancel the current streaming operation.
@@ -476,6 +561,71 @@ class ChatProvider extends ChangeNotifier {
     final session = _sessions.removeAt(_currentSessionIndex);
     _sessions.insert(0, session);
     _currentSessionIndex = 0;
+  }
+
+  // ── File attachments ──────────────────────────────────────────────
+
+  /// Pick and upload files, showing upload progress via [pendingFiles].
+  ///
+  /// Each file is uploaded independently in parallel. The [pendingFiles]
+  /// list is updated as each upload completes so the UI can display
+  /// per-file status in real-time.
+  Future<void> attachFiles(List<PlatformFile> files) async {
+    final session = currentSession;
+    if (session == null || files.isEmpty) return;
+
+    // Add all files to the pending list immediately with uploading status.
+    final newFiles = files
+        .map((f) => UploadedFile(
+              name: f.name,
+              size: f.size,
+            ))
+        .toList();
+
+    _pendingFiles.addAll(newFiles);
+    notifyListeners();
+
+    // Upload files in parallel, updating individual statuses as they finish.
+    await Future.wait(
+      List.generate(files.length, (i) async {
+        final platformFile = files[i];
+        final localId = newFiles[i].localId;
+        try {
+          final ids = await _apiService.uploadFiles(
+            session.id,
+            [platformFile],
+          );
+          _updatePendingFile(
+            localId,
+            serverId: ids.isNotEmpty ? ids.first : null,
+            status: UploadedFileStatus.uploaded,
+          );
+        } catch (_) {
+          _updatePendingFile(localId, status: UploadedFileStatus.error);
+        }
+      }),
+    );
+  }
+
+  /// Remove a pending file by its [localId] before it is sent.
+  void removeAttachment(String localId) {
+    _pendingFiles.removeWhere((f) => f.localId == localId);
+    notifyListeners();
+  }
+
+  void _updatePendingFile(
+    String localId, {
+    String? serverId,
+    required UploadedFileStatus status,
+  }) {
+    final index = _pendingFiles.indexWhere((f) => f.localId == localId);
+    if (index >= 0) {
+      _pendingFiles[index] = _pendingFiles[index].copyWith(
+        serverId: serverId,
+        status: status,
+      );
+      notifyListeners();
+    }
   }
 
   // ── Roles ─────────────────────────────────────────────────────────
