@@ -33,6 +33,8 @@ class _ChatPageState extends State<ChatPage> {
 
   // Text field controller for the chat prompt
   final _textFieldController = TextEditingController();
+  final _textFieldFocusNode = FocusNode();
+  bool _hadInputFocus = false;
 
   /// Tracks whether the text field has non-empty content. Used by the suffix
   /// icon builder so we can avoid calling setState on every keystroke.
@@ -46,6 +48,10 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
 
+    _textFieldFocusNode.addListener(() {
+      _hadInputFocus = _textFieldFocusNode.hasFocus;
+    });
+
     // Refresh sessions on launch
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
@@ -55,6 +61,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _textFieldFocusNode.dispose();
     _textFieldController.dispose();
     _hasText.dispose();
     super.dispose();
@@ -64,6 +71,12 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (BuildContext context, ChatProvider chatProvider, _) {
+        // Restore focus if user was typing and focus got lost due to rebuilds
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_hadInputFocus && !_textFieldFocusNode.hasFocus) {
+            _textFieldFocusNode.requestFocus();
+          }
+        });
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
@@ -83,8 +96,8 @@ class _ChatPageState extends State<ChatPage> {
               child: ChatTextField(
                 key: ValueKey(chatProvider.currentSession?.id),
                 controller: _textFieldController,
-                onChanged: (text) =>
-                    _hasText.value = text.trim().isNotEmpty,
+                focusNode: _textFieldFocusNode,
+                onChanged: (text) => _hasText.value = text.trim().isNotEmpty,
                 onEditingComplete: () => _handleOnEditingComplete(chatProvider),
                 prefixIcon: _buildAttachButton(chatProvider),
                 suffixIcon: _buildTextFieldSuffixIcon(chatProvider),

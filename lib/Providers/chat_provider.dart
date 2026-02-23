@@ -232,7 +232,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       // Then sync with server in background
       final serverMessages = await _apiService.listMessages(currentSession!.id);
-      
+
       // Only update if still on the same session
       if (currentSession != null) {
         _messages = serverMessages;
@@ -253,16 +253,17 @@ class ChatProvider extends ChangeNotifier {
     _lastTurnSummary = null;
     _pendingFiles.clear();
 
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Do not forcibly unfocus the input; preserve user typing across loads
     notifyListeners();
   }
 
   // ── Unread state ──────────────────────────────────────────────────
 
   final Set<String> _unreadSessions = {};
-  
-  bool hasUnreadMessages(String sessionId) => _unreadSessions.contains(sessionId);
-  
+
+  bool hasUnreadMessages(String sessionId) =>
+      _unreadSessions.contains(sessionId);
+
   void _markSessionAsRead(String sessionId) {
     if (_unreadSessions.contains(sessionId)) {
       _unreadSessions.remove(sessionId);
@@ -271,13 +272,16 @@ class ChatProvider extends ChangeNotifier {
   }
 
   // Expose per-session streaming/thinking/error state for UI badges
-  bool isSessionStreaming(String sessionId) => _activeStreams.contains(sessionId);
+  bool isSessionStreaming(String sessionId) =>
+      _activeStreams.contains(sessionId);
 
   bool isSessionThinking(String sessionId) =>
-      _activeStreams.contains(sessionId) && _streamingContent[sessionId] == null;
+      _activeStreams.contains(sessionId) &&
+      _streamingContent[sessionId] == null;
 
-  bool hasSessionError(String sessionId) => _sessionErrors.containsKey(sessionId);
-  
+  bool hasSessionError(String sessionId) =>
+      _sessionErrors.containsKey(sessionId);
+
   // ── Prompt submission ─────────────────────────────────────────────
 
   /// Maximum prompt size in bytes (matches server's MAX_PROMPT_BYTES).
@@ -286,7 +290,7 @@ class ChatProvider extends ChangeNotifier {
   Future<void> sendPrompt(String text) async {
     final session = currentSession;
     if (session == null) return;
-    
+
     // Clear unread status for the active session
     _markSessionAsRead(session.id);
 
@@ -389,11 +393,13 @@ class ChatProvider extends ChangeNotifier {
       }
 
       final isViewing = currentSession?.id == session.id;
+      bool stateChanged = false;
 
       switch (event.type) {
         case SseEventType.agentStart:
           if (isViewing) {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
@@ -401,30 +407,35 @@ class ChatProvider extends ChangeNotifier {
           if (isViewing) {
             _currentIteration = event.iterationNumber;
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
         case SseEventType.toolCall:
           if (isViewing) {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
         case SseEventType.toolResult:
           if (isViewing) {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
         case SseEventType.childStart:
           if (isViewing) {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
         case SseEventType.childEnd:
           if (isViewing) {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+            stateChanged = true;
           }
           break;
 
@@ -455,10 +466,12 @@ class ChatProvider extends ChangeNotifier {
               }
             }
             _updateDisplayMessages();
+            stateChanged = true;
           } else {
             // Mark as unread if we're not viewing this session
             if (!_unreadSessions.contains(session.id)) {
               _unreadSessions.add(session.id);
+              stateChanged = true;
             }
           }
           break;
@@ -468,6 +481,7 @@ class ChatProvider extends ChangeNotifier {
             _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
           }
           _sessionErrors[session.id] = CoquiException(event.errorMessage);
+          stateChanged = true;
           break;
 
         case SseEventType.complete:
@@ -497,19 +511,25 @@ class ChatProvider extends ChangeNotifier {
           }
           if (isViewing) {
             _lastTurnSummary = parts.join(' · ');
+            stateChanged = true;
           } else {
             // For background sessions: mark as unread or error appropriately
             if (completeError != null) {
               _sessionErrors[session.id] = CoquiException(
                 completeError.toString(),
               );
+              stateChanged = true;
             } else {
-              final hasAnyContent = gotContent || completeContent.trim().isNotEmpty;
+              final hasAnyContent =
+                  gotContent || completeContent.trim().isNotEmpty;
               if (hasAnyContent) {
                 _unreadSessions.add(session.id);
+                stateChanged = true;
               } else {
                 // Stream ended without any content and no error reported — treat as error
-                _sessionErrors[session.id] = CoquiException('No response received from server');
+                _sessionErrors[session.id] =
+                    CoquiException('No response received from server');
+                stateChanged = true;
               }
             }
           }
@@ -526,8 +546,9 @@ class ChatProvider extends ChangeNotifier {
         case SseEventType.unknown:
           break;
       }
-
-      notifyListeners();
+      if (stateChanged) {
+        notifyListeners();
+      }
     }
 
     // After stream completes, re-fetch messages from server to get real IDs.
