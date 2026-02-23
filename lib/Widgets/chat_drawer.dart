@@ -99,26 +99,29 @@ class ChatNavigationDrawer extends StatelessWidget {
 
               Widget? badge;
               if (hasError) {
-                badge = _StatusBadge(color: Colors.red);
+                badge = const _StatusBadge(color: Colors.red);
               } else if (isThinking) {
-                badge = _StatusBadge(color: Colors.orange);
-              } else if (isStreaming) {
-                badge = _StatusBadge(color: Colors.green);
+                badge = const _StatusBadge(color: Colors.orange);
               } else if (hasUnread) {
-                badge = _StatusBadge(color: Colors.green);
+                // Prioritize unread green over generic streaming indicator
+                badge = const _StatusBadge(color: Colors.greenAccent);
+              } else if (isStreaming) {
+                badge = const _StatusBadge(color: Colors.greenAccent);
               }
 
               return NavigationDrawerDestination(
                 icon: Stack(
                   children: [
                     const Icon(Icons.chat_bubble_outline),
-                    if (badge != null) Positioned(top: 0, left: 0, child: badge),
+                    if (badge != null)
+                      Positioned(top: 0, left: 0, child: badge),
                   ],
                 ),
                 selectedIcon: Stack(
                   children: [
                     const Icon(Icons.chat_bubble),
-                    if (badge != null) Positioned(top: 0, left: 0, child: badge),
+                    if (badge != null)
+                      Positioned(top: 0, left: 0, child: badge),
                   ],
                 ),
                 label: Expanded(
@@ -144,11 +147,13 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 8,
-      height: 8,
+      width: 10,
+      height: 10,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
+        border: Border.all(
+            color: Theme.of(context).colorScheme.surface, width: 1.5),
       ),
     );
   }
