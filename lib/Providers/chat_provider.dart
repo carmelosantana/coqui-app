@@ -121,6 +121,15 @@ class ChatProvider extends ChangeNotifier {
     if (destination == 0) {
       _resetChat();
     } else {
+      // Clear previous session data immediately to prevent ghosting/stacking
+      // while the new session loads.
+      _messages = [];
+      _updateDisplayMessages();
+      _currentTurnActivity.clear();
+      _currentIteration = 0;
+      _lastTurnSummary = null;
+      _pendingFiles.clear();
+
       _loadCurrentSession();
     }
 
@@ -210,21 +219,28 @@ class ChatProvider extends ChangeNotifier {
   Future<void> _loadCurrentSession() async {
     if (currentSession == null) return;
 
-    try {
-      // Fetch messages from server
-      final serverMessages = await _apiService.listMessages(currentSession!.id);
-      _messages = serverMessages;
-      _updateDisplayMessages();
+    // Load from cache FIRST for instant navigation
+    _messages = await _databaseService.getMessages(currentSession!.id);
+    _updateDisplayMessages();
+    notifyListeners();
 
-      // Cache locally
-      await _databaseService.upsertMessages(
-        serverMessages,
-        sessionId: currentSession!.id,
-      );
+    try {
+      // Then sync with server in background
+      final serverMessages = await _apiService.listMessages(currentSession!.id);
+
+      // Only update if still on the same session
+      if (currentSession != null) {
+        _messages = serverMessages;
+        _updateDisplayMessages();
+
+        // Cache locally
+        await _databaseService.upsertMessages(
+          serverMessages,
+          sessionId: currentSession!.id,
+        );
+      }
     } catch (_) {
-      // Fall back to cached messages
-      _messages = await _databaseService.getMessages(currentSession!.id);
-      _updateDisplayMessages();
+      // Already showed cached messages, so just fail silently
     }
 
     _currentTurnActivity.clear();
@@ -339,61 +355,79 @@ class ChatProvider extends ChangeNotifier {
         break;
       }
 
+      final isViewing = currentSession?.id == session.id;
+
       switch (event.type) {
         case SseEventType.agentStart:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.iteration:
-          _currentIteration = event.iterationNumber;
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentIteration = event.iterationNumber;
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.toolCall:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.toolResult:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.childStart:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.childEnd:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           break;
 
         case SseEventType.done:
           accumulatedContent = event.content;
           _streamingContent[session.id] = accumulatedContent;
 
-          if (assistantMessage == null) {
-            assistantMessage = CoquiMessage(
-              id: 'stream_${DateTime.now().millisecondsSinceEpoch}',
-              content: accumulatedContent,
-              role: CoquiMessageRole.assistant,
-            );
-            _messages.add(assistantMessage);
-          } else {
-            // Update existing message content
-            final index = _messages.indexOf(assistantMessage);
-            if (index >= 0) {
-              _messages[index] = CoquiMessage(
-                id: assistantMessage.id,
+          if (isViewing) {
+            if (assistantMessage == null) {
+              assistantMessage = CoquiMessage(
+                id: 'stream_${DateTime.now().millisecondsSinceEpoch}',
                 content: accumulatedContent,
                 role: CoquiMessageRole.assistant,
-                createdAt: assistantMessage.createdAt,
               );
-              assistantMessage = _messages[index];
+              _messages.add(assistantMessage);
+            } else {
+              // Update existing message content
+              final index = _messages.indexOf(assistantMessage);
+              if (index >= 0) {
+                _messages[index] = CoquiMessage(
+                  id: assistantMessage.id,
+                  content: accumulatedContent,
+                  role: CoquiMessageRole.assistant,
+                  createdAt: assistantMessage.createdAt,
+                );
+                assistantMessage = _messages[index];
+              }
             }
+            _updateDisplayMessages();
           }
-          _updateDisplayMessages();
           break;
 
         case SseEventType.error:
-          _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          if (isViewing) {
+            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
+          }
           _sessionErrors[session.id] = CoquiException(event.errorMessage);
           break;
 
@@ -420,7 +454,9 @@ class ChatProvider extends ChangeNotifier {
             final secs = (duration / 1000).toStringAsFixed(1);
             parts.add('${secs}s');
           }
-          _lastTurnSummary = parts.join(' · ');
+          if (isViewing) {
+            _lastTurnSummary = parts.join(' · ');
+          }
           break;
 
         case SseEventType.title:
@@ -444,42 +480,45 @@ class ChatProvider extends ChangeNotifier {
     try {
       final serverMessages = await _apiService.listMessages(session.id);
 
-      // Build a positional lookup: Nth user message → its file names.
-      final Map<int, List<String>> fileNamesByIndex = {};
-      int userIdx = 0;
-      for (final m in _messages) {
-        if (m.role == CoquiMessageRole.user) {
-          if (m.attachedFileNames.isNotEmpty) {
-            fileNamesByIndex[userIdx] = m.attachedFileNames;
+      if (currentSession?.id == session.id) {
+        // Build a positional lookup: Nth user message → its file names.
+        final Map<int, List<String>> fileNamesByIndex = {};
+        int userIdx = 0;
+        for (final m in _messages) {
+          if (m.role == CoquiMessageRole.user) {
+            if (m.attachedFileNames.isNotEmpty) {
+              fileNamesByIndex[userIdx] = m.attachedFileNames;
+            }
+            userIdx++;
           }
-          userIdx++;
         }
+
+        // Re-attach file names to the corresponding Nth user message from
+        // the server response.
+        userIdx = 0;
+        _messages = serverMessages.map((m) {
+          if (m.role == CoquiMessageRole.user) {
+            final names = fileNamesByIndex[userIdx];
+            userIdx++;
+            if (names != null && names.isNotEmpty) {
+              return CoquiMessage(
+                id: m.id,
+                content: m.content,
+                role: m.role,
+                toolCalls: m.toolCalls,
+                toolCallId: m.toolCallId,
+                createdAt: m.createdAt,
+                attachedFileNames: names,
+              );
+            }
+          }
+          return m;
+        }).toList();
+        _updateDisplayMessages();
       }
 
-      // Re-attach file names to the corresponding Nth user message from
-      // the server response.
-      userIdx = 0;
-      _messages = serverMessages.map((m) {
-        if (m.role == CoquiMessageRole.user) {
-          final names = fileNamesByIndex[userIdx];
-          userIdx++;
-          if (names != null && names.isNotEmpty) {
-            return CoquiMessage(
-              id: m.id,
-              content: m.content,
-              role: m.role,
-              toolCalls: m.toolCalls,
-              toolCallId: m.toolCallId,
-              createdAt: m.createdAt,
-              attachedFileNames: names,
-            );
-          }
-        }
-        return m;
-      }).toList();
-      _updateDisplayMessages();
-
-      await _databaseService.upsertMessages(_messages, sessionId: session.id);
+      await _databaseService.upsertMessages(serverMessages,
+          sessionId: session.id);
     } catch (_) {
       // Keep the streaming messages if re-fetch fails
     }
@@ -536,7 +575,8 @@ class ChatProvider extends ChangeNotifier {
     _sessionErrors.remove(currentSession!.id);
 
     // Re-send the prompt
-    await _initializeStream(currentSession!, lastUserMessage.content, const [], const []);
+    await _initializeStream(
+        currentSession!, lastUserMessage.content, const [], const []);
   }
 
   /// Cancel the current streaming operation.
