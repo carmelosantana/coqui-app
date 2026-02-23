@@ -219,6 +219,11 @@ class ChatProvider extends ChangeNotifier {
   Future<void> _loadCurrentSession() async {
     if (currentSession == null) return;
 
+    // Clear unread indicator
+    _markSessionAsRead(currentSession!.id);
+    // Clear any sticky error badge once user opens the session
+    _sessionErrors.remove(currentSession!.id);
+
     // Load from cache FIRST for instant navigation
     _messages = await _databaseService.getMessages(currentSession!.id);
     _updateDisplayMessages();
@@ -227,7 +232,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       // Then sync with server in background
       final serverMessages = await _apiService.listMessages(currentSession!.id);
-
+      
       // Only update if still on the same session
       if (currentSession != null) {
         _messages = serverMessages;
@@ -252,6 +257,27 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Unread state ──────────────────────────────────────────────────
+
+  final Set<String> _unreadSessions = {};
+  
+  bool hasUnreadMessages(String sessionId) => _unreadSessions.contains(sessionId);
+  
+  void _markSessionAsRead(String sessionId) {
+    if (_unreadSessions.contains(sessionId)) {
+      _unreadSessions.remove(sessionId);
+      notifyListeners();
+    }
+  }
+
+  // Expose per-session streaming/thinking/error state for UI badges
+  bool isSessionStreaming(String sessionId) => _activeStreams.contains(sessionId);
+
+  bool isSessionThinking(String sessionId) =>
+      _activeStreams.contains(sessionId) && _streamingContent[sessionId] == null;
+
+  bool hasSessionError(String sessionId) => _sessionErrors.containsKey(sessionId);
+  
   // ── Prompt submission ─────────────────────────────────────────────
 
   /// Maximum prompt size in bytes (matches server's MAX_PROMPT_BYTES).
@@ -260,6 +286,9 @@ class ChatProvider extends ChangeNotifier {
   Future<void> sendPrompt(String text) async {
     final session = currentSession;
     if (session == null) return;
+    
+    // Clear unread status for the active session
+    _markSessionAsRead(session.id);
 
     // Client-side prompt length guard
     if (utf8.encode(text).length > _maxPromptBytes) {
@@ -293,6 +322,9 @@ class ChatProvider extends ChangeNotifier {
     _messages.add(userMessage);
     _updateDisplayMessages();
     notifyListeners();
+
+    // Cache the optimistic message immediately so it persists when switching sessions
+    await _databaseService.upsertMessage(userMessage, sessionId: session.id);
 
     // Start streaming
     await _initializeStream(session, text, fileIds, fileNames);
@@ -348,6 +380,7 @@ class ChatProvider extends ChangeNotifier {
 
     String accumulatedContent = '';
     CoquiMessage? assistantMessage;
+    bool gotContent = false;
 
     await for (final event in stream) {
       // Check if stream was cancelled
@@ -398,6 +431,7 @@ class ChatProvider extends ChangeNotifier {
         case SseEventType.done:
           accumulatedContent = event.content;
           _streamingContent[session.id] = accumulatedContent;
+          gotContent = accumulatedContent.trim().isNotEmpty;
 
           if (isViewing) {
             if (assistantMessage == null) {
@@ -421,6 +455,11 @@ class ChatProvider extends ChangeNotifier {
               }
             }
             _updateDisplayMessages();
+          } else {
+            // Mark as unread if we're not viewing this session
+            if (!_unreadSessions.contains(session.id)) {
+              _unreadSessions.add(session.id);
+            }
           }
           break;
 
@@ -439,6 +478,8 @@ class ChatProvider extends ChangeNotifier {
           final childCount = event.data['child_agent_count'] as int? ?? 0;
           final tokens = event.totalTokens;
           final duration = event.durationMs;
+          final completeContent = (event.data['content'] as String?) ?? '';
+          final completeError = event.data['error'];
 
           if (iterations > 0) {
             parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
@@ -456,6 +497,21 @@ class ChatProvider extends ChangeNotifier {
           }
           if (isViewing) {
             _lastTurnSummary = parts.join(' · ');
+          } else {
+            // For background sessions: mark as unread or error appropriately
+            if (completeError != null) {
+              _sessionErrors[session.id] = CoquiException(
+                completeError.toString(),
+              );
+            } else {
+              final hasAnyContent = gotContent || completeContent.trim().isNotEmpty;
+              if (hasAnyContent) {
+                _unreadSessions.add(session.id);
+              } else {
+                // Stream ended without any content and no error reported — treat as error
+                _sessionErrors[session.id] = CoquiException('No response received from server');
+              }
+            }
           }
           break;
 

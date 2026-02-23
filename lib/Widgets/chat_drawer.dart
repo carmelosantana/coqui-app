@@ -12,27 +12,42 @@ class ChatDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      child: SafeArea(
+    if (ResponsiveBreakpoints.of(context).isMobile) {
+      return Drawer(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(child: const ChatNavigationDrawer()),
+              _buildSettingsButton(context),
+            ],
+          ),
+        ),
+      );
+    } else {
+      return SizedBox(
+        width: 300,
         child: Column(
           children: [
-            const Expanded(child: ChatNavigationDrawer()),
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.fromLTRB(28, 16, 28, 10),
-              child: IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () {
-                  if (ResponsiveBreakpoints.of(context).isMobile) {
-                    Navigator.pop(context);
-                  }
-
-                  Navigator.pushNamed(context, '/settings');
-                },
-              ),
-            ),
+            Expanded(child: const ChatNavigationDrawer()),
+            _buildSettingsButton(context),
           ],
         ),
+      );
+    }
+  }
+
+  Widget _buildSettingsButton(BuildContext context) {
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      child: IconButton(
+        icon: const Icon(Icons.settings_outlined),
+        onPressed: () {
+          if (ResponsiveBreakpoints.of(context).isMobile) {
+            Navigator.pop(context);
+          }
+          Navigator.pushNamed(context, '/settings');
+        },
       ),
     );
   }
@@ -51,6 +66,7 @@ class ChatNavigationDrawer extends StatelessWidget {
         return NavigationDrawer(
           selectedIndex: chatProvider.selectedDestination,
           onDestinationSelected: (destination) {
+            // First item is "New Chat" (index 0)
             chatProvider.destinationSelected(destination);
 
             if (ResponsiveBreakpoints.of(context).isMobile) {
@@ -66,29 +82,74 @@ class ChatNavigationDrawer extends StatelessWidget {
               ),
             ),
             NavigationDrawerDestination(
-              icon: const Icon(Icons.smart_toy_outlined),
-              selectedIcon: const Icon(Icons.smart_toy),
-              label: Text(activeInstance?.name ?? 'No Server'),
+              icon: const Icon(Icons.add_circle_outline),
+              selectedIcon: const Icon(Icons.add_circle),
+              label: Text('New Chat'),
             ),
             const Padding(
               padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
               child: TitleDivider(title: "Sessions"),
             ),
             ...chatProvider.sessions.map((session) {
+              // Status indicators
+              final isStreaming = chatProvider.isSessionStreaming(session.id);
+              final isThinking = chatProvider.isSessionThinking(session.id);
+              final hasUnread = chatProvider.hasUnreadMessages(session.id);
+              final hasError = chatProvider.hasSessionError(session.id);
+
+              Widget? badge;
+              if (hasError) {
+                badge = _StatusBadge(color: Colors.red);
+              } else if (isThinking) {
+                badge = _StatusBadge(color: Colors.orange);
+              } else if (isStreaming) {
+                badge = _StatusBadge(color: Colors.green);
+              } else if (hasUnread) {
+                badge = _StatusBadge(color: Colors.green);
+              }
+
               return NavigationDrawerDestination(
-                icon: const Icon(Icons.chat_outlined),
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.chat_bubble_outline),
+                    if (badge != null) Positioned(top: 0, left: 0, child: badge),
+                  ],
+                ),
+                selectedIcon: Stack(
+                  children: [
+                    const Icon(Icons.chat_bubble),
+                    if (badge != null) Positioned(top: 0, left: 0, child: badge),
+                  ],
+                ),
                 label: Expanded(
                   child: Text(
                     session.title ?? 'Untitled',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                selectedIcon: const Icon(Icons.chat),
               );
             }),
           ],
         );
       },
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final Color color;
+
+  const _StatusBadge({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
     );
   }
 }
