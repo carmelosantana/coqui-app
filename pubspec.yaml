@@ -133,13 +133,14 @@ flutter_launcher_icons:
   image_path: "assets/images/coqui-icon.png"
   android: true
   ios: true
-  image_path_ios: "assets/images/coqui-icon.png"
+  image_path_ios: "assets/images/coqui.png"
+  remove_alpha_ios: true
   macos:
     generate: true
-    image_path: "assets/images/coqui-icon.png"
+    image_path: "assets/images/coqui-icon-macos.png"
   windows:
     generate: true
-    image_path: "assets/images/coqui-icon.png"
+    image_path: "assets/images/coqui.png"
     icon_size: 256
 
 flutter_native_splash:

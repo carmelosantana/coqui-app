@@ -11,14 +11,23 @@ Required:
   --mode debug|release
 
 Options:
-  --image PATH            Source icon image for padding (default: assets/images/coqui-icon.png)
-  --inner-size VALUE      Inner artwork size (e.g. 83% or 860). Default: 83%
+  --image PATH            Source icon image for macOS padding (default: assets/images/coqui-icon.png)
+  --macos-output PATH     Output path for padded macOS icon (default: assets/images/coqui-icon-macos.png)
+  --inner-size VALUE      Inner artwork size for macOS icon (e.g. 83% or 860). Default: 83%
   --padding PERCENT       Alternate to --inner-size (mutually exclusive)
   --no-icons              Skip icon padding + launcher icon generation
-  --no-backup             Do not create backup when padding icon
   --no-open               Do not open built artifact/folder after build
   --dry-run               Print commands without executing
   -h, --help              Show this help
+
+Icon pipeline:
+  Only macOS icons are padded (for Sequoia/Tahoe dock size requirements).
+  Other platforms use their source icons directly via flutter_launcher_icons.
+    macOS  → padded coqui-icon-macos.png (generated from coqui-icon.png at 83%)
+    iOS    → coqui.png (square, no alpha — App Store requirement)
+    Android→ coqui-icon.png (round corners, OS applies adaptive mask)
+    Windows→ coqui.png (square .ico)
+    Linux  → coqui-icon.png (round corners with alpha)
 
 Examples:
   scripts/build.sh --platform macos --mode debug
@@ -34,10 +43,10 @@ projectRoot="$(cd "$scriptDir/.." && pwd)"
 platform=""
 mode=""
 imagePath="assets/images/coqui-icon.png"
+macosOutput="assets/images/coqui-icon-macos.png"
 innerSize="83%"
 padding=""
 runIcons='true'
-createBackup='true'
 openAfterBuild='true'
 dryRun='false'
 
@@ -55,6 +64,10 @@ while [[ $# -gt 0 ]]; do
       imagePath="${2:-}"
       shift 2
       ;;
+    --macos-output)
+      macosOutput="${2:-}"
+      shift 2
+      ;;
     --inner-size)
       innerSize="${2:-}"
       shift 2
@@ -65,10 +78,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-icons)
       runIcons='false'
-      shift
-      ;;
-    --no-backup)
-      createBackup='false'
       shift
       ;;
     --no-open)
@@ -328,8 +337,10 @@ runIconPipeline() {
     return
   fi
 
+  # Generate padded macOS icon from source (does not modify the source file)
+  info "Generating padded macOS icon: $macosOutput (from $imagePath)"
   local padCmd
-  padCmd="cd '$projectRoot' && ./scripts/pad-icon.sh --image '$imagePath'"
+  padCmd="cd '$projectRoot' && ./scripts/pad-icon.sh --image '$imagePath' --output '$macosOutput'"
 
   if [[ -n "$padding" ]]; then
     padCmd+=" --padding '$padding'"
@@ -337,11 +348,9 @@ runIconPipeline() {
     padCmd+=" --inner-size '$innerSize'"
   fi
 
-  if [[ "$createBackup" == 'true' ]]; then
-    padCmd+=" --backup"
-  fi
-
   runCmd "$padCmd"
+
+  # Generate platform icons (each platform uses its own source — see pubspec.yaml)
   runCmd "cd '$projectRoot' && dart run flutter_launcher_icons"
 }
 
