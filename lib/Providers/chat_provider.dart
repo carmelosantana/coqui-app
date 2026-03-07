@@ -229,28 +229,39 @@ class ChatProvider extends ChangeNotifier {
     _updateDisplayMessages();
     notifyListeners();
 
-    try {
-      // Then sync with server in background
-      final serverMessages = await _apiService.listMessages(currentSession!.id);
+    final sessionIsStreaming = _activeStreams.contains(currentSession!.id);
 
-      // Only update if still on the same session
-      if (currentSession != null) {
-        _messages = serverMessages;
-        _updateDisplayMessages();
+    // Skip server sync while the session is actively streaming —
+    // the stream handler manages _messages in real time.
+    if (!sessionIsStreaming) {
+      try {
+        // Then sync with server in background
+        final serverMessages =
+            await _apiService.listMessages(currentSession!.id);
 
-        // Cache locally
-        await _databaseService.upsertMessages(
-          serverMessages,
-          sessionId: currentSession!.id,
-        );
+        // Only update if still on the same session
+        if (currentSession != null) {
+          _messages = serverMessages;
+          _updateDisplayMessages();
+
+          // Cache locally
+          await _databaseService.deleteMessages(currentSession!.id);
+          await _databaseService.upsertMessages(
+            serverMessages,
+            sessionId: currentSession!.id,
+          );
+        }
+      } catch (_) {
+        // Already showed cached messages, so just fail silently
       }
-    } catch (_) {
-      // Already showed cached messages, so just fail silently
     }
 
-    _currentTurnActivity.clear();
-    _currentIteration = 0;
-    _lastTurnSummary = null;
+    // Preserve live activity panel when resuming a streaming session.
+    if (!sessionIsStreaming) {
+      _currentTurnActivity.clear();
+      _currentIteration = 0;
+      _lastTurnSummary = null;
+    }
     _pendingFiles.clear();
 
     // Do not forcibly unfocus the input; preserve user typing across loads
@@ -343,6 +354,10 @@ class ChatProvider extends ChangeNotifier {
     // Cancel any existing stream for this session
     _cancelStream(session.id);
 
+    // Clear the cancel flag so the NEW stream is not poisoned by the
+    // cancellation of the previous one.
+    _cancelledStreams.remove(session.id);
+
     // Clear errors
     _sessionErrors.remove(session.id);
 
@@ -386,167 +401,227 @@ class ChatProvider extends ChangeNotifier {
     CoquiMessage? assistantMessage;
     bool gotContent = false;
 
-    await for (final event in stream) {
-      // Check if stream was cancelled
-      if (_cancelledStreams.contains(session.id)) {
-        break;
+    // Throttle notifyListeners during rapid text_delta events to avoid
+    // excessive widget rebuilds. Accumulate deltas and flush at ~50ms.
+    bool hasPendingNotify = false;
+    Timer? throttleTimer;
+
+    void scheduleNotify() {
+      if (hasPendingNotify) return;
+      hasPendingNotify = true;
+      throttleTimer?.cancel();
+      throttleTimer = Timer(const Duration(milliseconds: 50), () {
+        hasPendingNotify = false;
+        notifyListeners();
+      });
+    }
+
+    /// Helper to add an activity event (handles nullable return from fromSseEvent).
+    void addActivity(SseEvent event) {
+      final activity = AgentActivityEvent.fromSseEvent(event);
+      if (activity != null) _currentTurnActivity.add(activity);
+    }
+
+    /// Helper to create or update the streaming assistant message.
+    void upsertStreamingMessage() {
+      if (assistantMessage == null) {
+        assistantMessage = CoquiMessage(
+          id: 'stream_${DateTime.now().millisecondsSinceEpoch}',
+          content: accumulatedContent,
+          role: CoquiMessageRole.assistant,
+        );
+        _messages.add(assistantMessage!);
+      } else {
+        final index = _messages.indexOf(assistantMessage!);
+        final updated = CoquiMessage(
+          id: assistantMessage!.id,
+          content: accumulatedContent,
+          role: CoquiMessageRole.assistant,
+          createdAt: assistantMessage!.createdAt,
+        );
+        if (index >= 0) {
+          _messages[index] = updated;
+        } else {
+          // The _messages list was replaced (e.g. user navigated away and
+          // back). Re-add the streaming message so it stays visible.
+          _messages.add(updated);
+        }
+        assistantMessage = updated;
       }
+      _updateDisplayMessages();
+    }
 
-      final isViewing = currentSession?.id == session.id;
-      bool stateChanged = false;
-
-      switch (event.type) {
-        case SseEventType.agentStart:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
+    try {
+      await for (final event in stream) {
+        // Check if stream was cancelled
+        if (_cancelledStreams.contains(session.id)) {
           break;
+        }
 
-        case SseEventType.iteration:
-          if (isViewing) {
-            _currentIteration = event.iterationNumber;
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
-          break;
+        final isViewing = currentSession?.id == session.id;
+        bool stateChanged = false;
 
-        case SseEventType.toolCall:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
-          break;
+        switch (event.type) {
+          case SseEventType.agentStart:
+            if (isViewing) {
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
 
-        case SseEventType.toolResult:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
-          break;
+          case SseEventType.iteration:
+            if (isViewing) {
+              _currentIteration = event.iterationNumber;
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
 
-        case SseEventType.childStart:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
-          break;
+          case SseEventType.toolCall:
+            if (isViewing) {
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
 
-        case SseEventType.childEnd:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-            stateChanged = true;
-          }
-          break;
+          case SseEventType.toolResult:
+            if (isViewing) {
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
 
-        case SseEventType.done:
-          accumulatedContent = event.content;
-          _streamingContent[session.id] = accumulatedContent;
-          gotContent = accumulatedContent.trim().isNotEmpty;
+          case SseEventType.childStart:
+            if (isViewing) {
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
 
-          if (isViewing) {
-            if (assistantMessage == null) {
-              assistantMessage = CoquiMessage(
-                id: 'stream_${DateTime.now().millisecondsSinceEpoch}',
-                content: accumulatedContent,
-                role: CoquiMessageRole.assistant,
-              );
-              _messages.add(assistantMessage);
-            } else {
-              // Update existing message content
-              final index = _messages.indexOf(assistantMessage);
-              if (index >= 0) {
-                _messages[index] = CoquiMessage(
-                  id: assistantMessage.id,
-                  content: accumulatedContent,
-                  role: CoquiMessageRole.assistant,
-                  createdAt: assistantMessage.createdAt,
-                );
-                assistantMessage = _messages[index];
+          case SseEventType.childEnd:
+            if (isViewing) {
+              addActivity(event);
+              stateChanged = true;
+            }
+            break;
+
+          case SseEventType.textDelta:
+            // Incremental text streaming — append delta to the running content
+            // and update the assistant message bubble in real time.
+            final delta = event.textDeltaContent;
+            if (delta.isNotEmpty) {
+              accumulatedContent += delta;
+              _streamingContent[session.id] = accumulatedContent;
+              gotContent = true;
+
+              if (isViewing) {
+                upsertStreamingMessage();
+                // Use throttled notify to avoid excessive rebuilds
+                scheduleNotify();
               }
             }
-            _updateDisplayMessages();
-            stateChanged = true;
-          } else {
-            // Mark as unread if we're not viewing this session
-            if (!_unreadSessions.contains(session.id)) {
-              _unreadSessions.add(session.id);
-              stateChanged = true;
-            }
-          }
-          break;
+            // Don't set stateChanged — throttled notify handles it
+            break;
 
-        case SseEventType.error:
-          if (isViewing) {
-            _currentTurnActivity.add(AgentActivityEvent.fromSseEvent(event));
-          }
-          _sessionErrors[session.id] = CoquiException(event.errorMessage);
-          stateChanged = true;
-          break;
+          case SseEventType.done:
+            // Final authoritative content from the server — replace whatever
+            // was accumulated from text deltas.
+            accumulatedContent = event.content;
+            _streamingContent[session.id] = accumulatedContent;
+            gotContent = accumulatedContent.trim().isNotEmpty;
 
-        case SseEventType.complete:
-          // Build turn summary
-          final parts = <String>[];
-          final iterations = event.data['iterations'] as int? ?? 0;
-          final tools = event.toolsUsed;
-          final childCount = event.data['child_agent_count'] as int? ?? 0;
-          final tokens = event.totalTokens;
-          final duration = event.durationMs;
-          final completeContent = (event.data['content'] as String?) ?? '';
-          final completeError = event.data['error'];
-
-          if (iterations > 0) {
-            parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
-          }
-          if (tools.isNotEmpty) {
-            parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
-          }
-          if (childCount > 0) {
-            parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
-          }
-          if (tokens > 0) parts.add('$tokens tokens');
-          if (duration > 0) {
-            final secs = (duration / 1000).toStringAsFixed(1);
-            parts.add('${secs}s');
-          }
-          if (isViewing) {
-            _lastTurnSummary = parts.join(' · ');
-            stateChanged = true;
-          } else {
-            // For background sessions: mark as unread or error appropriately
-            if (completeError != null) {
-              _sessionErrors[session.id] = CoquiException(
-                completeError.toString(),
-              );
+            if (isViewing) {
+              upsertStreamingMessage();
               stateChanged = true;
             } else {
-              final hasAnyContent =
-                  gotContent || completeContent.trim().isNotEmpty;
-              if (hasAnyContent) {
+              // Mark as unread if we're not viewing this session
+              if (!_unreadSessions.contains(session.id)) {
                 _unreadSessions.add(session.id);
                 stateChanged = true;
-              } else {
-                // Stream ended without any content and no error reported — treat as error
-                _sessionErrors[session.id] =
-                    CoquiException('No response received from server');
-                stateChanged = true;
               }
             }
-          }
-          break;
+            break;
 
-        case SseEventType.title:
-          final title = event.titleText;
-          if (title.isNotEmpty) {
-            session.title = title;
-            await _databaseService.updateSessionTitle(session.id, title);
-          }
-          break;
+          case SseEventType.error:
+            if (isViewing) {
+              addActivity(event);
+            }
+            _sessionErrors[session.id] = CoquiException(event.errorMessage);
+            stateChanged = true;
+            break;
 
-        case SseEventType.unknown:
-          break;
+          case SseEventType.complete:
+            // Build turn summary
+            final parts = <String>[];
+            final iterations = event.data['iterations'] as int? ?? 0;
+            final tools = event.toolsUsed;
+            final childCount = event.data['child_agent_count'] as int? ?? 0;
+            final tokens = event.totalTokens;
+            final duration = event.durationMs;
+            final completeContent = (event.data['content'] as String?) ?? '';
+            final completeError = event.data['error'];
+
+            if (iterations > 0) {
+              parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
+            }
+            if (tools.isNotEmpty) {
+              parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
+            }
+            if (childCount > 0) {
+              parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
+            }
+            if (tokens > 0) parts.add('$tokens tokens');
+            if (duration > 0) {
+              final secs = (duration / 1000).toStringAsFixed(1);
+              parts.add('${secs}s');
+            }
+            if (isViewing) {
+              _lastTurnSummary = parts.join(' · ');
+              stateChanged = true;
+            } else {
+              // For background sessions: mark as unread or error appropriately
+              if (completeError != null) {
+                _sessionErrors[session.id] = CoquiException(
+                  completeError.toString(),
+                );
+                stateChanged = true;
+              } else {
+                final hasAnyContent =
+                    gotContent || completeContent.trim().isNotEmpty;
+                if (hasAnyContent) {
+                  _unreadSessions.add(session.id);
+                  stateChanged = true;
+                } else {
+                  // Stream ended without any content and no error reported — treat as error
+                  _sessionErrors[session.id] =
+                      CoquiException('No response received from server');
+                  stateChanged = true;
+                }
+              }
+            }
+            break;
+
+          case SseEventType.title:
+            final title = event.titleText;
+            if (title.isNotEmpty) {
+              session.title = title;
+              await _databaseService.updateSessionTitle(session.id, title);
+            }
+            break;
+
+          case SseEventType.unknown:
+            break;
+        }
+        if (stateChanged) {
+          notifyListeners();
+        }
       }
-      if (stateChanged) {
+    } finally {
+      // Always clean up the throttle timer
+      throttleTimer?.cancel();
+      // Flush any pending throttled notify
+      if (hasPendingNotify) {
+        hasPendingNotify = false;
         notifyListeners();
       }
     }
@@ -594,6 +669,9 @@ class ChatProvider extends ChangeNotifier {
         _updateDisplayMessages();
       }
 
+      // Clean out any stale pending_*/stream_* messages before caching
+      // the authoritative server response.
+      await _databaseService.deleteMessages(session.id);
       await _databaseService.upsertMessages(serverMessages,
           sessionId: session.id);
     } catch (_) {

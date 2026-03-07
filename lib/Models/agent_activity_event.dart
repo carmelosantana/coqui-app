@@ -26,7 +26,7 @@ class AgentActivityEvent {
     return label;
   }
 
-  factory AgentActivityEvent.fromSseEvent(SseEvent event) {
+  static AgentActivityEvent? fromSseEvent(SseEvent event) {
     return switch (event.type) {
       SseEventType.agentStart => AgentActivityEvent(
           type: AgentActivityType.start,
@@ -59,6 +59,8 @@ class AgentActivityEvent {
           label: 'Error',
           detail: event.errorMessage,
         ),
+      // text_delta is handled by the streaming message, not the activity panel
+      SseEventType.textDelta => null,
       _ => AgentActivityEvent(
           type: AgentActivityType.info,
           label: event.type.name,
