@@ -125,22 +125,36 @@ IPA testing options:
 
 Note: IPA files do not run on iOS Simulator.
 
-## Icon Padding Script
+## Icon Pipeline
 
-Use [scripts/pad-icon.sh](scripts/pad-icon.sh) to shrink artwork inside a PNG canvas (transparent padding around it).
+Each platform uses a different source icon to meet platform-specific requirements:
+
+| Platform | Source | Rationale |
+|----------|--------|----------|
+| macOS | `coqui-icon-macos.png` (auto-generated) | Padded to 83% inner size for Sequoia/Tahoe dock requirements |
+| iOS | `coqui.png` | Square, no alpha (App Store rejects alpha) |
+| Android | `coqui-icon.png` | Round corners; OS applies adaptive mask |
+| Windows | `coqui.png` | Square .ico |
+| Linux | `coqui-icon.png` | Round corners with alpha |
+
+Regenerate all icons (pads macOS icon + runs flutter_launcher_icons):
 
 ```bash
-# Keep 84% inner artwork size and overwrite image
-./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 84%
-
-# Or set explicit padding per side and keep a backup
-./scripts/pad-icon.sh --image assets/images/coqui-icon.png --padding 10 --backup
+make icons
 ```
 
-After padding, regenerate app icons:
+The macOS padded icon is generated automatically and never overwrites the source `coqui-icon.png`.
+
+### Icon Padding Script
+
+Use [scripts/pad-icon.sh](scripts/pad-icon.sh) to generate a padded PNG (transparent padding around artwork). This is only needed for macOS icons.
 
 ```bash
-flutter pub run flutter_launcher_icons
+# Generate macOS padded icon at 83% inner size (default for build pipeline)
+./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 83% --output assets/images/coqui-icon-macos.png
+
+# Custom padding percentage
+./scripts/pad-icon.sh --image assets/images/coqui-icon.png --padding 10 --output assets/images/coqui-icon-macos.png
 ```
 
 ## License

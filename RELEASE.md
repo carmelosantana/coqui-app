@@ -47,7 +47,7 @@ Expected tracked changes should be source/config/assets only (no `build/`, no pl
 
 - Confirm app version in `pubspec.yaml` (`version: x.y.z+build`).
 - Confirm app name/bundle identifiers are final for each platform.
-- Confirm launcher icons and splash assets are correct.
+- Confirm launcher icons and splash assets are correct (see Icon Pipeline below).
 - Run static checks and tests:
 
 ```bash
@@ -57,6 +57,33 @@ flutter test
 
 - Run at least one smoke test per platform target you ship.
 - Confirm production API URL/auth behavior in app settings flow.
+
+## 2.1) Icon Pipeline
+
+Each platform uses a different source icon. The build script (`build.sh`) and `make icons` handle this automatically.
+
+| Platform | Source file | Notes |
+|----------|-------------|-------|
+| macOS | `coqui-icon-macos.png` | Auto-generated from `coqui-icon.png` at 83% inner size. Sequoia/Tahoe applies its own rounded-rect mask; without padding the icon appears oversized vs system apps. |
+| iOS | `coqui.png` | Square, no alpha channel. App Store rejects icons with alpha. iOS clips its own rounded rect. |
+| Android | `coqui-icon.png` | Primary icon with round corners and alpha. Android applies adaptive mask (circle/squircle). |
+| Windows | `coqui.png` | Square .ico, no transparency. Standard Windows convention. |
+| Linux | `coqui-icon.png` | Round-corner icon with alpha. |
+
+To regenerate all platform icons:
+
+```bash
+make icons
+```
+
+Or manually:
+
+```bash
+./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 83% --output assets/images/coqui-icon-macos.png
+dart run flutter_launcher_icons
+```
+
+The per-platform source mapping is defined in the `flutter_launcher_icons` section of `pubspec.yaml`.
 
 ## 3) iOS Release (TestFlight / App Store)
 
