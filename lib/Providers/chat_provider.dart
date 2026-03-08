@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -375,12 +374,17 @@ class ChatProvider extends ChangeNotifier {
       await _processStream(session, prompt, fileIds, fileNames);
     } on CoquiException catch (e) {
       _sessionErrors[session.id] = e;
-    } on SocketException catch (_) {
-      _sessionErrors[session.id] = CoquiException(
-        'Network connection lost. Check your server address or internet connection.',
-      );
     } catch (e) {
-      _sessionErrors[session.id] = CoquiException('Something went wrong: $e');
+      // Catches SocketException on native and ClientException on web.
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('ClientException') ||
+          e.toString().contains('XMLHttpRequest')) {
+        _sessionErrors[session.id] = CoquiException(
+          'Network connection lost. Check your server address or internet connection.',
+        );
+      } else {
+        _sessionErrors[session.id] = CoquiException('Something went wrong: $e');
+      }
     } finally {
       _activeStreams.remove(session.id);
       _streamingContent.remove(session.id);

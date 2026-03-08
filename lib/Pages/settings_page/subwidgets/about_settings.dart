@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'dart:io' show Platform;
 
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Widgets/flexible_text.dart';
 
 class AboutSettings extends StatelessWidget {
@@ -40,20 +40,29 @@ class AboutSettings extends StatelessWidget {
             launchUrlString(AppConstants.githubUrl);
           },
         ),
-        if (Platform.isAndroid || Platform.isIOS)
+        if (PlatformInfo.isMobile)
           ListTile(
             leading: const Icon(Icons.desktop_mac_outlined),
             title: const Text('Try Desktop App'),
-            subtitle: const Text('Available on Linux'),
+            subtitle: const Text('Available on macOS, Linux, Windows'),
             onTap: () {
               launchUrlString(AppConstants.githubUrl);
             },
           ),
-        if (Platform.isMacOS || Platform.isLinux || Platform.isWindows)
+        if (PlatformInfo.isDesktop)
           ListTile(
             leading: const Icon(Icons.phone_iphone_outlined),
             title: const Text('Try Mobile App'),
-            subtitle: const Text('Coming soon'),
+            subtitle: const Text('Available on iOS and Android'),
+            onTap: () {
+              launchUrlString(AppConstants.githubUrl);
+            },
+          ),
+        if (PlatformInfo.isWeb)
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Download Native App'),
+            subtitle: const Text('Available on all platforms'),
             onTap: () {
               launchUrlString(AppConstants.githubUrl);
             },

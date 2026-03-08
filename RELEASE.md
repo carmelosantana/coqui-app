@@ -188,7 +188,51 @@ flutter build windows --release
 3. Code-sign installer and binaries.
 4. Validate install/upgrade/uninstall on a clean Windows VM.
 
-## 7) Final Verification Matrix
+## 7) Web Release (WASM)
+
+The web build produces static files served by any web server. No server-side code.
+
+Steps:
+1. Build release with WASM:
+
+```bash
+flutter build web --wasm --release
+```
+
+2. Test locally:
+
+```bash
+cd build/web && python3 -m http.server 8080
+# → Open http://localhost:8080 and verify app loads
+```
+
+3. Deploy via Docker:
+
+```bash
+docker compose -f compose.web.yaml build
+docker compose -f compose.web.yaml up -d
+```
+
+4. Or deploy to Vercel (pre-built, no server-side build):
+
+```bash
+cd build/web && npx vercel --prod
+```
+
+The project includes a `vercel.json` that handles SPA routing, COOP/COEP headers, and caching — no additional configuration needed. Do NOT build on Vercel (Flutter is not available there). Always deploy the pre-built `build/web/` output.
+
+5. Or deploy to other static hosting (Cloudflare Pages, Netlify, etc.):
+
+```bash
+cd build/web && vercel --prod
+```
+
+Notes:
+- Ensure `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers are set (required for SQLite WASM / OPFS).
+- CORS must be configured on the Coqui API server (`--cors-origin`).
+- See [docs/WEB.md](docs/WEB.md) for full deployment documentation.
+
+## 8) Final Verification Matrix
 
 Before publishing, validate:
 - Fresh install works.
@@ -197,6 +241,9 @@ Before publishing, validate:
 - Role selection and chat flow work.
 - Tool output rendering and session persistence work.
 - App icon and splash assets render correctly on device.
+- Web: WASM loads in Chrome, Firefox, Safari.
+- Web: SQLite WASM storage persists across page reloads.
+- Web: PWA install works ("Add to Home Screen").
 
 ## 8) Recommended Release Commands (Quick Sequence)
 
@@ -209,6 +256,7 @@ flutter build ipa --release        # macOS host, iOS release
 flutter build appbundle --release  # Android release
 flutter build macos --release      # macOS desktop
 flutter build windows --release    # Windows desktop (on Windows host)
+flutter build web --wasm --release # Web (WASM)
 ```
 
 ## 9) GitHub Release Hygiene
