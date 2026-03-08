@@ -10,6 +10,7 @@ import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Services/analytics_service.dart';
 import 'package:coqui_app/Widgets/chat_app_bar.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
@@ -348,6 +349,7 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     if (selectedRole != null) {
+      AnalyticsService.trackEvent('role_selected', {'role': selectedRole.name});
       setState(() {
         _selectedRole = selectedRole;
       });
