@@ -1,0 +1,66 @@
+# Coqui — AI Agent in Your Browser
+
+> Privacy-first AI agent chat client that runs entirely in your browser via WebAssembly. No server-side code, no tracking, your data stays on your device.
+
+## Links
+- Project Website: https://coquibot.org
+- Documentation: https://coquibot.org/docs
+- Hosted App: https://app.coquibot.ai
+- GitHub (Core): https://github.com/AgentCoqui/coqui
+- GitHub (App): https://github.com/AgentCoqui/coqui-app
+- php-agents Framework: https://github.com/carmelosantana/php-agents
+- Discord: https://discord.gg/TaCpZVqbbT
+
+## What This Is
+Coqui is a cross-platform AI agent chat client. This web version compiles to WebAssembly (WASM-GC) for native-speed execution directly in the browser. It is a full-featured Progressive Web App (PWA) that can be installed on any device.
+
+## Core Features
+- Privacy-first — all data stored locally in your browser via OPFS and IndexedDB
+- WebAssembly-powered — full SQLite database and native-speed execution via WASM-GC
+- Connect anywhere — works with local or remote Coqui API servers
+- Cross-platform — also available as a native app for macOS, Windows, Linux, iOS, and Android
+- Installable — add to home screen as a PWA for an app-like experience
+- No server-side code — the entire application runs client-side
+- No tracking — no cookies, no analytics, no server-side state
+
+## Technology
+- Built with Flutter (Dart) compiled to WebAssembly
+- SQLite via sqflite_common_ffi_web using Origin Private File System (OPFS)
+- Hive (IndexedDB) for settings and API key storage
+- Requires Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp headers
+
+## Browser Requirements
+- Chrome 119+
+- Firefox 120+
+- Safari 18.2+
+- Edge 119+
+- Any browser with WASM-GC and SharedArrayBuffer support
+
+## API Compatibility
+The web app communicates with any Coqui API server via REST + Server-Sent Events (SSE).
+
+### Key Endpoints Used
+- POST /api/sessions — Create a new session
+- GET  /api/sessions — List all sessions
+- POST /api/sessions/{id}/messages — Send a prompt (SSE stream response)
+- GET  /api/sessions/{id}/turns — List turns with metadata
+- GET  /api/config/roles — List agent roles and model mappings
+- POST /api/credentials — Set a credential
+- GET  /api/health — Server liveness check
+
+## Self-Hosting
+Users can self-host the web app using Docker (nginx:alpine) or any static file server that supports custom HTTP headers. Required headers: COOP (same-origin) and COEP (require-corp) for SharedArrayBuffer/WASM threading.
+
+## Documentation Pages
+- Overview: https://coquibot.org/docs/readme
+- HTTP API Reference: https://coquibot.org/docs/api
+- Skills System: https://coquibot.org/docs/skills
+- Creating Toolkits: https://coquibot.org/docs/toolkits
+- Building Apps with the API: https://coquibot.org/docs/app-api-usage
+
+## Tech Stack
+- Flutter/Dart compiled to WASM-GC
+- SQLite (OPFS) + Hive (IndexedDB)
+- Material Design 3
+- PWA with service worker
+- MIT License

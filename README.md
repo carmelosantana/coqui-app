@@ -42,7 +42,57 @@ flutter build apk
 
 # iOS
 flutter build ios
+
+# Web (WASM)
+flutter build web --wasm --release
 ```
+
+## Web
+
+The app runs in the browser as a WebAssembly (WASM) application. No server-side code — everything runs client-side.
+
+### Quick Start
+
+```bash
+# Build and serve locally
+make web-serve    # → http://localhost:8080
+
+# Or build manually
+flutter build web --wasm --release
+cd build/web && python3 -m http.server 8080
+```
+
+### Docker Deployment
+
+```bash
+# Build and start (nginx:alpine, ~10MB image)
+make docker-web-build
+make docker-web-start    # → http://localhost:8080
+
+# Custom port
+COQUI_WEB_PORT=3000 docker compose -f compose.web.yaml up -d
+```
+
+### Vercel / Static Hosting
+
+The build output (`build/web/`) is static files deployable to Vercel, Netlify, Cloudflare Pages, GitHub Pages, S3, or any static host.
+
+```bash
+flutter build web --wasm --release
+cd build/web && vercel --prod
+```
+
+### Browser Requirements
+
+WASM-GC required: Chrome 119+, Firefox 120+, Safari 18.2+, Edge 119+.
+
+### Local Storage
+
+All data stays in the browser:
+- **SQLite WASM (OPFS)** — cached sessions and messages for offline viewing
+- **Hive (IndexedDB)** — server configurations, API keys, user preferences
+
+No cookies, no tracking, no server-side state. See [docs/WEB.md](docs/WEB.md) for full details.
 
 ## Unified Build Script
 

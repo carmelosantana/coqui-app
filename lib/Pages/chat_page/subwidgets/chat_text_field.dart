@@ -1,6 +1,5 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:flutter/services.dart';
 
 class ChatTextField extends StatefulWidget {
@@ -79,7 +78,7 @@ class _ChatTextFieldState extends State<ChatTextField> {
   }
 
   TextInputAction get _textInputAction {
-    return Platform.isIOS || Platform.isAndroid
+    return PlatformInfo.isMobile
         ? TextInputAction.newline
         : TextInputAction.send;
   }

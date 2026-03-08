@@ -7,7 +7,7 @@ Usage:
   scripts/build.sh --platform PLATFORM --mode MODE [options]
 
 Required:
-  --platform macos|ios|linux|android|windows|all
+  --platform macos|ios|linux|android|windows|web|all
   --mode debug|release
 
 Options:
@@ -107,7 +107,7 @@ if [[ -z "$platform" || -z "$mode" ]]; then
 fi
 
 case "$platform" in
-  macos|ios|linux|android|windows|all) ;;
+  macos|ios|linux|android|windows|web|all) ;;
   *)
     echo "Error: invalid --platform: $platform" >&2
     exit 1
@@ -201,6 +201,9 @@ cleanupOldArtifact() {
       ;;
     windows)
       runCmd "rm -rf '$projectRoot/build/windows'"
+      ;;
+    web)
+      runCmd "rm -rf '$projectRoot/build/web'"
       ;;
   esac
 }
@@ -328,6 +331,16 @@ buildTarget() {
       runCmd "cd '$projectRoot' && flutter build windows --$targetMode"
       openPath "$projectRoot/build/windows"
       ;;
+    web)
+      cleanupOldArtifact "web" "$targetMode"
+      runCmd "cd '$projectRoot' && dart run sqflite_common_ffi_web:setup --force"
+      if [[ "$targetMode" == 'debug' ]]; then
+        runCmd "cd '$projectRoot' && flutter build web --wasm"
+      else
+        runCmd "cd '$projectRoot' && flutter build web --wasm --release --base-href /"
+      fi
+      openPath "$projectRoot/build/web"
+      ;;
   esac
 }
 
@@ -358,13 +371,13 @@ resolveTargets() {
   case "$platform" in
     all)
       if [[ "$hostPlatform" == 'macos' ]]; then
-        echo "macos ios android linux windows"
+        echo "macos ios android linux windows web"
       elif [[ "$hostPlatform" == 'linux' ]]; then
-        echo "linux android windows macos ios"
+        echo "linux android windows macos ios web"
       elif [[ "$hostPlatform" == 'windows' ]]; then
-        echo "windows android linux macos ios"
+        echo "windows android linux macos ios web"
       else
-        echo "macos ios android linux windows"
+        echo "macos ios android linux windows web"
       fi
       ;;
     *)
