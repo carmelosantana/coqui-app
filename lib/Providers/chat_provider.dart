@@ -12,6 +12,7 @@ import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 import 'package:coqui_app/Models/uploaded_file.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Services/analytics_service.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
 
@@ -193,6 +194,8 @@ class ChatProvider extends ChangeNotifier {
     _updateDisplayMessages();
     _currentTurnActivity.clear();
 
+    AnalyticsService.trackEvent('session_created', {'role': role.name});
+
     notifyListeners();
   }
 
@@ -300,6 +303,8 @@ class ChatProvider extends ChangeNotifier {
   Future<void> sendPrompt(String text) async {
     final session = currentSession;
     if (session == null) return;
+
+    AnalyticsService.trackEvent('message_sent');
 
     // Clear unread status for the active session
     _markSessionAsRead(session.id);

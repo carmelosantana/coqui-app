@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
+import 'package:coqui_app/Services/analytics_service.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/instance_service.dart';
 
@@ -54,6 +55,8 @@ class InstanceProvider extends ChangeNotifier {
       _activeInstance = _instanceService.getActiveInstance();
       _configureApiService();
     }
+
+    AnalyticsService.trackEvent('server_configured');
 
     notifyListeners();
   }

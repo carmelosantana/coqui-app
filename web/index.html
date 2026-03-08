@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Coqui — a privacy-first AI agent chat client that runs entirely in your browser. No server-side code, no tracking. Powered by WebAssembly.">
+  <meta name="description" content="Coqui — a privacy-first AI agent chat client that runs entirely in your browser. No server-side code. Powered by WebAssembly.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#4CAF50" media="(prefers-color-scheme: light)">
@@ -32,7 +32,7 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="Coqui — AI Agent in Your Browser">
-  <meta property="og:description" content="Privacy-first AI agent chat client. Runs entirely in your browser via WebAssembly. No server-side code, no tracking.">
+  <meta property="og:description" content="Privacy-first AI agent chat client. Runs entirely in your browser via WebAssembly. No server-side code.">
   <meta property="og:image" content="icons/Icon-512.png">
   <meta property="og:url" content="https://app.coquibot.ai">
   <meta property="og:site_name" content="Coqui">
@@ -41,7 +41,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Coqui — AI Agent in Your Browser">
-  <meta name="twitter:description" content="Privacy-first AI agent chat client. Runs entirely in your browser via WebAssembly. No server-side code, no tracking.">
+  <meta name="twitter:description" content="Privacy-first AI agent chat client. Runs entirely in your browser via WebAssembly. No server-side code.">
   <meta name="twitter:image" content="icons/Icon-512.png">
 
   <!-- Security headers via meta tags (supplemented by server headers in production) -->
@@ -68,7 +68,7 @@
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "Coqui",
-    "description": "Privacy-first AI agent chat client that runs entirely in your browser via WebAssembly. No server-side code, no tracking.",
+    "description": "Privacy-first AI agent chat client that runs entirely in your browser via WebAssembly. No server-side code.",
     "url": "https://app.coquibot.ai",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (browser-based)",
@@ -330,7 +330,7 @@
 
       <h1 class="landing-title">Your AI agent, <span class="accent">in&nbsp;your&nbsp;browser</span></h1>
       <p class="landing-subtitle">
-        A privacy-first chat client for the Coqui AI agent. Runs entirely in your browser via WebAssembly. No server-side code, no tracking, your data stays on your device.
+        A privacy-first chat client for the Coqui AI agent. Runs entirely in your browser via WebAssembly. No server-side code, your data stays on your device.
       </p>
 
       <div class="features">
@@ -394,6 +394,9 @@
     </div>
   </noscript>
 
+  <!-- Umami Analytics (cookieless, GDPR-compliant) -->
+  <script defer src="https://go.coqui.bot/script.js" data-website-id="625097e3-cb91-43a8-9890-5cad1b00b27f" data-domains="localhost,studio.coqui.bot,app.coquibot.ai"></script>
+
   <script>
     // Show Launch App button once Flutter engine is ready
     window.addEventListener('flutter-first-frame', function () {
@@ -401,6 +404,11 @@
       var btn = document.getElementById('launch-btn');
       if (loader) loader.style.display = 'none';
       if (btn) btn.style.display = '';
+
+      // Track WASM app launch (page view is already auto-tracked by Umami)
+      if (typeof umami !== 'undefined') {
+        umami.track('app_launched');
+      }
     });
   </script>
   <script src="flutter_bootstrap.js" async></script>
