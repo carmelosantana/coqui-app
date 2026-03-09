@@ -115,7 +115,7 @@ class LocalServerService {
         final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
         final result = await Process.run(
           shell,
-          ['-l', '-c', 'echo \$PATH'],
+          ['-l', '-c', 'echo \$PATH 2>/dev/null'],
         );
         if (result.exitCode == 0) {
           final loginPath = result.stdout.toString().trim();
@@ -263,7 +263,7 @@ class LocalServerService {
 
     final process = await Process.start(
       'bash',
-      ['-l', scriptFile.path, '--non-interactive'],
+      [scriptFile.path, '--non-interactive'],
       environment: env,
       // Redirect stdin from /dev/null so sudo cannot prompt for a password.
       // The symlink step will fall back to ~/.local/bin instead.

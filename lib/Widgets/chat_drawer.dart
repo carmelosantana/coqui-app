@@ -3,6 +3,7 @@ import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
@@ -45,7 +46,6 @@ class ChatDrawer extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Row(
         children: [
-          if (PlatformInfo.isDesktop) _buildServerButton(context),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () {
@@ -55,8 +55,39 @@ class ChatDrawer extends StatelessWidget {
               Navigator.pushNamed(context, '/settings');
             },
           ),
+          _buildConfigButton(context),
+          if (PlatformInfo.isDesktop) _buildServerButton(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildConfigButton(BuildContext context) {
+    return Consumer<InstanceProvider>(
+      builder: (context, instanceProvider, _) {
+        final hasInstance = instanceProvider.hasActiveInstance;
+
+        return IconButton(
+          icon: const Icon(Icons.build_outlined),
+          tooltip: hasInstance
+              ? 'Server configuration'
+              : 'Connect to a server first',
+          color: hasInstance
+              ? null
+              : Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.38),
+          onPressed: hasInstance
+              ? () {
+                  if (ResponsiveBreakpoints.of(context).isMobile) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/config');
+                }
+              : null,
+        );
+      },
     );
   }
 

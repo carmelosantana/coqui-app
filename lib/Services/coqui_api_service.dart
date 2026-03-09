@@ -428,6 +428,16 @@ class CoquiApiService {
     return _parseResponse(response);
   }
 
+  /// Update the server configuration (openclaw.json).
+  Future<void> updateConfig(String rawJson) async {
+    final response = await http.put(
+      _url('/api/config'),
+      headers: _headers,
+      body: rawJson,
+    );
+    _parseResponse(response);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
