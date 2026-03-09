@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
 
 /// Extension on [BuildContext] to provide consistent markdown styling across the app.
 extension MarkdownStyleSheetExtension on BuildContext {
@@ -15,6 +16,13 @@ extension MarkdownStyleSheetExtension on BuildContext {
             ),
       ),
     ).copyWith(
+      code: CoquiTypography.monoStyle(
+        TextStyle(fontSize: Theme.of(this).textTheme.bodyMedium?.fontSize),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: Theme.of(this).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
       textScaler: MediaQuery.textScalerOf(this).clamp(
         minScaleFactor: 0.8,
         maxScaleFactor: 2.0,

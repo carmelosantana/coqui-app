@@ -384,6 +384,7 @@
       <a href="https://discord.gg/TaCpZVqbbT">Discord</a>
       <span class="sep">·</span>
       <a href="https://coquibot.ai">Hosted Version</a>
+      <p style="flex-basis:100%;text-align:center;margin-top:0.5rem;color:var(--text-muted);">MIT License &copy; <span id="footer-year"></span> <a href="https://www.linkedin.com/in/carmelosantana/" target="_blank" rel="noopener noreferrer">Carmelo Santana</a>. All rights reserved.</p>
     </footer>
   </div>
 
@@ -398,6 +399,8 @@
   <script defer src="https://go.coqui.bot/script.js" data-website-id="625097e3-cb91-43a8-9890-5cad1b00b27f" data-domains="localhost,studio.coqui.bot,app.coquibot.ai"></script>
 
   <script>
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
     // Show Launch App button once Flutter engine is ready
     window.addEventListener('flutter-first-frame', function () {
       var loader = document.getElementById('launch-loading');
