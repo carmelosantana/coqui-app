@@ -360,12 +360,20 @@ class CoquiApiService {
     return switch (ext) {
       // Images
       'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
-      'png'           => MediaType('image', 'png'),
-      'gif'           => MediaType('image', 'gif'),
-      'webp'          => MediaType('image', 'webp'),
+      'png' => MediaType('image', 'png'),
+      'gif' => MediaType('image', 'gif'),
+      'webp' => MediaType('image', 'webp'),
       // Plain text
-      'txt' || 'log' || 'ini' || 'conf' ||
-      'sh' || 'bash' || 'zsh' || 'fish' || 'env' => MediaType('text', 'plain'),
+      'txt' ||
+      'log' ||
+      'ini' ||
+      'conf' ||
+      'sh' ||
+      'bash' ||
+      'zsh' ||
+      'fish' ||
+      'env' =>
+        MediaType('text', 'plain'),
       // Markdown
       'md' || 'markdown' => MediaType('text', 'markdown'),
       // CSV

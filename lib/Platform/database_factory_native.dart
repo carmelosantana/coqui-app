@@ -4,9 +4,11 @@ import 'platform_info_native.dart';
 
 /// Initialize the database factory for native platforms.
 ///
-/// Linux and Windows use FFI; macOS/iOS/Android use the default sqflite plugin.
+/// Desktop platforms (macOS, Linux, Windows) use FFI to bundle SQLite
+/// and avoid system-SQLite authorization issues (SQLITE_AUTH on macOS).
+/// iOS/Android use the default sqflite plugin.
 Future<void> initDatabaseFactory() async {
-  if (PlatformInfo.isWindows || PlatformInfo.isLinux) {
+  if (PlatformInfo.isWindows || PlatformInfo.isLinux || PlatformInfo.isMacOS) {
     sqfliteFfiInit();
     sqflite.databaseFactory = databaseFactoryFfi;
   }

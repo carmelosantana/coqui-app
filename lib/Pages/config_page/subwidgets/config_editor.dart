@@ -63,8 +63,17 @@ class _ConfigEditorState extends State<ConfigEditor>
       final api =
           Provider.of<InstanceProvider>(context, listen: false).apiService;
       final result = await api.getConfig();
-      final raw = result['raw'] as String? ?? '';
-      _configPath = result['path'] as String?;
+
+      // The API may return either an envelope {path, config, raw} or the
+      // config object directly — handle both gracefully.
+      String raw;
+      if (result.containsKey('raw')) {
+        raw = result['raw'] as String? ?? '';
+        _configPath = result['path'] as String?;
+      } else {
+        raw = const JsonEncoder.withIndent('    ').convert(result);
+        _configPath = null;
+      }
 
       _controller.text = raw;
       _lastSavedText = raw;
