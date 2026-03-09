@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
 
 /// An inline collapsible card that displays a tool call within a chat bubble.
 ///
@@ -104,12 +104,11 @@ class _ToolCallCardState extends State<ToolCallCard> {
                   Expanded(
                     child: Text(
                       _toolName,
-                      style: GoogleFonts.sourceCodePro(
-                        textStyle:
-                            Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: colorScheme.onSurface,
-                                ),
+                      style: CoquiTypography.monoStyle(
+                        Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                            ),
                       ),
                     ),
                   ),
@@ -164,8 +163,8 @@ class _ToolCallCardState extends State<ToolCallCard> {
                             children: [
                               Text(
                                 entry.key,
-                                style: GoogleFonts.sourceCodePro(
-                                  textStyle: Theme.of(context)
+                                style: CoquiTypography.monoStyle(
+                                  Theme.of(context)
                                       .textTheme
                                       .labelSmall
                                       ?.copyWith(
@@ -176,8 +175,8 @@ class _ToolCallCardState extends State<ToolCallCard> {
                               ),
                               Text(
                                 valueStr,
-                                style: GoogleFonts.sourceCodePro(
-                                  textStyle: Theme.of(context)
+                                style: CoquiTypography.monoStyle(
+                                  Theme.of(context)
                                       .textTheme
                                       .bodySmall
                                       ?.copyWith(
@@ -235,11 +234,10 @@ class _ToolCallCardState extends State<ToolCallCard> {
                         const SizedBox(height: 4),
                         Text(
                           _truncate(widget.resultContent!, 500),
-                          style: GoogleFonts.sourceCodePro(
-                            textStyle:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
+                          style: CoquiTypography.monoStyle(
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                           ),
                           maxLines: 15,
                           overflow: TextOverflow.ellipsis,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Theme/theme.dart';
 
 class ThemesSettings extends StatefulWidget {
   const ThemesSettings({super.key});
@@ -53,36 +54,7 @@ class _ThemesSettingsState extends State<ThemesSettings> {
           ),
         ),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _ThemeButton(
-              seedColor: Colors.green,
-              onPressed: () => _settingsBox.put("color", Colors.green),
-            ),
-            _ThemeButton(
-              seedColor: Colors.blue,
-              onPressed: () => _settingsBox.put("color", Colors.blue),
-            ),
-            _ThemeButton(
-              seedColor: Colors.purple,
-              onPressed: () => _settingsBox.put("color", Colors.purple),
-            ),
-            _ThemeButton(
-              seedColor: Colors.orange,
-              onPressed: () => _settingsBox.put("color", Colors.orange),
-            ),
-            _ThemeButton(
-              seedColor: Colors.red,
-              onPressed: () => _settingsBox.put("color", Colors.red),
-            ),
-            _ThemeButton(
-              seedColor: Colors.grey,
-              onPressed: () => _settingsBox.put("color", Colors.grey),
-            ),
-          ],
-        ),
+        _buildThemePreviewRow(context),
       ],
     );
   }
@@ -102,67 +74,66 @@ class _ThemesSettingsState extends State<ThemesSettings> {
         ? Icons.light_mode_outlined
         : Icons.dark_mode_outlined;
   }
-}
 
-class _ThemeButton extends StatelessWidget {
-  final Color seedColor;
-  final Function()? onPressed;
-
-  const _ThemeButton({required this.seedColor, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: Theme.of(context).brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-    );
-
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: colorScheme.surfaceContainer,
-        padding: EdgeInsets.all(16.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _colorNames[seedColor] ?? "Custom",
-            style: TextStyle(color: colorScheme.primary),
-          ),
-          Container(
-            height: 20,
-            width: 80,
-            decoration: ShapeDecoration(
+  Widget _buildThemePreviewRow(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
               color: colorScheme.primary,
-              shape: StadiumBorder(),
+              borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(CoquiColors.radiusMd),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'Primary',
+              style: TextStyle(color: colorScheme.onPrimary, fontSize: 12),
             ),
           ),
-          const SizedBox(height: 8),
-          Container(
-            height: 20,
-            width: 80,
-            decoration: ShapeDecoration(
-              color: colorScheme.surface,
-              shape: StadiumBorder(),
+        ),
+        Expanded(
+          child: Container(
+            height: 48,
+            color: colorScheme.tertiary,
+            alignment: Alignment.center,
+            child: Text(
+              'Accent',
+              style: TextStyle(color: colorScheme.onTertiary, fontSize: 12),
             ),
           ),
-          const SizedBox(height: 8),
-        ],
-      ),
+        ),
+        Expanded(
+          child: Container(
+            height: 48,
+            color: colorScheme.surface,
+            alignment: Alignment.center,
+            child: Text(
+              'Surface',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 12),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorScheme.secondary,
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(CoquiColors.radiusMd),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'Muted',
+              style: TextStyle(color: colorScheme.onSecondary, fontSize: 12),
+            ),
+          ),
+        ),
+      ],
     );
   }
-
-  static final _colorNames = {
-    Colors.red: "Red",
-    Colors.blue: "Blue",
-    Colors.purple: "Purple",
-    Colors.orange: "Orange",
-    Colors.green: "Green",
-    Colors.grey: "Grey",
-  };
 }

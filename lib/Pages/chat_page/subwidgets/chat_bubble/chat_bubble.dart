@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:coqui_app/Extensions/markdown_stylesheet_extension.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Theme/coqui_colors.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'chat_bubble_actions.dart';
@@ -89,15 +90,23 @@ class _ChatBubbleBody extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isSentFromUser
                     ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(10.0),
+                    : null,
+                border: isSentFromUser
+                    ? null
+                    : Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.3),
+                      ),
+                borderRadius: BorderRadius.circular(CoquiColors.radiusLg),
               ),
               child: MarkdownBody(
                 data: message.content,
                 selectable: true,
                 softLineBreak: true,
                 styleSheet: context.markdownStyleSheet.copyWith(
-                  code: GoogleFonts.sourceCodePro(),
+                  code: CoquiTypography.monoStyle(),
                 ),
                 builders: {'think': ThinkBlockBuilder()},
                 extensionSet: md.ExtensionSet(
