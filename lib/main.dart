@@ -5,6 +5,7 @@ import 'package:coqui_app/Pages/settings_page/settings_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Providers/supporter_provider.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
@@ -35,6 +36,10 @@ void main() async {
   final apiService = CoquiApiService();
   final databaseService = DatabaseService();
   final instanceService = InstanceService();
+  final purchaseService = PurchaseService();
+
+  // Initialize in-app purchase listener (no-op on non-iOS).
+  await purchaseService.initialize();
 
   runApp(
     MultiProvider(
@@ -63,6 +68,11 @@ void main() async {
             apiService: apiService,
           ),
         ),
+        ChangeNotifierProvider(
+          create: (_) => SupporterProvider(
+            purchaseService: purchaseService,
+          ),
+        ),
       ],
       child: const CoquiApp(),
     ),
@@ -76,13 +86,14 @@ class CoquiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
       valueListenable: Hive.box('settings').listenable(
-        keys: ['brightness'],
+        keys: ['brightness', 'selected_theme', 'is_supporter'],
       ),
       builder: (context, box, _) {
+        final themeName = _supporterThemeName;
         return MaterialApp(
           title: AppConstants.appName,
-          theme: CoquiTheme.light(),
-          darkTheme: CoquiTheme.dark(),
+          theme: CoquiTheme.light(themeName: themeName),
+          darkTheme: CoquiTheme.dark(themeName: themeName),
           themeMode: _themeMode,
           builder: (context, child) => ResponsiveBreakpoints.builder(
             breakpoints: [
@@ -118,5 +129,14 @@ class CoquiApp extends StatelessWidget {
     final brightnessValue = Hive.box('settings').get('brightness');
     if (brightnessValue == null) return ThemeMode.system;
     return brightnessValue == 1 ? ThemeMode.light : ThemeMode.dark;
+  }
+
+  /// Returns the active supporter theme name, or null for the default palette.
+  /// Only returns a theme when the user is a verified supporter.
+  String? get _supporterThemeName {
+    final box = Hive.box('settings');
+    final isSupporter = box.get('is_supporter', defaultValue: false);
+    if (isSupporter != true) return null;
+    return box.get('selected_theme') as String?;
   }
 }

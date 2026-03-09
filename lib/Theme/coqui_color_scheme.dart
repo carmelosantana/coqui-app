@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'coqui_colors.dart';
+import 'supporter_themes.dart';
 
 /// Builds Material [ColorScheme] instances from the Coqui brand palette.
 ///
@@ -67,6 +68,94 @@ abstract final class CoquiColorScheme {
       inverseSurface: CoquiColors.darkForeground,
       onInverseSurface: CoquiColors.darkBackground,
     );
+  }
+
+  // ── Palette-based factories ────────────────────────────────────────────
+
+  /// Build a light [ColorScheme] from a [SupporterThemePalette].
+  ///
+  /// Derives on-colors, containers, and semantic tokens from the 4 core
+  /// palette colors (primary, accent, surface, muted).
+  static ColorScheme lightFromPalette(SupporterThemePalette p) {
+    final onPrimary = _contrastForeground(p.lightPrimary);
+    final onAccent = _contrastForeground(p.lightAccent);
+    final onSurface = _contrastForeground(p.lightSurface);
+    final onMuted = _contrastForeground(p.lightMuted);
+    final border = Color.lerp(p.lightSurface, onSurface, 0.12)!;
+
+    return ColorScheme(
+      brightness: Brightness.light,
+      primary: p.lightPrimary,
+      onPrimary: onPrimary,
+      primaryContainer: p.lightAccent,
+      onPrimaryContainer: onAccent,
+      secondary: p.lightMuted,
+      onSecondary: onMuted,
+      secondaryContainer: p.lightMuted,
+      onSecondaryContainer: onMuted.withValues(alpha: 0.6),
+      tertiary: p.lightAccent,
+      onTertiary: onAccent,
+      surface: p.lightSurface,
+      onSurface: onSurface,
+      surfaceContainerLowest: p.lightSurface,
+      surfaceContainerLow: Color.lerp(p.lightSurface, p.lightMuted, 0.3)!,
+      surfaceContainer: p.lightMuted,
+      surfaceContainerHigh: p.lightMuted,
+      surfaceContainerHighest: border,
+      onSurfaceVariant: onSurface.withValues(alpha: 0.6),
+      outline: border,
+      outlineVariant: border,
+      error: CoquiColors.lightDestructive,
+      onError: Colors.white,
+      shadow: Colors.black,
+      inverseSurface: onSurface,
+      onInverseSurface: p.lightSurface,
+    );
+  }
+
+  /// Build a dark [ColorScheme] from a [SupporterThemePalette].
+  static ColorScheme darkFromPalette(SupporterThemePalette p) {
+    final onPrimary = _contrastForeground(p.darkPrimary);
+    final onAccent = _contrastForeground(p.darkAccent);
+    final onSurface = _contrastForeground(p.darkSurface);
+    final onMuted = _contrastForeground(p.darkMuted);
+    final border = Color.lerp(p.darkSurface, onSurface, 0.12)!;
+
+    return ColorScheme(
+      brightness: Brightness.dark,
+      primary: p.darkPrimary,
+      onPrimary: onPrimary,
+      primaryContainer: p.darkAccent,
+      onPrimaryContainer: onAccent,
+      secondary: p.darkMuted,
+      onSecondary: onMuted,
+      secondaryContainer: p.darkMuted,
+      onSecondaryContainer: onMuted.withValues(alpha: 0.6),
+      tertiary: p.darkAccent,
+      onTertiary: onAccent,
+      surface: p.darkSurface,
+      onSurface: onSurface,
+      surfaceContainerLowest: p.darkSurface,
+      surfaceContainerLow: Color.lerp(p.darkSurface, p.darkMuted, 0.5)!,
+      surfaceContainer: p.darkMuted,
+      surfaceContainerHigh: p.darkMuted,
+      surfaceContainerHighest: border,
+      onSurfaceVariant: onSurface.withValues(alpha: 0.6),
+      outline: border,
+      outlineVariant: border,
+      error: CoquiColors.darkDestructiveForeground,
+      onError: CoquiColors.darkDestructive,
+      shadow: Colors.black,
+      inverseSurface: onSurface,
+      onInverseSurface: p.darkSurface,
+    );
+  }
+
+  /// Returns black or white depending on which contrasts better with [bg].
+  static Color _contrastForeground(Color bg) {
+    return bg.computeLuminance() > 0.5
+        ? const Color(0xFF0A0A0A)
+        : const Color(0xFFFAFAFA);
   }
 }
 
@@ -169,6 +258,46 @@ class CoquiBrandColors extends ThemeExtension<CoquiBrandColors> {
       ring: Color.lerp(ring, other.ring, t)!,
       card: Color.lerp(card, other.card, t)!,
       cardForeground: Color.lerp(cardForeground, other.cardForeground, t)!,
+    );
+  }
+
+  /// Derive brand colors from a supporter theme palette for light mode.
+  static CoquiBrandColors lightFromPalette(SupporterThemePalette p) {
+    final onSurface = CoquiColorScheme._contrastForeground(p.lightSurface);
+    final sidebar = Color.lerp(p.lightSurface, p.lightMuted, 0.3)!;
+    final border = Color.lerp(p.lightSurface, onSurface, 0.12)!;
+    return CoquiBrandColors(
+      sidebar: sidebar,
+      sidebarForeground: onSurface,
+      sidebarPrimary: p.lightPrimary,
+      sidebarPrimaryForeground:
+          CoquiColorScheme._contrastForeground(p.lightPrimary),
+      sidebarAccent: p.lightMuted,
+      sidebarAccentForeground: onSurface,
+      sidebarBorder: border,
+      ring: p.lightPrimary,
+      card: p.lightSurface,
+      cardForeground: onSurface,
+    );
+  }
+
+  /// Derive brand colors from a supporter theme palette for dark mode.
+  static CoquiBrandColors darkFromPalette(SupporterThemePalette p) {
+    final onSurface = CoquiColorScheme._contrastForeground(p.darkSurface);
+    final sidebar = Color.lerp(p.darkSurface, p.darkMuted, 0.5)!;
+    final border = Color.lerp(p.darkSurface, onSurface, 0.12)!;
+    return CoquiBrandColors(
+      sidebar: sidebar,
+      sidebarForeground: onSurface,
+      sidebarPrimary: p.darkPrimary,
+      sidebarPrimaryForeground:
+          CoquiColorScheme._contrastForeground(p.darkPrimary),
+      sidebarAccent: p.darkMuted,
+      sidebarAccentForeground: onSurface,
+      sidebarBorder: border,
+      ring: p.darkPrimary,
+      card: Color.lerp(p.darkSurface, p.darkMuted, 0.3)!,
+      cardForeground: onSurface,
     );
   }
 }
