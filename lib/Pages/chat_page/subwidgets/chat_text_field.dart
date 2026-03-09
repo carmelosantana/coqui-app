@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
+import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:flutter/services.dart';
 
 class ChatTextField extends StatefulWidget {
@@ -62,7 +63,20 @@ class _ChatTextFieldState extends State<ChatTextField> {
         onEditingComplete: widget.onEditingComplete,
         decoration: InputDecoration(
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30.0),
+            borderRadius: BorderRadius.circular(CoquiColors.radiusXl),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(CoquiColors.radiusXl),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(CoquiColors.radiusXl),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
+              width: 2,
+            ),
           ),
           labelText: 'Prompt',
           prefixIcon: widget.prefixIcon,

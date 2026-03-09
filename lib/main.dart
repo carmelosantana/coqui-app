@@ -6,7 +6,7 @@ import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/services.dart';
-import 'package:coqui_app/Utils/material_color_adapter.dart';
+import 'package:coqui_app/Theme/theme.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
 import 'package:provider/provider.dart';
@@ -28,8 +28,6 @@ void main() async {
   } else {
     await Hive.initFlutter();
   }
-
-  Hive.registerAdapter(MaterialColorAdapter());
 
   await Hive.openBox('settings');
 
@@ -78,21 +76,14 @@ class CoquiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
       valueListenable: Hive.box('settings').listenable(
-        keys: ['color', 'brightness'],
+        keys: ['brightness'],
       ),
       builder: (context, box, _) {
         return MaterialApp(
           title: AppConstants.appName,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              brightness:
-                  _brightness ?? MediaQuery.platformBrightnessOf(context),
-              dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-              seedColor: box.get('color', defaultValue: Colors.green),
-            ),
-            appBarTheme: const AppBarTheme(centerTitle: true),
-            useMaterial3: true,
-          ),
+          theme: CoquiTheme.light(),
+          darkTheme: CoquiTheme.dark(),
+          themeMode: _themeMode,
           builder: (context, child) => ResponsiveBreakpoints.builder(
             breakpoints: [
               const Breakpoint(start: 0, end: 450, name: MOBILE),
@@ -123,9 +114,9 @@ class CoquiApp extends StatelessWidget {
     );
   }
 
-  Brightness? get _brightness {
+  ThemeMode get _themeMode {
     final brightnessValue = Hive.box('settings').get('brightness');
-    if (brightnessValue == null) return null;
-    return brightnessValue == 1 ? Brightness.light : Brightness.dark;
+    if (brightnessValue == null) return ThemeMode.system;
+    return brightnessValue == 1 ? ThemeMode.light : ThemeMode.dark;
   }
 }

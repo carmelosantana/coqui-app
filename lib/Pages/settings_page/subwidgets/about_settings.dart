@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'package:coqui_app/Constants/constants.dart';
-import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Widgets/flexible_text.dart';
 
 class AboutSettings extends StatelessWidget {
@@ -10,6 +9,9 @@ class AboutSettings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mutedColor =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -20,61 +22,23 @@ class AboutSettings extends StatelessWidget {
               ),
         ),
         ListTile(
-          leading: const Icon(Icons.info_outline),
-          title: const Text('Version'),
-          subtitle: Text(AppConstants.appVersion),
-        ),
-        ListTile(
           leading: const Icon(Icons.code),
           title: const Text('Source Code'),
           subtitle: const Text('View on GitHub'),
           onTap: () {
-            launchUrlString(AppConstants.githubUrl);
+            launchUrlString(AppConstants.githubCoreUrl);
           },
         ),
-        ListTile(
-          leading: const Icon(Icons.star),
-          title: const Text('Give a Star on GitHub'),
-          subtitle: const Text('Support the project'),
-          onTap: () {
-            launchUrlString(AppConstants.githubUrl);
-          },
-        ),
-        if (PlatformInfo.isMobile)
-          ListTile(
-            leading: const Icon(Icons.desktop_mac_outlined),
-            title: const Text('Try Desktop App'),
-            subtitle: const Text('Available on macOS, Linux, Windows'),
-            onTap: () {
-              launchUrlString(AppConstants.githubUrl);
-            },
-          ),
-        if (PlatformInfo.isDesktop)
-          ListTile(
-            leading: const Icon(Icons.phone_iphone_outlined),
-            title: const Text('Try Mobile App'),
-            subtitle: const Text('Available on iOS and Android'),
-            onTap: () {
-              launchUrlString(AppConstants.githubUrl);
-            },
-          ),
-        if (PlatformInfo.isWeb)
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Download Native App'),
-            subtitle: const Text('Available on all platforms'),
-            onTap: () {
-              launchUrlString(AppConstants.githubUrl);
-            },
-          ),
+        const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           spacing: 5,
           children: [
-            const Icon(Icons.favorite, color: Colors.red, size: 16),
+            Icon(Icons.favorite, color: mutedColor, size: 16),
             FlexibleText(
               "Thanks for using ${AppConstants.appName}!",
               textAlign: TextAlign.center,
+              style: TextStyle(color: mutedColor),
             ),
           ],
         ),

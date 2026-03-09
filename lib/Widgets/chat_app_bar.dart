@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -33,8 +33,8 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: Text(
                   chatProvider.currentSession!.modelRole,
-                  style: GoogleFonts.kodeMono(
-                    textStyle: Theme.of(context).textTheme.labelSmall,
+                  style: CoquiTypography.monoStyle(
+                    Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
               ),
