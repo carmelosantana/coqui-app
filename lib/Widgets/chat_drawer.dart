@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
-import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -58,9 +58,6 @@ class ChatNavigationDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final instanceProvider = Provider.of<InstanceProvider>(context);
-    final activeInstance = instanceProvider.activeInstance;
-
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
         return NavigationDrawer(
@@ -99,14 +96,14 @@ class ChatNavigationDrawer extends StatelessWidget {
 
               Widget? badge;
               if (hasError) {
-                badge = const _StatusBadge(color: Colors.red);
+                badge =
+                    _StatusBadge(color: Theme.of(context).colorScheme.error);
               } else if (isThinking) {
-                badge = const _StatusBadge(color: Colors.orange);
+                badge = const _StatusBadge(color: CoquiColors.chart1);
               } else if (hasUnread) {
-                // Prioritize unread green over generic streaming indicator
-                badge = const _StatusBadge(color: Colors.greenAccent);
+                badge = const _StatusBadge(color: CoquiColors.chart2);
               } else if (isStreaming) {
-                badge = const _StatusBadge(color: Colors.greenAccent);
+                badge = const _StatusBadge(color: CoquiColors.chart2);
               }
 
               return NavigationDrawerDestination(
