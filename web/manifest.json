@@ -1,13 +1,16 @@
 {
     "name": "Coqui",
     "short_name": "Coqui",
+    "description": "AI agent chat client — connect to your Coqui server and chat in real-time.",
     "start_url": ".",
+    "scope": "/",
+    "id": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "orientation": "any",
     "prefer_related_applications": false,
+    "categories": ["productivity", "utilities"],
     "icons": [
         {
             "src": "icons/Icon-192.png",

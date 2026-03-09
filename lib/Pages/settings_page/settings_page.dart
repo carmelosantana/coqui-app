@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:coqui_app/Services/analytics_service.dart';
+
 import 'subwidgets/subwidgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -7,6 +9,8 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AnalyticsService.trackEvent('settings_opened');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),

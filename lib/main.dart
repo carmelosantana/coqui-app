@@ -7,26 +7,24 @@ import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Utils/material_color_adapter.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
+import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import 'dart:io' show Platform;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (Platform.isWindows || Platform.isLinux) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
+  // Initialize platform-appropriate database factory (FFI on desktop, WASM on web)
+  await db_factory.initDatabaseFactory();
 
-  // Initialize PathManager
+  // Initialize PathManager (no-op on web)
   await PathManager.initialize();
 
-  // Initialize Hive
-  if (Platform.isLinux) {
-    Hive.init(PathManager.instance.documentsDirectory.path);
+  // Initialize Hive (uses IndexedDB on web, filesystem on native)
+  if (!PlatformInfo.isWeb && PlatformInfo.isLinux) {
+    Hive.init(PathManager.instance.documentsPath);
   } else {
     await Hive.initFlutter();
   }

@@ -1,10 +1,10 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:flutter/services.dart';
 
 class ChatTextField extends StatefulWidget {
   final TextEditingController? controller;
+  final FocusNode? focusNode;
 
   final void Function(String)? onChanged;
   final void Function()? onEditingComplete;
@@ -15,6 +15,7 @@ class ChatTextField extends StatefulWidget {
   const ChatTextField({
     super.key,
     this.controller,
+    this.focusNode,
     this.onChanged,
     this.onEditingComplete,
     this.prefixIcon,
@@ -56,6 +57,7 @@ class _ChatTextFieldState extends State<ChatTextField> {
       },
       child: TextField(
         controller: widget.controller,
+        focusNode: widget.focusNode,
         onChanged: widget.onChanged,
         onEditingComplete: widget.onEditingComplete,
         decoration: InputDecoration(
@@ -70,15 +72,13 @@ class _ChatTextFieldState extends State<ChatTextField> {
         maxLines: 5,
         textCapitalization: TextCapitalization.sentences,
         textInputAction: _textInputAction,
-        onTapOutside: (PointerDownEvent event) {
-          FocusManager.instance.primaryFocus?.unfocus();
-        },
+        // Avoid aggressive unfocus on pointer down outside to preserve typing
       ),
     );
   }
 
   TextInputAction get _textInputAction {
-    return Platform.isIOS || Platform.isAndroid
+    return PlatformInfo.isMobile
         ? TextInputAction.newline
         : TextInputAction.send;
   }

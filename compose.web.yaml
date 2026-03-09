@@ -1,0 +1,27 @@
+# Coqui Web — Docker Compose
+#
+# Serves the Flutter WASM web app via nginx:alpine.
+#
+# Usage:
+#   docker compose -f compose.web.yaml up -d        # Start (builds if needed)
+#   docker compose -f compose.web.yaml up -d --build # Force rebuild
+#   docker compose -f compose.web.yaml down          # Stop
+#
+# Access at http://localhost:${COQUI_WEB_PORT:-8080}
+
+services:
+  coqui-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: coqui-web:latest
+    container_name: coqui-web
+    ports:
+      - "${COQUI_WEB_PORT:-8080}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3

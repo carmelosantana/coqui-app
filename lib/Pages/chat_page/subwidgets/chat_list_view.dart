@@ -145,20 +145,15 @@ class _ChatListViewState extends State<ChatListView> {
                 final message =
                     widget.messages[widget.messages.length - index - 1];
 
-                if (index == 0) {
-                  return ObserveSize(
-                    key: Key(message.id),
-                    onSizeChanged: _onMessageSizeChanged,
-                    child: ChatBubble(
-                      message: message,
-                      allMessages: widget.allMessages,
-                    ),
-                  );
-                }
-
-                return ChatBubble(
-                  message: message,
-                  allMessages: widget.allMessages,
+                return ObserveSize(
+                  key: ValueKey(message.id),
+                  onSizeChanged:
+                      index == 0 ? _onMessageSizeChanged : (_, __) {},
+                  child: ChatBubble(
+                    key: ValueKey(message.id),
+                    message: message,
+                    allMessages: widget.allMessages,
+                  ),
                 );
               },
             ),

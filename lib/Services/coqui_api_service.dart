@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
@@ -222,13 +225,21 @@ class CoquiApiService {
   /// This is the core streaming endpoint. Events are yielded as they
   /// arrive, allowing the UI to render tool calls, iterations, and
   /// the final response in real-time.
-  Stream<SseEvent> sendPrompt(String sessionId, String prompt) async* {
+  ///
+  /// Pass [fileIds] to attach previously uploaded file IDs to this prompt.
+  Stream<SseEvent> sendPrompt(
+    String sessionId,
+    String prompt, {
+    List<String> fileIds = const [],
+  }) async* {
     final request = http.Request(
       'POST',
       _url('/api/sessions/$sessionId/messages'),
     );
     request.headers.addAll(_headers);
-    request.body = jsonEncode({'prompt': prompt});
+    final body = <String, dynamic>{'prompt': prompt};
+    if (fileIds.isNotEmpty) body['files'] = fileIds;
+    request.body = jsonEncode(body);
 
     http.StreamedResponse response;
     try {
@@ -283,6 +294,99 @@ class CoquiApiService {
       body: jsonEncode({'prompt': prompt}),
     );
     return _parseResponse(response);
+  }
+
+  // ── File uploads ─────────────────────────────────────────────────────
+
+  /// Upload files to a session using multipart/form-data.
+  ///
+  /// Returns the list of server-assigned file IDs which can then be passed
+  /// to [sendPrompt] as [fileIds]. Each file is uploaded with the field
+  /// name `files[]` as the server expects.
+  Future<List<String>> uploadFiles(
+    String sessionId,
+    List<PlatformFile> files,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _url('/api/sessions/$sessionId/files'),
+    );
+
+    if (_apiKey.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $_apiKey';
+    }
+
+    for (final file in files) {
+      final contentType = _mediaTypeForFilename(file.name);
+      if (!kIsWeb && file.path != null) {
+        request.files.add(await http.MultipartFile.fromPath(
+          'files[]',
+          file.path!,
+          filename: file.name,
+          contentType: contentType,
+        ));
+      } else if (file.bytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'files[]',
+          file.bytes!,
+          filename: file.name,
+          contentType: contentType,
+        ));
+      }
+    }
+
+    final streamedResponse = await request.send();
+
+    if (streamedResponse.statusCode != 201) {
+      await _throwStreamedError(streamedResponse);
+    }
+
+    final rawBody = await streamedResponse.stream.bytesToString();
+    final body = jsonDecode(rawBody) as Map<String, dynamic>;
+    final uploaded = body['files'] as List? ?? [];
+    return uploaded
+        .map((f) => (f as Map<String, dynamic>)['id'] as String)
+        .toList();
+  }
+
+  /// Derive a [MediaType] from a filename's extension for multipart uploads.
+  ///
+  /// Maps the extensions accepted by the server's [FileUploadStorage] allowed
+  /// list. Unknown extensions fall back to `application/octet-stream`, which
+  /// the server will reject with a user-visible error on the chip.
+  static MediaType _mediaTypeForFilename(String filename) {
+    final dot = filename.lastIndexOf('.');
+    final ext = dot >= 0 ? filename.substring(dot + 1).toLowerCase() : '';
+    return switch (ext) {
+      // Images
+      'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
+      'png'           => MediaType('image', 'png'),
+      'gif'           => MediaType('image', 'gif'),
+      'webp'          => MediaType('image', 'webp'),
+      // Plain text
+      'txt' || 'log' || 'ini' || 'conf' ||
+      'sh' || 'bash' || 'zsh' || 'fish' || 'env' => MediaType('text', 'plain'),
+      // Markdown
+      'md' || 'markdown' => MediaType('text', 'markdown'),
+      // CSV
+      'csv' => MediaType('text', 'csv'),
+      // HTML
+      'html' || 'htm' => MediaType('text', 'html'),
+      // XML
+      'xml' => MediaType('text', 'xml'),
+      // PHP
+      'php' => MediaType('text', 'x-php'),
+      // JavaScript
+      'js' || 'mjs' => MediaType('text', 'javascript'),
+      // JSON
+      'json' => MediaType('application', 'json'),
+      // PDF
+      'pdf' => MediaType('application', 'pdf'),
+      // YAML
+      'yaml' || 'yml' => MediaType('application', 'x-yaml'),
+      // Unknown — server will reject with a clear error message on the chip
+      _ => MediaType('application', 'octet-stream'),
+    };
   }
 
   // ── Turns ───────────────────────────────────────────────────────────
