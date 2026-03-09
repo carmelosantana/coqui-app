@@ -129,11 +129,9 @@ class _CredentialsEditorState extends State<CredentialsEditor>
 
   void _showAddCredentialDialog() {
     // Find keys that aren't already set
-    final existingKeys =
-        _credentials.map((c) => c['key'] as String).toSet();
-    final suggestions = _knownCredentials.keys
-        .where((k) => !existingKeys.contains(k))
-        .toList();
+    final existingKeys = _credentials.map((c) => c['key'] as String).toSet();
+    final suggestions =
+        _knownCredentials.keys.where((k) => !existingKeys.contains(k)).toList();
 
     final keyController = TextEditingController();
     final valueController = TextEditingController();
@@ -189,9 +187,7 @@ class _CredentialsEditorState extends State<CredentialsEditor>
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        obscureValue
-                            ? Icons.visibility_off
-                            : Icons.visibility,
+                        obscureValue ? Icons.visibility_off : Icons.visibility,
                       ),
                       onPressed: () {
                         setDialogState(() => obscureValue = !obscureValue);
@@ -253,9 +249,7 @@ class _CredentialsEditorState extends State<CredentialsEditor>
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        obscureValue
-                            ? Icons.visibility_off
-                            : Icons.visibility,
+                        obscureValue ? Icons.visibility_off : Icons.visibility,
                       ),
                       onPressed: () {
                         setDialogState(() => obscureValue = !obscureValue);

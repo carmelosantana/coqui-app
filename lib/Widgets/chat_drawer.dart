@@ -74,10 +74,7 @@ class ChatDrawer extends StatelessWidget {
               : 'Connect to a server first',
           color: hasInstance
               ? null
-              : Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.38),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
           onPressed: hasInstance
               ? () {
                   if (ResponsiveBreakpoints.of(context).isMobile) {
