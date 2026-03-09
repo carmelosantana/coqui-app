@@ -3,22 +3,39 @@ import 'package:flutter/material.dart';
 import 'coqui_colors.dart';
 import 'coqui_color_scheme.dart';
 import 'coqui_typography.dart';
+import 'supporter_themes.dart';
 
 /// Central theme factory for the Coqui app.
 ///
 /// Composes brand colors, Geist typography, and component-level overrides
 /// to produce a shadcn-inspired flat/bordered Material 3 theme.
 abstract final class CoquiTheme {
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
+  static ThemeData light({String? themeName}) =>
+      _build(Brightness.light, themeName: themeName);
+  static ThemeData dark({String? themeName}) =>
+      _build(Brightness.dark, themeName: themeName);
 
-  static ThemeData _build(Brightness brightness) {
+  static ThemeData _build(Brightness brightness, {String? themeName}) {
     final isLight = brightness == Brightness.light;
-    final colorScheme =
-        isLight ? CoquiColorScheme.light() : CoquiColorScheme.dark();
-    final brandColors = isLight
-        ? CoquiBrandColors.lightInstance
-        : CoquiBrandColors.darkInstance;
+    final palette = SupporterThemes.byName(themeName);
+
+    final ColorScheme colorScheme;
+    final CoquiBrandColors brandColors;
+
+    if (palette != null) {
+      colorScheme = isLight
+          ? CoquiColorScheme.lightFromPalette(palette)
+          : CoquiColorScheme.darkFromPalette(palette);
+      brandColors = isLight
+          ? CoquiBrandColors.lightFromPalette(palette)
+          : CoquiBrandColors.darkFromPalette(palette);
+    } else {
+      colorScheme =
+          isLight ? CoquiColorScheme.light() : CoquiColorScheme.dark();
+      brandColors = isLight
+          ? CoquiBrandColors.lightInstance
+          : CoquiBrandColors.darkInstance;
+    }
 
     final borderColor =
         isLight ? CoquiColors.lightBorder : CoquiColors.darkBorder;

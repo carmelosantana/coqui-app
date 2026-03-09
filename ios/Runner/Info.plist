@@ -24,6 +24,30 @@
 		<string>????</string>
 		<key>CFBundleVersion</key>
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>CFBundleIcons</key>
+		<dict>
+			<key>CFBundleAlternateIcons</key>
+			<dict>
+				<key>CoquiBW</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>CoquiBW</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+				<key>CoquiBot</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>CoquiBot</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+			</dict>
+		</dict>
 		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
 		<key>LSRequiresIPhoneOS</key>
