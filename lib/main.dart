@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Pages/config_page/config_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
@@ -131,6 +132,12 @@ class CoquiApp extends StatelessWidget {
             if (settings.name == '/server' && PlatformInfo.isDesktop) {
               return MaterialPageRoute(
                 builder: (context) => const ServerPage(),
+              );
+            }
+
+            if (settings.name == '/config') {
+              return MaterialPageRoute(
+                builder: (context) => const ConfigPage(),
               );
             }
 
