@@ -277,9 +277,12 @@ class _ServerDropdownState extends State<_ServerDropdown> {
             color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: 4),
-          Text(
-            active?.name ?? instances.first.name,
-            style: Theme.of(context).textTheme.labelMedium,
+          Flexible(
+            child: Text(
+              active?.name ?? instances.first.name,
+              style: Theme.of(context).textTheme.labelMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       );
@@ -335,9 +338,12 @@ class _ServerDropdownState extends State<_ServerDropdown> {
             color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: 4),
-          Text(
-            active?.name ?? 'Select Server',
-            style: Theme.of(context).textTheme.labelMedium,
+          Flexible(
+            child: Text(
+              active?.name ?? 'Select Server',
+              style: Theme.of(context).textTheme.labelMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const Icon(Icons.arrow_drop_down, size: 18),
         ],

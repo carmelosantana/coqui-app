@@ -33,6 +33,7 @@ dependencies:
 
   # HTTP package for making network requests
   http: ^1.3.0
+  http_parser: ^4.0.0
   async: ^2.12.0
 
   # State management solution
@@ -40,7 +41,9 @@ dependencies:
 
   # SQLite plugin for Flutter
   sqflite: ^2.4.2
+  sqflite_common: ^2.5.4
   sqflite_common_ffi: ^2.3.4
+  sqflite_common_ffi_web: ^0.4.5
   uuid: ^4.5.1
 
   # Path provider for SQLite
@@ -66,6 +69,9 @@ dependencies:
 
   # Path provider for app data
   path_provider: ^2.1.5
+
+  # File picker for chat attachments
+  file_picker: ^8.1.6
 
 dev_dependencies:
   flutter_test:
@@ -129,13 +135,14 @@ flutter_launcher_icons:
   image_path: "assets/images/coqui-icon.png"
   android: true
   ios: true
-  image_path_ios: "assets/images/coqui-icon.png"
+  image_path_ios: "assets/images/coqui.png"
+  remove_alpha_ios: true
   macos:
     generate: true
-    image_path: "assets/images/coqui-icon.png"
+    image_path: "assets/images/coqui-icon-macos.png"
   windows:
     generate: true
-    image_path: "assets/images/coqui-icon.png"
+    image_path: "assets/images/coqui.png"
     icon_size: 256
 
 flutter_native_splash:
@@ -150,4 +157,4 @@ flutter_native_splash:
 
   android: true
   ios: true
-  web: false
+  web: true

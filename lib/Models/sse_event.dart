@@ -65,6 +65,9 @@ class SseEvent {
   /// Content from a 'done' or 'complete' event.
   String get content => data['content'] as String? ?? '';
 
+  /// Incremental text delta from a 'text_delta' event.
+  String get textDeltaContent => data['content'] as String? ?? '';
+
   /// Iteration number from an 'iteration' event.
   int get iterationNumber => data['number'] as int? ?? 0;
 
@@ -120,6 +123,7 @@ enum SseEventType {
   toolResult,
   childStart,
   childEnd,
+  textDelta,
   done,
   error,
   complete,
@@ -134,6 +138,7 @@ enum SseEventType {
       'tool_result' => SseEventType.toolResult,
       'child_start' => SseEventType.childStart,
       'child_end' => SseEventType.childEnd,
+      'text_delta' => SseEventType.textDelta,
       'done' => SseEventType.done,
       'error' => SseEventType.error,
       'complete' => SseEventType.complete,

@@ -1,32 +1,43 @@
-import 'dart:io';
-
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
+import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
+import 'package:sqflite_common/sqlite_api.dart';
 import 'package:path/path.dart' as path;
 
 /// SQLite-backed local cache for Coqui API data.
 ///
 /// Caches sessions, messages, and turns fetched from the API server
 /// for offline viewing and fast UI rendering.
+///
+/// On web, uses SQLite compiled to WASM via OPFS for persistent storage.
+/// On native, uses sqflite (mobile) or FFI (desktop).
 class DatabaseService {
   late Database _db;
 
   Future<String> getDatabasesPathForPlatform() async {
-    if (Platform.isLinux) {
-      return PathManager.instance.documentsDirectory.path;
-    } else {
-      return await getDatabasesPath();
+    if (PlatformInfo.isWeb) {
+      // Web SQLite WASM manages its own storage path.
+      return '';
     }
+    if (PlatformInfo.isLinux) {
+      return PathManager.instance.documentsPath;
+    }
+    return await db_factory.getDatabaseFactory().getDatabasesPath();
   }
 
   Future<void> open(String databaseFile) async {
-    _db = await openDatabase(
-      path.join(await getDatabasesPathForPlatform(), databaseFile),
-      version: 1,
-      onCreate: (Database db, int version) async {
-        await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
+    final factory = db_factory.getDatabaseFactory();
+    final dbPath = PlatformInfo.isWeb
+        ? databaseFile
+        : path.join(await getDatabasesPathForPlatform(), databaseFile);
+    _db = await factory.openDatabase(
+      dbPath,
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: (Database db, int version) async {
+          await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
 instance_id TEXT,
 model_role TEXT NOT NULL,
@@ -37,7 +48,7 @@ token_count INTEGER DEFAULT 0,
 title TEXT
 ) WITHOUT ROWID;''');
 
-        await db.execute('''CREATE TABLE IF NOT EXISTS messages (
+          await db.execute('''CREATE TABLE IF NOT EXISTS messages (
 id TEXT PRIMARY KEY,
 session_id TEXT NOT NULL,
 content TEXT NOT NULL,
@@ -47,7 +58,8 @@ tool_call_id TEXT,
 created_at INTEGER NOT NULL,
 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 ) WITHOUT ROWID;''');
-      },
+        },
+      ),
     );
   }
 
@@ -104,7 +116,8 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   /// Delete a session and its messages from the local cache.
   Future<void> deleteSession(String sessionId) async {
     await _db.delete('sessions', where: 'id = ?', whereArgs: [sessionId]);
-    await _db.delete('messages', where: 'session_id = ?', whereArgs: [sessionId]);
+    await _db
+        .delete('messages', where: 'session_id = ?', whereArgs: [sessionId]);
   }
 
   /// Clear all sessions for an instance (used when switching instances).
@@ -118,7 +131,8 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   // ── Message Operations ──────────────────────────────────────────────
 
   /// Upsert a message into the local cache.
-  Future<void> upsertMessage(CoquiMessage message, {required String sessionId}) async {
+  Future<void> upsertMessage(CoquiMessage message,
+      {required String sessionId}) async {
     await _db.insert(
       'messages',
       {

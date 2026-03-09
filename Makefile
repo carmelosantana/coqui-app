@@ -2,6 +2,8 @@
        ios-debug ios-release ios-ipa ios-open \
 	macos-debug macos-release macos-open \
 	android-debug android-release android-install android-launch android-avds android-emulator \
+	web-build web-debug web-serve \
+	docker-web-build docker-web-start docker-web-stop \
        doctor test
 
 # Default target
@@ -19,7 +21,8 @@ doctor: ## Check Flutter environment
 deps: ## Install Flutter dependencies
 	flutter pub get
 
-icons: ## Regenerate app icons for all platforms
+icons: ## Regenerate app icons for all platforms (pads macOS icon automatically)
+	./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 83% --output assets/images/coqui-icon-macos.png
 	dart run flutter_launcher_icons
 
 splash: ## Regenerate splash screens
@@ -92,7 +95,28 @@ android-emulator: ## Start Android emulator (set AVD=<name>)
 
 test: ## Run Flutter tests
 	flutter test
+# ─── Web Builds ─────────────────────────────────────────────────────────────────────
 
+web-build: ## Build web release with WASM
+	flutter build web --wasm --release
+
+web-debug: ## Build web debug with WASM
+	flutter build web --wasm
+
+web-serve: web-build ## Build and serve web locally (port 8080)
+	@echo "Serving build/web on http://localhost:8080"
+	@cd build/web && python3 -m http.server 8080
+
+# ─── Docker (Web) ──────────────────────────────────────────────────────────────────
+
+docker-web-build: ## Build Docker image for web
+	docker compose -f compose.web.yaml build
+
+docker-web-start: ## Start web in Docker (port 8080)
+	docker compose -f compose.web.yaml up -d
+
+docker-web-stop: ## Stop Docker web container
+	docker compose -f compose.web.yaml down
 # ─── Cleanup ────────────────────────────────────────────────────────────
 
 clean: ## Clean all build artifacts
