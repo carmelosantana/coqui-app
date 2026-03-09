@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/local_server_state.dart';
+import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -40,15 +43,69 @@ class ChatDrawer extends StatelessWidget {
     return Container(
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      child: IconButton(
-        icon: const Icon(Icons.settings_outlined),
-        onPressed: () {
-          if (ResponsiveBreakpoints.of(context).isMobile) {
-            Navigator.pop(context);
-          }
-          Navigator.pushNamed(context, '/settings');
-        },
+      child: Row(
+        children: [
+          if (PlatformInfo.isDesktop) _buildServerButton(context),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              if (ResponsiveBreakpoints.of(context).isMobile) {
+                Navigator.pop(context);
+              }
+              Navigator.pushNamed(context, '/settings');
+            },
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildServerButton(BuildContext context) {
+    return Consumer<LocalServerProvider>(
+      builder: (context, provider, _) {
+        final status = provider.info.status;
+        final Color? dotColor = switch (status) {
+          LocalServerStatus.running => CoquiColors.chart2,
+          LocalServerStatus.error => Theme.of(context).colorScheme.error,
+          LocalServerStatus.starting ||
+          LocalServerStatus.stopping ||
+          LocalServerStatus.installing ||
+          LocalServerStatus.updating =>
+            Colors.orange,
+          _ => null,
+        };
+
+        return IconButton(
+          icon: Stack(
+            children: [
+              const Icon(Icons.dns_outlined),
+              if (dotColor != null)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: () {
+            if (ResponsiveBreakpoints.of(context).isMobile) {
+              Navigator.pop(context);
+            }
+            Navigator.pushNamed(context, '/server');
+          },
+        );
+      },
     );
   }
 }
