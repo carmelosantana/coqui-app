@@ -61,7 +61,7 @@ class _CredentialsEditorState extends State<CredentialsEditor>
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = 'Failed to load credentials: $e';
+        _error = CoquiException.friendly(e).message;
       });
     }
   }
@@ -76,7 +76,8 @@ class _CredentialsEditorState extends State<CredentialsEditor>
     } on CoquiException catch (e) {
       _showSnackBar('Failed to save: ${e.message}', isError: true);
     } catch (e) {
-      _showSnackBar('Failed to save: $e', isError: true);
+      _showSnackBar('Failed to save: ${CoquiException.friendly(e).message}',
+          isError: true);
     }
   }
 
@@ -110,7 +111,8 @@ class _CredentialsEditorState extends State<CredentialsEditor>
     } on CoquiException catch (e) {
       _showSnackBar('Failed to delete: ${e.message}', isError: true);
     } catch (e) {
-      _showSnackBar('Failed to delete: $e', isError: true);
+      _showSnackBar('Failed to delete: ${CoquiException.friendly(e).message}',
+          isError: true);
     }
   }
 

@@ -380,16 +380,7 @@ class ChatProvider extends ChangeNotifier {
     } on CoquiException catch (e) {
       _sessionErrors[session.id] = e;
     } catch (e) {
-      // Catches SocketException on native and ClientException on web.
-      if (e.toString().contains('SocketException') ||
-          e.toString().contains('ClientException') ||
-          e.toString().contains('XMLHttpRequest')) {
-        _sessionErrors[session.id] = CoquiException(
-          'Network connection lost. Check your server address or internet connection.',
-        );
-      } else {
-        _sessionErrors[session.id] = CoquiException('Something went wrong: $e');
-      }
+      _sessionErrors[session.id] = CoquiException.friendly(e);
     } finally {
       _activeStreams.remove(session.id);
       _streamingContent.remove(session.id);

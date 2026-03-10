@@ -139,12 +139,15 @@ class CoquiApiService {
         statusCode: response.statusCode,
       );
     } on TimeoutException {
-      throw CoquiException('Connection timed out');
+      throw CoquiException(
+        'Connection timed out. The server may be unresponsive.',
+        code: 'timeout',
+      );
     } on http.ClientException catch (e) {
-      throw CoquiException('Connection failed: ${e.message}');
+      throw CoquiException.friendly(e);
     } catch (e) {
       if (e is CoquiException) rethrow;
-      throw CoquiException('Connection failed: $e');
+      throw CoquiException.friendly(e);
     }
   }
 
@@ -253,7 +256,7 @@ class CoquiApiService {
     try {
       response = await request.send();
     } on http.ClientException catch (e) {
-      throw CoquiException('Connection failed: ${e.message}');
+      throw CoquiException.friendly(e);
     }
 
     // For non-200 responses, read the body and parse the error envelope
