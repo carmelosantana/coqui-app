@@ -72,8 +72,8 @@ class LocalServerProvider extends ChangeNotifier {
     _info = await _service.detectInstallation();
     notifyListeners();
 
-    // Auto-create local instance in the app
-    await _autoConfigureInstance(apiKey: apiKey, port: port);
+    // Auto-create local instance in the app (no API key needed for localhost)
+    await _autoConfigureInstance(port: port);
 
     return true;
   }
@@ -231,7 +231,7 @@ class LocalServerProvider extends ChangeNotifier {
   // ── Auto-configure instance ───────────────────────────────────────────
 
   Future<void> _autoConfigureInstance({
-    required String apiKey,
+    String? apiKey,
     required int port,
   }) async {
     // Check if a local instance already exists
@@ -242,15 +242,15 @@ class LocalServerProvider extends ChangeNotifier {
     );
 
     if (existing.isNotEmpty) {
-      // Update existing local instance with new API key
-      final updated = existing.first.copyWith(apiKey: apiKey);
+      // Update existing local instance
+      final updated = existing.first.copyWith(apiKey: apiKey ?? '');
       await _instanceProvider.updateInstance(updated);
       _addLog('Updated existing local server instance.');
     } else {
       final instance = CoquiInstance(
         name: 'Local Server',
         baseUrl: 'http://127.0.0.1:$port',
-        apiKey: apiKey,
+        apiKey: apiKey ?? '',
       );
       await _instanceProvider.addInstance(instance);
       _addLog('Local server instance added and configured.');
