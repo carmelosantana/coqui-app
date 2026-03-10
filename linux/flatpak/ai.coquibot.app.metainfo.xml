@@ -1,37 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>dev.ibrahimcetin.reins</id>
+  <id>ai.coquibot.app</id>
 
-  <name>Reins: Chat for Ollama</name>
-  <summary>Private AI Chat</summary>
+  <name>Coqui</name>
+  <summary>AI agent chat client</summary>
 
   <description>
     <p>
-    Reins is a powerful chat client for your self-hosted Ollama AI models. Connect remotely, customize prompts, adjust parameters, and manage multiple conversations with ease.
+    Coqui is a cross-platform client for the Coqui AI agent. Connect to a Coqui API server, manage sessions, and chat with your agent in real-time via SSE streaming.
     </p>
     <p>
     Key Features:
     </p>
     <ul>
-      <li>Connect to remote Ollama servers</li>
-      <li>Custom system prompts per chat</li>
-      <li>Edit and regenerate responses</li>
-      <li>Send images</li>
-      <li>Fine-tune model parameters (temperature, context size, etc.) for each chat</li>
-      <li>Switch models mid-conversation</li>
-      <li>Create custom models from chats</li>
-      <li>Real-time message streaming</li>
+      <li>Connect to Coqui API servers</li>
+      <li>Role-based session creation</li>
+      <li>Real-time SSE message streaming</li>
+      <li>Multiple server instance support</li>
+      <li>Tool output rendering</li>
+      <li>Session persistence</li>
     </ul>
-    <p>
-    Requires a self-hosted Ollama Server.
-    </p>
   </description>
 
-  <icon type="stock">dev.ibrahimcetin.reins</icon>
-  <launchable type="desktop-id">dev.ibrahimcetin.reins.desktop</launchable>
+  <icon type="stock">ai.coquibot.app</icon>
+  <launchable type="desktop-id">ai.coquibot.app.desktop</launchable>
 
-  <developer id="dev.ibrahimcetin">
-     <name>İbrahim Çetin</name>
+  <developer id="ai.coquibot">
+     <name>Coqui Bot</name>
   </developer>
 
   <categories>
@@ -51,9 +46,9 @@
 
   <content_rating type="oars-1.1" />
 
-  <url type="homepage">https://reins.ibrahimcetin.dev</url>
-  <url type="vcs-browser">https://github.com/ibrahimcetin/reins</url>
-  <url type="bugtracker">https://github.com/ibrahimcetin/reins/issues</url>
+  <url type="homepage">https://coquibot.org</url>
+  <url type="vcs-browser">https://github.com/AgentCoqui/coqui-app</url>
+  <url type="bugtracker">https://github.com/AgentCoqui/coqui-app/issues</url>
 
   <screenshots>
     <screenshot type="default">
