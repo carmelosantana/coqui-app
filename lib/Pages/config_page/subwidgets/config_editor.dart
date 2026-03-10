@@ -89,7 +89,7 @@ class _ConfigEditorState extends State<ConfigEditor>
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = 'Failed to load configuration: $e';
+        _error = CoquiException.friendly(e).message;
       });
     }
   }
@@ -121,7 +121,8 @@ class _ConfigEditorState extends State<ConfigEditor>
       _showSnackBar('Save failed: ${e.message}', isError: true);
     } catch (e) {
       setState(() => _isSaving = false);
-      _showSnackBar('Save failed: $e', isError: true);
+      _showSnackBar('Save failed: ${CoquiException.friendly(e).message}',
+          isError: true);
     }
   }
 

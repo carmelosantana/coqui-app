@@ -307,7 +307,7 @@ class _ChatPageState extends State<ChatPage> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to create session: $e'),
+              content: Text(CoquiException.friendly(e).message),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
