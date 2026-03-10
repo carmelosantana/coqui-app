@@ -74,8 +74,10 @@ class SaasApiService {
         'Accept': 'application/json',
       };
 
-  /// Parse a JSON response, throwing [SaasApiException] on errors.
-  Map<String, dynamic> _parse(http.Response response) {
+  /// Parse a JSON response, handling errors and unwrapping the API envelope.
+  /// Returns the unwrapped payload (the value inside `{ "data": ... }`).
+  /// Throws [SaasApiException] on HTTP errors.
+  dynamic _parseResponse(http.Response response) {
     if (response.statusCode == 401) {
       onUnauthorized?.call();
       throw SaasApiException('Unauthorized',
@@ -93,14 +95,45 @@ class SaasApiService {
     }
 
     if (response.statusCode >= 400) {
+      // API returns { error: { code, message } } envelope
+      final error = body['error'];
+      String message = 'Request failed';
+      String? code;
+      if (error is Map<String, dynamic>) {
+        message = error['message'] as String? ?? message;
+        code = error['code'] as String?;
+      } else if (error is String) {
+        message = error;
+      }
       throw SaasApiException(
-        body['error'] as String? ?? 'Request failed',
+        message,
         statusCode: response.statusCode,
-        code: body['code'] as String?,
+        code: code,
       );
     }
 
+    // Unwrap { data: ..., meta: ... } API envelope
+    if (body.containsKey('data')) {
+      return body['data'];
+    }
+
     return body;
+  }
+
+  /// Parse a JSON response expecting a Map payload.
+  Map<String, dynamic> _parse(http.Response response) {
+    final result = _parseResponse(response);
+    if (result is Map<String, dynamic>) return result;
+    // If the response was successful but not a map, return an empty map
+    // (for void-style calls that just check status).
+    return <String, dynamic>{};
+  }
+
+  /// Parse a JSON response expecting a List payload.
+  List<dynamic> _parseList(http.Response response) {
+    final result = _parseResponse(response);
+    if (result is List) return result;
+    return <dynamic>[];
   }
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -149,7 +182,7 @@ class SaasApiService {
       headers: _authHeaders,
     );
     final data = _parse(response);
-    return UserProfile.fromJson(data['user'] as Map<String, dynamic>);
+    return UserProfile.fromJson(data);
   }
 
   // ── Plans (public) ──────────────────────────────────────────────────
@@ -160,8 +193,7 @@ class SaasApiService {
       _url('/plans'),
       headers: _publicHeaders,
     );
-    final data = _parse(response);
-    final plans = data['plans'] as List;
+    final plans = _parseList(response);
     return plans.map((p) => Plan.fromJson(p as Map<String, dynamic>)).toList();
   }
 
@@ -172,7 +204,7 @@ class SaasApiService {
       headers: _publicHeaders,
     );
     final data = _parse(response);
-    return Plan.fromJson(data['plan'] as Map<String, dynamic>);
+    return Plan.fromJson(data);
   }
 
   // ── Regions (public) ────────────────────────────────────────────────
@@ -183,8 +215,7 @@ class SaasApiService {
       _url('/regions'),
       headers: _publicHeaders,
     );
-    final data = _parse(response);
-    final regions = data['regions'] as List;
+    final regions = _parseList(response);
     return regions
         .map((r) => Region.fromJson(r as Map<String, dynamic>))
         .toList();
@@ -260,7 +291,7 @@ class SaasApiService {
       headers: _authHeaders,
     );
     final data = _parse(response);
-    return Subscription.fromJson(data['subscription'] as Map<String, dynamic>);
+    return Subscription.fromJson(data);
   }
 
   /// Cancel a subscription (sets cancel_at_period_end).
@@ -291,8 +322,7 @@ class SaasApiService {
       _url('/instances'),
       headers: _authHeaders,
     );
-    final data = _parse(response);
-    final instances = data['instances'] as List;
+    final instances = _parseList(response);
     return instances
         .map((i) => HostedInstance.fromJson(i as Map<String, dynamic>))
         .toList();
@@ -312,7 +342,7 @@ class SaasApiService {
       body: jsonEncode(body),
     );
     final data = _parse(response);
-    return HostedInstance.fromJson(data['instance'] as Map<String, dynamic>);
+    return HostedInstance.fromJson(data);
   }
 
   /// Get a single hosted instance by ID.
@@ -359,8 +389,7 @@ class SaasApiService {
       _url('/instances/$id/snapshots'),
       headers: _authHeaders,
     );
-    final data = _parse(response);
-    final snapshots = data['snapshots'] as List;
+    final snapshots = _parseList(response);
     return snapshots
         .map((s) => InstanceSnapshot.fromJson(s as Map<String, dynamic>))
         .toList();
@@ -374,8 +403,7 @@ class SaasApiService {
       _url('/instances/$id/metrics', {'since': since}),
       headers: _authHeaders,
     );
-    final data = _parse(response);
-    final metrics = data['metrics'] as List;
+    final metrics = _parseList(response);
     return metrics
         .map((m) => InstanceMetric.fromJson(m as Map<String, dynamic>))
         .toList();
@@ -389,8 +417,7 @@ class SaasApiService {
       _url('/billing'),
       headers: _authHeaders,
     );
-    final data = _parse(response);
-    final events = data['events'] as List;
+    final events = _parseList(response);
     return events
         .map((e) => BillingEvent.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -416,7 +443,7 @@ class SaasApiService {
       headers: _authHeaders,
     );
     final data = _parse(response);
-    return UserProfile.fromJson(data['user'] as Map<String, dynamic>);
+    return UserProfile.fromJson(data);
   }
 
   /// Update user profile.
@@ -434,7 +461,7 @@ class SaasApiService {
       body: jsonEncode(body),
     );
     final data = _parse(response);
-    return UserProfile.fromJson(data['user'] as Map<String, dynamic>);
+    return UserProfile.fromJson(data);
   }
 
   /// Regenerate API token. Returns the new token.
