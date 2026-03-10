@@ -98,7 +98,7 @@ class LocalServerService {
 
   String get _binPath => '$installPath/bin/coqui';
   String get _versionFile => '$installPath/.coqui-version';
-  String get _workspacePath => '$installPath/.workspace';
+  String get _workspacePath => '$installPath/workspace';
   String get _envFile => '$_workspacePath/.env';
   String get _logsDir => '$_workspacePath/logs';
 
