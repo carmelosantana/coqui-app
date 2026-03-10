@@ -39,6 +39,7 @@ class InstanceProvider extends ChangeNotifier {
       _apiService.configure(
         baseUrl: _activeInstance!.baseUrl,
         apiKey: _activeInstance!.apiKey,
+        apiVersion: _activeInstance!.apiVersion,
       );
     }
 
@@ -105,6 +106,7 @@ class InstanceProvider extends ChangeNotifier {
       _apiService.configure(
         baseUrl: _activeInstance!.baseUrl,
         apiKey: _activeInstance!.apiKey,
+        apiVersion: _activeInstance!.apiVersion,
       );
     }
   }
