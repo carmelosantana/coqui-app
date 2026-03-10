@@ -47,6 +47,7 @@ class ChatDrawer extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Row(
         children: [
+          _buildAccountButton(context),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () {
@@ -59,7 +60,6 @@ class ChatDrawer extends StatelessWidget {
           _buildConfigButton(context),
           if (PlatformInfo.isDesktop) _buildServerButton(context),
           _buildHostedButton(context),
-          _buildAccountButton(context),
         ],
       ),
     );

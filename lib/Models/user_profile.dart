@@ -1,13 +1,13 @@
 /// User profile from the CoquiBot SaaS API.
 class UserProfile {
-  final int id;
+  final String id;
   final String? displayName;
   final String? githubUsername;
   final String? image;
   final String? email;
   final String role;
   final String? sshPublicKey;
-  final DateTime createdAt;
+  final DateTime? createdAt;
 
   UserProfile({
     required this.id,
@@ -17,19 +17,21 @@ class UserProfile {
     this.email,
     required this.role,
     this.sshPublicKey,
-    required this.createdAt,
+    this.createdAt,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      id: json['id'] as int,
+      id: json['id'].toString(),
       displayName: json['displayName'] as String?,
       githubUsername: json['githubUsername'] as String?,
       image: json['image'] as String?,
       email: json['email'] as String?,
       role: json['role'] as String? ?? 'user',
       sshPublicKey: json['sshPublicKey'] as String?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
     );
   }
 
