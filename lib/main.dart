@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Pages/account_page.dart';
 import 'package:coqui_app/Pages/config_page/config_page.dart';
+import 'package:coqui_app/Pages/hosted_detail_page.dart';
+import 'package:coqui_app/Pages/hosted_instances_page.dart';
+import 'package:coqui_app/Pages/login_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
+import 'package:coqui_app/Pages/pricing_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
+import 'package:coqui_app/Providers/auth_provider.dart';
+import 'package:coqui_app/Providers/account_provider.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/hosted_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Providers/subscription_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
@@ -17,6 +26,7 @@ import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:app_links/app_links.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +51,11 @@ void main() async {
   final databaseService = DatabaseService();
   final instanceService = InstanceService();
   final purchaseService = PurchaseService();
+  final saasApiService = SaasApiService();
+  final authService = AuthService(api: saasApiService);
+  final iapSubscriptionService = IapSubscriptionService(
+    apiService: saasApiService,
+  );
 
   // Initialize in-app purchase listener (no-op on non-iOS).
   await purchaseService.initialize();
@@ -51,6 +66,25 @@ void main() async {
         Provider.value(value: apiService),
         Provider.value(value: databaseService),
         Provider.value(value: instanceService),
+        Provider.value(value: saasApiService),
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(
+            authService: authService,
+            apiService: saasApiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AccountProvider(api: saasApiService),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => SubscriptionProvider(
+            apiService: saasApiService,
+            iapService: iapSubscriptionService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => HostedProvider(apiService: saasApiService),
+        ),
         ChangeNotifierProvider(
           create: (_) => InstanceProvider(
             instanceService: instanceService,
@@ -91,8 +125,49 @@ void main() async {
   );
 }
 
-class CoquiApp extends StatelessWidget {
+class CoquiApp extends StatefulWidget {
   const CoquiApp({super.key});
+
+  @override
+  State<CoquiApp> createState() => _CoquiAppState();
+}
+
+class _CoquiAppState extends State<CoquiApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final AppLinks _appLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+    _restoreSession();
+  }
+
+  void _restoreSession() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().tryRestoreSession();
+    });
+  }
+
+  void _initDeepLinks() {
+    _appLinks = AppLinks();
+    _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    // Handle OAuth callback: coquibot://auth/callback?code=...&state=...
+    if (uri.host == 'auth' && uri.path == '/callback') {
+      final code = uri.queryParameters['code'];
+      final state = uri.queryParameters['state'];
+      if (code != null && state != null) {
+        context.read<AuthProvider>().completeLogin(code: code, state: state);
+        // Navigate to home after login
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (_) => false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +178,7 @@ class CoquiApp extends StatelessWidget {
       builder: (context, box, _) {
         final themeName = _supporterThemeName;
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           title: AppConstants.appName,
           theme: CoquiTheme.light(themeName: themeName),
           darkTheme: CoquiTheme.dark(themeName: themeName),
@@ -138,6 +214,37 @@ class CoquiApp extends StatelessWidget {
             if (settings.name == '/config') {
               return MaterialPageRoute(
                 builder: (context) => const ConfigPage(),
+              );
+            }
+
+            if (settings.name == '/login') {
+              return MaterialPageRoute(
+                builder: (context) => const LoginPage(),
+              );
+            }
+
+            if (settings.name == '/account') {
+              return MaterialPageRoute(
+                builder: (context) => const AccountPage(),
+              );
+            }
+
+            if (settings.name == '/hosted') {
+              return MaterialPageRoute(
+                builder: (context) => const HostedInstancesPage(),
+              );
+            }
+
+            if (settings.name == '/hosted/detail') {
+              final instanceId = settings.arguments as int;
+              return MaterialPageRoute(
+                builder: (context) => HostedDetailPage(instanceId: instanceId),
+              );
+            }
+
+            if (settings.name == '/pricing') {
+              return MaterialPageRoute(
+                builder: (context) => const PricingPage(),
               );
             }
 
