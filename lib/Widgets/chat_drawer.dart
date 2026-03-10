@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
+import 'package:coqui_app/Providers/auth_provider.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
@@ -57,6 +58,8 @@ class ChatDrawer extends StatelessWidget {
           ),
           _buildConfigButton(context),
           if (PlatformInfo.isDesktop) _buildServerButton(context),
+          _buildHostedButton(context),
+          _buildAccountButton(context),
         ],
       ),
     );
@@ -131,6 +134,48 @@ class ChatDrawer extends StatelessWidget {
               Navigator.pop(context);
             }
             Navigator.pushNamed(context, '/server');
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHostedButton(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (!auth.isLoggedIn) return const SizedBox.shrink();
+        return IconButton(
+          icon: const Icon(Icons.cloud_outlined),
+          tooltip: 'Hosted Instances',
+          onPressed: () {
+            if (ResponsiveBreakpoints.of(context).isMobile) {
+              Navigator.pop(context);
+            }
+            Navigator.pushNamed(context, '/hosted');
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAccountButton(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        return IconButton(
+          icon: Icon(
+            auth.isLoggedIn
+                ? Icons.account_circle
+                : Icons.account_circle_outlined,
+          ),
+          tooltip: auth.isLoggedIn ? 'Account' : 'Sign In',
+          onPressed: () {
+            if (ResponsiveBreakpoints.of(context).isMobile) {
+              Navigator.pop(context);
+            }
+            Navigator.pushNamed(
+              context,
+              auth.isLoggedIn ? '/account' : '/login',
+            );
           },
         );
       },

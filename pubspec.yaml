@@ -70,8 +70,14 @@ dependencies:
   # File picker for chat attachments
   file_picker: ^8.1.6
 
-  # In-app purchases (iOS supporter donations)
+  # In-app purchases (iOS/Android subscriptions + supporter donations)
   in_app_purchase: ^3.2.0
+
+  # Secure storage for API tokens (Keychain on iOS, KeyStore on Android)
+  flutter_secure_storage: ^9.2.4
+
+  # Deep link handling for OAuth callbacks
+  app_links: ^6.4.0
 
 dev_dependencies:
   flutter_test:
