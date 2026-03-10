@@ -25,7 +25,9 @@ class SupporterSettings extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Supporter',
+                  (PlatformInfo.isIOS || PlatformInfo.isAndroid)
+                      ? 'Perks'
+                      : 'Support',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -140,7 +142,7 @@ class _SupporterCta extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          if (PlatformInfo.isIOS) ...[
+          if (PlatformInfo.isIOS || PlatformInfo.isAndroid) ...[
             _DonationTiers(supporter: supporter),
             const SizedBox(height: 8),
             Center(
