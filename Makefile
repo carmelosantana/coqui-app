@@ -4,7 +4,8 @@
 	android-debug android-release android-install android-launch android-avds android-emulator \
 	web-build web-debug web-serve \
 	docker-web-build docker-web-start docker-web-stop \
-       doctor test
+       doctor test \
+       release-tag
 
 # Default target
 help: ## Show this help
@@ -125,3 +126,15 @@ clean: ## Clean all build artifacts
 	cd macos && rm -rf Pods Podfile.lock
 
 rebuild: clean setup ## Clean everything and rebuild from scratch
+
+# ─── Release ────────────────────────────────────────────────────────
+
+release-tag: ## Tag and push a release (reads version from pubspec.yaml, triggers CI)
+	@VERSION=$$(grep '^version:' pubspec.yaml | head -1 | awk '{print $$2}' | cut -d+ -f1); \
+	if [ -z "$$VERSION" ]; then echo "Error: could not read version from pubspec.yaml"; exit 1; fi; \
+	echo "Tagging release v$$VERSION..."; \
+	git add .; \
+	git commit -m "chore: prepare release v$$VERSION" --allow-empty; \
+	git tag "v$$VERSION"; \
+	git push origin main --tags; \
+	echo "Pushed v$$VERSION — GitHub Actions will build and create the release."

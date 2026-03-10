@@ -1,6 +1,84 @@
 # Coqui App Release Guide
 
-This guide covers final checks and release steps for iOS, Android, macOS, and Windows.
+This guide covers final checks and release steps for iOS, Android, macOS, Windows, Linux, and Web.
+
+## Automated Release (GitHub Actions)
+
+Pushing a `v*` tag triggers the release workflow (`.github/workflows/release.yml`), which builds all platforms in parallel and creates a GitHub Release with downloadable artifacts.
+
+### Quick Release
+
+```bash
+# 1. Update version in pubspec.yaml (version: x.y.z+build)
+# 2. Commit and tag:
+make release-tag
+```
+
+This reads the version from `pubspec.yaml`, commits, tags, and pushes. GitHub Actions then:
+
+1. Builds **Android APK**, **macOS DMG** (signed + notarized), **iOS IPA**, **Linux tar.gz**, **Windows zip**, and **Web WASM** in parallel
+2. Creates a **GitHub Release** with all artifacts and SHA-256 checksums
+3. Deploys the **Web build to Vercel** (`app.coquibot.ai`)
+
+### Artifacts Produced
+
+| Platform | Artifact | Distribution |
+|----------|----------|-------------|
+| Android | `Coqui-{ver}-android.apk` | Direct download / sideload |
+| macOS | `Coqui-{ver}-macos-arm64.dmg` | Direct download (signed + notarized) |
+| iOS | `Coqui-{ver}-ios.ipa` | Upload to TestFlight via Transporter |
+| Linux | `Coqui-{ver}-linux-x64.tar.gz` | Direct download, extract and run |
+| Windows | `Coqui-{ver}-windows-x64.zip` | Direct download, extract and run |
+| Web | Deployed to Vercel | `app.coquibot.ai` |
+
+### Required GitHub Secrets
+
+Before the first release, configure these in the repo settings (Settings → Secrets → Actions):
+
+**Apple Signing:**
+- `APPLE_CERTIFICATE_P12` — base64-encoded .p12 signing certificate
+- `APPLE_CERTIFICATE_PASSWORD` — password for the .p12
+- `MACOS_PROVISIONING_PROFILE` — base64-encoded macOS provisioning profile
+- `IOS_PROVISIONING_PROFILE` — base64-encoded iOS provisioning profile
+- `APPLE_TEAM_ID` — Apple Developer Team ID
+- `APPLE_ID` — Apple ID email (for notarization)
+- `APPLE_APP_SPECIFIC_PASSWORD` — app-specific password (generate at appleid.apple.com)
+- `KEYCHAIN_PASSWORD` — arbitrary password for CI temporary keychain
+
+**Android Signing:**
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded .jks keystore
+- `ANDROID_KEYSTORE_PASSWORD` — keystore password
+- `ANDROID_KEY_ALIAS` — key alias (e.g. `coqui`)
+- `ANDROID_KEY_PASSWORD` — key password
+
+**Vercel Deployment:**
+- `VERCEL_TOKEN` — personal access token from vercel.com/account/tokens
+- `VERCEL_ORG_ID` — from Vercel project settings
+- `VERCEL_PROJECT_ID` — from Vercel project settings
+
+### One-Time Setup
+
+**Generate Android keystore:**
+
+```bash
+keytool -genkey -v -keystore ~/coqui-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias coqui
+```
+
+**Export Apple certificate:**
+
+1. Open Keychain Access → My Certificates
+2. Export your signing certificate as `.p12`
+3. Base64 encode: `base64 -i certificate.p12 | pbcopy`
+4. Store as `APPLE_CERTIFICATE_P12` secret
+
+**Base64 encode files for secrets:**
+
+```bash
+base64 -i ~/coqui-release.jks | pbcopy          # Android keystore
+base64 -i ~/path/to/profile.provisionprofile | pbcopy  # Provisioning profile
+```
+
+## Manual Release (Local Builds)
 
 ## 0) Unified Builder (Recommended)
 

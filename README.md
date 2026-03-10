@@ -11,6 +11,22 @@ Connect to a Coqui API server, manage sessions, and chat with your agent in real
 - Windows
 - Android
 - iOS
+- Web (WASM)
+
+## Downloads
+
+Download the latest release from [GitHub Releases](https://github.com/AgentCoqui/coqui-app/releases/latest):
+
+| Platform | Download | Notes |
+|----------|----------|-------|
+| Android | `Coqui-*-android.apk` | Sideload APK |
+| macOS | `Coqui-*-macos-arm64.dmg` | Signed and notarized |
+| Windows | `Coqui-*-windows-x64.zip` | Extract and run `coqui.exe` |
+| Linux | `Coqui-*-linux-x64.tar.gz` | Extract and run `./coqui` |
+| iOS | `Coqui-*-ios.ipa` | Install via TestFlight |
+| Web | [app.coquibot.ai](https://app.coquibot.ai) | No install needed |
+
+All release artifacts include SHA-256 checksums in `SHA256SUMS.txt`.
 
 ## Getting Started
 
