@@ -3809,11 +3809,11 @@ ic:function ic(){},
 ci:function ci(a,b,c){var _=this
 _.a=a
 _.b=b
-_.c=c
-_.d=null
-_.e=!0
-_.f=!1
-_.r=null},
+_.d=c
+_.e=null
+_.f=!0
+_.r=!1
+_.w=null},
 f_:function f_(a,b,c){var _=this
 _.r=a
 _.w=-1
@@ -7051,8 +7051,8 @@ o=l.gbB()
 l.gcD()
 n=new A.f_(l,o,B.p)
 n.by()
-l.e=!1
-l.r=n
+l.f=!1
+l.w=n
 o=++p.Q
 m=new A.fm(o,l,a,n)
 p.z.l(0,o,m)
@@ -7637,10 +7637,10 @@ A.h5.prototype={
 $0(){var s,r,q,p,o,n
 this.a.R()
 for(s=this.b,r=s.length,q=0;q<s.length;s.length===r||(0,A.bZ)(s),++q){p=s[q]
-if(!p.f){p.f=!0
-if(!p.e){o=p.a
+if(!p.r){p.r=!0
+if(!p.f){o=p.a
 A.d(o.c.d.sqlite3_reset(o.b))
-p.e=!0}p.r=null
+p.f=!0}p.w=null
 o=p.a
 n=o.c
 A.d(n.d.sqlite3_finalize(o.b))
@@ -7692,17 +7692,17 @@ k=A.km(i,m)
 l=p.a(new Uint8Array(l,m,k))
 q.push(new A.dJ(!1).bD(l,0,null,!0))}return q},
 gcD(){return null},
-bF(){if(this.f||this.b.r)throw A.c(A.Y("Tried to operate on a released prepared statement"))},
-dO(){var s,r=this,q=r.e=!1,p=r.a,o=p.b
+bF(){if(this.r||this.b.r)throw A.c(A.Y("Tried to operate on a released prepared statement"))},
+dO(){var s,r=this,q=r.f=!1,p=r.a,o=p.b
 p=p.c.d
 do s=A.d(p.sqlite3_step(o))
 while(s===100)
-if(s!==0?s!==101:q)A.cA(r.b,s,"executing statement",r.c,r.d)},
-e3(){var s,r,q,p,o,n,m,l=this,k=A.y([],t.G),j=l.e=!1
+if(s!==0?s!==101:q)A.cA(r.b,s,"executing statement",r.d,r.e)},
+e3(){var s,r,q,p,o,n,m,l=this,k=A.y([],t.G),j=l.f=!1
 for(s=l.a,r=s.b,s=s.c.d,q=-1;p=A.d(s.sqlite3_step(r)),p===100;){if(q===-1)q=A.d(s.sqlite3_column_count(r))
 o=[]
 for(n=0;n<q;++n)o.push(l.cw(n))
-B.b.p(k,o)}if(p!==0?p!==101:j)A.cA(l.b,p,"selecting from statement",l.c,l.d)
+B.b.p(k,o)}if(p!==0?p!==101:j)A.cA(l.b,p,"selecting from statement",l.d,l.e)
 m=l.gbB()
 l.gcD()
 j=new A.eC(k,m,B.p)
@@ -7726,7 +7726,7 @@ if(q!==o)A.J(A.aP(a,"parameters","Expected "+o+" parameters, got "+q))
 p=r.gW(a)
 if(p)return
 for(s=1;s<=r.gj(a);++s)this.dC(r.k(a,s-1),s)
-this.d=a},
+this.e=a},
 dC(a,b){var s,r,q,p,o=this
 A:{if(a==null){s=o.a
 s=A.d(s.c.d.sqlite3_bind_null(s.b,b))
@@ -7751,17 +7751,17 @@ s.a(a)
 s=p.c
 s=A.d(s.d.dart_sqlite3_bind_blob(p.b,b,s.bV(a),J.S(a)))
 break A}s=o.dA(a,b)
-break A}if(s!==0)A.cA(o.b,s,"binding parameter",o.c,o.d)},
+break A}if(s!==0)A.cA(o.b,s,"binding parameter",o.d,o.e)},
 dA(a,b){A.aG(a)
 throw A.c(A.aP(a,"params["+b+"]","Allowed parameters must either be null or bool, int, num, String or List<int>."))},
 bx(a){A:{this.dB(a.a)
 break A}},
 bi(){var s,r=this
-if(!r.e){s=r.a
+if(!r.f){s=r.a
 A.d(s.c.d.sqlite3_reset(s.b))
-r.e=!0}r.r=null},
+r.f=!0}r.w=null},
 R(){var s,r,q=this
-if(!q.f){q.f=!0
+if(!q.r){q.r=!0
 q.bi()
 s=q.a
 r=s.c
@@ -7778,7 +7778,7 @@ gn(){var s=this.x
 s===$&&A.M("current")
 return s},
 m(){var s,r,q,p,o=this,n=o.r
-if(n.f||n.r!==o)return!1
+if(n.r||n.w!==o)return!1
 s=n.a
 r=s.b
 s=s.c.d
@@ -7789,8 +7789,8 @@ o.by()
 o.y=!0}s=[]
 for(p=0;p<o.w;++p)s.push(n.cw(p))
 o.x=new A.ad(o,A.en(s,t.X))
-return!0}if(q!==5)n.r=null
-if(q!==0&&q!==101)A.cA(n.b,q,"iterating through statement",n.c,n.d)
+return!0}if(q!==5)n.w=null
+if(q!==0&&q!==101)A.cA(n.b,q,"iterating through statement",n.d,n.e)
 return!1}}
 A.ee.prototype={
 bm(a,b){return this.d.K(a)?1:0},

@@ -18,6 +18,7 @@ import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:app_links/app_links.dart';
+import 'package:coqui_app/Utils/material_color_adapter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +36,19 @@ void main() async {
     await Hive.initFlutter();
   }
 
-  await Hive.openBox('settings');
+  // Register adapters before opening any boxes.
+  Hive.registerAdapter(MaterialColorAdapter());
+
+  // Open settings box with recovery for stale/incompatible data.
+  // Previous builds stored objects (auth, SaaS models) whose adapters have
+  // since been removed — reading those entries triggers HiveError with an
+  // unknown typeId. Deleting the box and re-opening resets to defaults.
+  try {
+    await Hive.openBox('settings');
+  } catch (e) {
+    await Hive.deleteBoxFromDisk('settings');
+    await Hive.openBox('settings');
+  }
 
   // Create services
   final apiService = CoquiApiService();
