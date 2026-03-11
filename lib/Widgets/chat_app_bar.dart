@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
@@ -177,11 +179,17 @@ class _ServerDropdownState extends State<_ServerDropdown> {
   /// null = unknown/checking, true = reachable, false = unreachable
   bool? _isHealthy;
   String? _lastCheckedInstanceId;
+  Timer? _healthTimer;
+  bool _isChecking = false;
 
   @override
   void initState() {
     super.initState();
     _checkHealth();
+    _healthTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _checkHealth(),
+    );
   }
 
   @override
@@ -193,33 +201,57 @@ class _ServerDropdownState extends State<_ServerDropdown> {
     }
   }
 
+  @override
+  void dispose() {
+    _healthTimer?.cancel();
+    _healthTimer = null;
+    super.dispose();
+  }
+
   Future<void> _checkHealth() async {
-    final active = widget.instanceProvider.activeInstance;
-    if (active == null) {
-      setState(() {
-        _isHealthy = null;
-        _lastCheckedInstanceId = null;
-      });
-      return;
-    }
-
-    _lastCheckedInstanceId = active.id;
-    setState(() => _isHealthy = null); // checking
-
-    final testService = CoquiApiService(
-      baseUrl: active.baseUrl,
-      apiKey: active.apiKey,
-    );
+    if (_isChecking) return;
+    _isChecking = true;
 
     try {
-      await testService.healthCheck();
-      if (mounted && _lastCheckedInstanceId == active.id) {
-        setState(() => _isHealthy = true);
+      final active = widget.instanceProvider.activeInstance;
+      if (active == null) {
+        if (_isHealthy != null || _lastCheckedInstanceId != null) {
+          setState(() {
+            _isHealthy = null;
+            _lastCheckedInstanceId = null;
+          });
+        }
+        return;
       }
-    } catch (_) {
-      if (mounted && _lastCheckedInstanceId == active.id) {
-        setState(() => _isHealthy = false);
+
+      final instanceChanged = _lastCheckedInstanceId != active.id;
+      _lastCheckedInstanceId = active.id;
+      if (instanceChanged) {
+        setState(() => _isHealthy = null); // show checking state
       }
+
+      final testService = CoquiApiService(
+        baseUrl: active.baseUrl,
+        apiKey: active.apiKey,
+        apiVersion: active.apiVersion,
+      );
+
+      try {
+        await testService.healthCheck();
+        if (mounted &&
+            _lastCheckedInstanceId == active.id &&
+            _isHealthy != true) {
+          setState(() => _isHealthy = true);
+        }
+      } catch (_) {
+        if (mounted &&
+            _lastCheckedInstanceId == active.id &&
+            _isHealthy != false) {
+          setState(() => _isHealthy = false);
+        }
+      }
+    } finally {
+      _isChecking = false;
     }
   }
 
