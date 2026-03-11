@@ -98,7 +98,7 @@ class LocalServerService {
 
   String get _binPath => '$installPath/bin/coqui';
   String get _versionFile => '$installPath/.coqui-version';
-  String get _workspacePath => '$installPath/workspace';
+  String get _workspacePath => '$installPath/.workspace';
   String get _envFile => '$_workspacePath/.env';
   String get _logsDir => '$_workspacePath/logs';
 
@@ -263,7 +263,7 @@ class LocalServerService {
 
     final process = await Process.start(
       'bash',
-      [scriptFile.path, '--non-interactive'],
+      [scriptFile.path, '--non-interactive', '--quiet'],
       environment: env,
       // Redirect stdin from /dev/null so sudo cannot prompt for a password.
       // The symlink step will fall back to ~/.local/bin instead.
@@ -312,6 +312,7 @@ class LocalServerService {
         'Bypass',
         '-File',
         scriptFile.path,
+        '-Quiet',
       ],
       environment: env,
     );
@@ -486,7 +487,7 @@ class LocalServerService {
   /// Check if the Coqui API at the given port is responding.
   Future<bool> checkHealth({int port = defaultPort}) async {
     try {
-      final uri = Uri.parse('http://127.0.0.1:$port/api/health');
+      final uri = Uri.parse('http://127.0.0.1:$port/api/v1/health');
       final response = await http.get(uri).timeout(
             const Duration(seconds: 3),
           );
