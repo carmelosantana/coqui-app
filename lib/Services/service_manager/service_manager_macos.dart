@@ -167,9 +167,9 @@ class MacOSServiceManager implements ServiceManager {
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>$coquiPath/workspace/logs/api-stdout.log</string>
+    <string>$coquiPath/.workspace/logs/api-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>$coquiPath/workspace/logs/api-stderr.log</string>
+    <string>$coquiPath/.workspace/logs/api-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key>

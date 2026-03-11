@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -72,8 +73,8 @@ class LocalServerProvider extends ChangeNotifier {
     _info = await _service.detectInstallation();
     notifyListeners();
 
-    // Auto-create local instance in the app (no API key needed for localhost)
-    await _autoConfigureInstance(port: port);
+    // Auto-create local instance in the app
+    await _autoConfigureInstance(apiKey: apiKey, port: port);
 
     return true;
   }
@@ -96,6 +97,9 @@ class LocalServerProvider extends ChangeNotifier {
 
   Future<bool> startProcess() async {
     _updateStatus(LocalServerStatus.starting);
+
+    // Ensure .env config exists before spawning — recover if missing
+    await _ensureConfig();
 
     final success = await _service.startProcess(port: _info.port);
     if (success) {
@@ -255,6 +259,23 @@ class LocalServerProvider extends ChangeNotifier {
       await _instanceProvider.addInstance(instance);
       _addLog('Local server instance added and configured.');
     }
+  }
+
+  /// Ensure the workspace .env file exists before starting the server.
+  ///
+  /// If missing (e.g. after upgrade or partial install), generates a new
+  /// API key, writes config, and updates the active instance so the app
+  /// and server stay in sync.
+  Future<void> _ensureConfig() async {
+    final envPath = '${_service.installPath}/workspace/.env';
+    if (File(envPath).existsSync()) return;
+
+    _addLog('No .env found — generating server configuration...');
+    final apiKey = _service.generateApiKey();
+    final port = _info.port;
+    await _service.writeConfig(apiKey: apiKey, port: port);
+    _info = await _service.detectInstallation();
+    await _autoConfigureInstance(apiKey: apiKey, port: port);
   }
 
   // ── Logging ───────────────────────────────────────────────────────────
