@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Pages/main_page.dart';
+import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
+import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
@@ -73,6 +76,14 @@ void main() async {
             purchaseService: purchaseService,
           ),
         ),
+        if (PlatformInfo.isDesktop)
+          ChangeNotifierProvider(
+            create: (context) => LocalServerProvider(
+              service: LocalServerService(),
+              instanceProvider:
+                  Provider.of<InstanceProvider>(context, listen: false),
+            ),
+          ),
       ],
       child: const CoquiApp(),
     ),
@@ -114,6 +125,12 @@ class CoquiApp extends StatelessWidget {
             if (settings.name == '/settings') {
               return MaterialPageRoute(
                 builder: (context) => const SettingsPage(),
+              );
+            }
+
+            if (settings.name == '/server' && PlatformInfo.isDesktop) {
+              return MaterialPageRoute(
+                builder: (context) => const ServerPage(),
               );
             }
 
