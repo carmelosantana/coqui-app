@@ -223,6 +223,87 @@ Use [scripts/pad-icon.sh](scripts/pad-icon.sh) to generate a padded PNG (transpa
 ./scripts/pad-icon.sh --image assets/images/coqui-icon.png --padding 10 --output assets/images/coqui-icon-macos.png
 ```
 
+## CI/CD
+
+### Continuous Integration
+
+Every push to `main` and every pull request runs the CI pipeline (`.github/workflows/ci.yml`):
+
+1. **Analyze & Test** — `flutter analyze` + `flutter test`
+2. **Build Android** (smoke test) — `flutter build apk --debug`
+3. **Build iOS** (smoke test) — `flutter build ios --debug --no-codesign`
+4. **Build Web** (smoke test) — `flutter build web --wasm --release`
+
+Build jobs only run after analysis and tests pass.
+
+### Releases
+
+Pushing a `v*` tag triggers the release pipeline (`.github/workflows/release.yml`):
+
+1. **Validate** — `flutter analyze` + `flutter test` (blocks all builds if failing)
+2. **Build** — Android APK, macOS DMG (signed + notarized), iOS IPA, Linux tar.gz, Windows zip, Web WASM — all in parallel
+3. **Release** — Creates a GitHub Release with all artifacts and SHA-256 checksums
+4. **Deploy** — Deploys the web build to Vercel (`app.coquibot.ai`)
+
+See [RELEASE.md](RELEASE.md) for the full release checklist.
+
+## Troubleshooting
+
+### iOS: "No such module 'Flutter'"
+
+This occurs when Xcode's module cache is stale or CocoaPods artifacts are out of sync with the Flutter SDK.
+
+```bash
+make fix-ios
+```
+
+This runs: `flutter clean` → `flutter pub get` → reinstall CocoaPods → clear Xcode derived data.
+
+After running, always open `ios/Runner.xcworkspace` (not `.xcodeproj`) in Xcode.
+
+If the error persists:
+
+1. Close Xcode completely
+2. Run `make fix-ios` again
+3. Reopen `ios/Runner.xcworkspace`
+4. Product → Clean Build Folder (Shift+Cmd+K)
+5. Build (Cmd+B)
+
+### Android: Build failures after SDK update
+
+```bash
+make fix-android
+```
+
+This runs: `flutter clean` → `flutter pub get` → `./gradlew clean`.
+
+Note: `android/key.properties` is only needed for release builds (CI creates it from secrets). Debug builds work without it.
+
+### Web: WASM fails to load / blank screen
+
+SQLite WASM requires `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers. If using a custom server, ensure these headers are set:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+The included `vercel.json`, `nginx.conf`, and Docker setup handle this automatically.
+
+### General: Full clean rebuild
+
+```bash
+make rebuild    # flutter clean + full setup from scratch
+```
+
+Or with the build script:
+
+```bash
+./scripts/build.sh --platform macos --mode debug --clean
+```
+
+The `--clean` flag runs `flutter clean`, reinstalls dependencies, and cleans platform-specific caches before building.
+
 ## License
 
 GPL-3.0
