@@ -6,7 +6,7 @@
 	docker-web-build docker-web-start docker-web-stop \
        doctor test analyze \
        fix fix-ios fix-android \
-       release-tag
+       release-setup release-status release-verify release-build release-tag release-publish
 
 # Default target
 help: ## Show this help
@@ -150,12 +150,24 @@ fix-android: ## Fix Android build (clean Gradle + Flutter)
 
 # ─── Release ────────────────────────────────────────────────────────
 
-release-tag: ## Tag and push a release (reads version from pubspec.yaml, triggers CI)
-	@VERSION=$$(grep '^version:' pubspec.yaml | head -1 | awk '{print $$2}' | cut -d+ -f1); \
-	if [ -z "$$VERSION" ]; then echo "Error: could not read version from pubspec.yaml"; exit 1; fi; \
-	echo "Tagging release v$$VERSION..."; \
-	git add .; \
-	git commit -m "chore: prepare release v$$VERSION" --allow-empty; \
-	git tag "v$$VERSION"; \
-	git push origin main --tags; \
-	echo "Pushed v$$VERSION — GitHub Actions will build and create the release."
+release-setup: ## Run release signing setup wizard
+	./scripts/release-setup.sh
+
+release-status: ## Show release readiness dashboard
+	./scripts/release.sh status
+
+release-verify: ## Verify all signing requirements
+	./scripts/release-setup.sh verify
+
+release-build: ## Build all platforms for release
+	./scripts/release.sh build --platform all
+
+release-tag: ## Tag and push a release (usage: make release-tag V=patch|minor|major)
+	@if [ -z "$(V)" ]; then \
+		echo "Usage: make release-tag V=patch|minor|major"; \
+		exit 1; \
+	fi
+	./scripts/release.sh tag $(V)
+
+release-publish: ## Upload iOS build to TestFlight
+	./scripts/release.sh publish

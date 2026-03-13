@@ -77,8 +77,10 @@ jobs:
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=coqui-release.jks
+          storeFile=${{ github.workspace }}/android/app/coqui-release.jks
           EOF
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' android/key.properties
 
       - name: Build APK
         run: flutter build apk --release
@@ -458,4 +460,5 @@ jobs:
             --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
