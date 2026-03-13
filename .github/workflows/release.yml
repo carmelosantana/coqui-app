@@ -12,10 +12,34 @@ env:
   FLUTTER_VERSION: stable
 
 jobs:
+  # ── Validate ────────────────────────────────────────────────────────
+  validate:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test
+
   # ── Android ─────────────────────────────────────────────────────────
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,6 +99,7 @@ jobs:
   build-macos:
     name: Build macOS DMG
     runs-on: macos-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,6 +185,7 @@ jobs:
   build-ios:
     name: Build iOS IPA
     runs-on: macos-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -235,6 +261,7 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -280,6 +307,7 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -321,6 +349,7 @@ jobs:
   build-web:
     name: Build Web (WASM)
     runs-on: ubuntu-latest
+    needs: [validate]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

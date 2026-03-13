@@ -30,7 +30,7 @@ class _ChatPageState extends State<ChatPage> {
   CoquiRole? _selectedRole;
 
   // Cached preset suggestions — only regenerated on new conversation
-  List<ChatPreset> _presets = ChatPresets.randomPresets;
+  final List<ChatPreset> _presets = ChatPresets.randomPresets;
 
   // Text field controller for the chat prompt
   final _textFieldController = TextEditingController();
@@ -209,11 +209,6 @@ class _ChatPageState extends State<ChatPage> {
         return const SizedBox.shrink();
       },
     );
-  }
-
-  void _resetChat() {
-    _selectedRole = null;
-    _presets = ChatPresets.randomPresets;
   }
 
   /// Horizontal row of file chips shown above the text field when files are
