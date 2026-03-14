@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -96,6 +97,9 @@ class LocalServerProvider extends ChangeNotifier {
 
   Future<bool> startProcess() async {
     _updateStatus(LocalServerStatus.starting);
+
+    // Ensure .env config exists before spawning — recover if missing
+    await _ensureConfig();
 
     final success = await _service.startProcess(port: _info.port);
     if (success) {
@@ -231,7 +235,7 @@ class LocalServerProvider extends ChangeNotifier {
   // ── Auto-configure instance ───────────────────────────────────────────
 
   Future<void> _autoConfigureInstance({
-    required String apiKey,
+    String? apiKey,
     required int port,
   }) async {
     // Check if a local instance already exists
@@ -242,19 +246,36 @@ class LocalServerProvider extends ChangeNotifier {
     );
 
     if (existing.isNotEmpty) {
-      // Update existing local instance with new API key
-      final updated = existing.first.copyWith(apiKey: apiKey);
+      // Update existing local instance
+      final updated = existing.first.copyWith(apiKey: apiKey ?? '');
       await _instanceProvider.updateInstance(updated);
       _addLog('Updated existing local server instance.');
     } else {
       final instance = CoquiInstance(
         name: 'Local Server',
         baseUrl: 'http://127.0.0.1:$port',
-        apiKey: apiKey,
+        apiKey: apiKey ?? '',
       );
       await _instanceProvider.addInstance(instance);
       _addLog('Local server instance added and configured.');
     }
+  }
+
+  /// Ensure the workspace .env file exists before starting the server.
+  ///
+  /// If missing (e.g. after upgrade or partial install), generates a new
+  /// API key, writes config, and updates the active instance so the app
+  /// and server stay in sync.
+  Future<void> _ensureConfig() async {
+    final envPath = '${_service.installPath}/workspace/.env';
+    if (File(envPath).existsSync()) return;
+
+    _addLog('No .env found — generating server configuration...');
+    final apiKey = _service.generateApiKey();
+    final port = _info.port;
+    await _service.writeConfig(apiKey: apiKey, port: port);
+    _info = await _service.detectInstallation();
+    await _autoConfigureInstance(apiKey: apiKey, port: port);
   }
 
   // ── Logging ───────────────────────────────────────────────────────────

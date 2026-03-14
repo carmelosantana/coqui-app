@@ -115,7 +115,7 @@ class LocalServerService {
         final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
         final result = await Process.run(
           shell,
-          ['-l', '-c', 'echo \$PATH'],
+          ['-l', '-c', 'echo \$PATH 2>/dev/null'],
         );
         if (result.exitCode == 0) {
           final loginPath = result.stdout.toString().trim();
@@ -263,7 +263,7 @@ class LocalServerService {
 
     final process = await Process.start(
       'bash',
-      ['-l', scriptFile.path, '--non-interactive'],
+      [scriptFile.path, '--non-interactive', '--quiet'],
       environment: env,
       // Redirect stdin from /dev/null so sudo cannot prompt for a password.
       // The symlink step will fall back to ~/.local/bin instead.
@@ -312,6 +312,7 @@ class LocalServerService {
         'Bypass',
         '-File',
         scriptFile.path,
+        '-Quiet',
       ],
       environment: env,
     );
@@ -486,7 +487,7 @@ class LocalServerService {
   /// Check if the Coqui API at the given port is responding.
   Future<bool> checkHealth({int port = defaultPort}) async {
     try {
-      final uri = Uri.parse('http://127.0.0.1:$port/api/health');
+      final uri = Uri.parse('http://127.0.0.1:$port/api/v1/health');
       final response = await http.get(uri).timeout(
             const Duration(seconds: 3),
           );

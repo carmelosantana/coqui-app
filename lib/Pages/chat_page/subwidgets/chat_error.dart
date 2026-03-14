@@ -126,6 +126,16 @@ class ChatError extends StatelessWidget {
           'Server error. Please try again later.',
           true,
         ),
+      'connection_failed' => (
+          Icons.wifi_off_rounded,
+          'Unable to connect to the server. Please ensure your Coqui API server is running and try again.',
+          true,
+        ),
+      'timeout' => (
+          Icons.timer_off_rounded,
+          'Connection timed out. The server may be unresponsive.',
+          true,
+        ),
       _ => (
           Icons.error_outline_rounded,
           error.message,

@@ -69,7 +69,7 @@ class CoquiMessage {
 
   /// Parse the tool_calls JSON string into a list of tool call maps.
   ///
-  /// Each map has: `id`, `name`, `arguments` (Map<String, dynamic>).
+  /// Each map has: `id`, `name`, `arguments` (`Map<String, dynamic>`).
   List<Map<String, dynamic>> get parsedToolCalls {
     if (!hasToolCalls) return [];
     try {

@@ -11,6 +11,10 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+docs/
+
+# Android Studio / Eclipse Buildship IDE settings
+android/.settings/
 
 # IntelliJ related
 *.iml
@@ -18,10 +22,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code workspace settings and launch configs are local-only
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -56,3 +58,10 @@ app.*.map.json
 # Local icon-editing artifacts
 assets/images/*.backup.png
 assets/images/*.test.png
+
+# Release signing artifacts (never commit)
+android/key.properties
+android/app/*.jks
+*.jks
+*.keystore
+*.p12
