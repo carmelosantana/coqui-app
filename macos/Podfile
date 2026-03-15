@@ -39,5 +39,14 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    # Suppress deprecation warnings from in_app_purchase_storekit (StoreKit 1 APIs).
+    # These warnings are inside the plugin's compiled framework headers and cannot
+    # be fixed in our code — they are suppressed here until the plugin migrates to SK2.
+    if target.name == 'in_app_purchase_storekit'
+      target.build_configurations.each do |config|
+        config.build_settings['WARNING_CFLAGS'] = '-w'
+        config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+      end
+    end
   end
 end
