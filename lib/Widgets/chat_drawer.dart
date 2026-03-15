@@ -5,6 +5,7 @@ import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
+import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -48,6 +49,7 @@ class ChatDrawer extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
             onPressed: () {
               if (ResponsiveBreakpoints.of(context).isMobile) {
                 Navigator.pop(context);
@@ -55,10 +57,50 @@ class ChatDrawer extends StatelessWidget {
               Navigator.pushNamed(context, '/settings');
             },
           ),
+          _buildTasksButton(context),
           _buildConfigButton(context),
           if (PlatformInfo.isDesktop) _buildServerButton(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildTasksButton(BuildContext context) {
+    return Consumer<TaskProvider>(
+      builder: (context, taskProvider, _) {
+        final hasActive = taskProvider.hasActiveTasks;
+        return IconButton(
+          icon: Stack(
+            children: [
+              const Icon(Icons.task_outlined),
+              if (hasActive)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: CoquiColors.chart2,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          tooltip: 'Background Tasks',
+          onPressed: () {
+            if (ResponsiveBreakpoints.of(context).isMobile) {
+              Navigator.pop(context);
+            }
+            Navigator.pushNamed(context, '/tasks');
+          },
+        );
+      },
     );
   }
 

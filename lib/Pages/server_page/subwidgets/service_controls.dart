@@ -48,8 +48,9 @@ class ServiceControls extends StatelessWidget {
             const SizedBox(height: 12),
             CheckboxListTile(
               value: provider.autoApprove,
-              onChanged:
-                  info.isBusy ? null : (v) => provider.setAutoApprove(v ?? false),
+              onChanged: info.isBusy
+                  ? null
+                  : (v) => provider.setAutoApprove(v ?? false),
               title: const Text('Auto-approve tools'),
               dense: true,
               contentPadding: EdgeInsets.zero,

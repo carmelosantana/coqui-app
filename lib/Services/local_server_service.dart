@@ -562,8 +562,10 @@ class LocalServerService {
         final args = [
           _launcherPath,
           '--api-only',
-          '--host', host,
-          '--port', '$port',
+          '--host',
+          host,
+          '--port',
+          '$port',
           if (autoApprove) '--auto-approve',
           if (unsafe) '--unsafe',
         ];
@@ -580,7 +582,12 @@ class LocalServerService {
           return false;
         }
         final args = [
-          _binPath, 'api', '--host', host, '--port', '$port',
+          _binPath,
+          'api',
+          '--host',
+          host,
+          '--port',
+          '$port',
           if (autoApprove) '--auto-approve',
           if (unsafe) '--unsafe',
         ];

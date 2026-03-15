@@ -21,7 +21,7 @@ class ServerControls extends StatelessWidget {
               _buildInstallSection(context, provider),
             if (info.isInstalled) ...[
               _buildProcessSection(context, provider),
-                if (info.status == LocalServerStatus.running) ...[
+              if (info.status == LocalServerStatus.running) ...[
                 const SizedBox(height: 16),
                 _buildConnectionInfo(context, provider),
               ],
@@ -101,46 +101,46 @@ class ServerControls extends StatelessWidget {
           children: [
             if (info.status == LocalServerStatus.stopped ||
                 info.status == LocalServerStatus.error) ...[
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: isBusy ? null : () => provider.startProcess(),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start'),
-            ),
-          ),
-        ],
-        if (info.status == LocalServerStatus.running) ...[
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: isBusy ? null : () => provider.stopProcess(),
-              icon: const Icon(Icons.stop),
-              label: const Text('Stop'),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: isBusy ? null : () => provider.restartProcess(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Restart'),
-            ),
-          ),
-        ],
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : () => provider.startProcess(),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start'),
+                ),
+              ),
+            ],
+            if (info.status == LocalServerStatus.running) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : () => provider.stopProcess(),
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isBusy ? null : () => provider.restartProcess(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Restart'),
+                ),
+              ),
+            ],
             if (info.status == LocalServerStatus.starting ||
                 info.status == LocalServerStatus.stopping) ...[
-          const Expanded(
-            child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              const Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
               ),
-            ),
-              ),
+            ],
           ],
-        ],
-      ),
-    ],
+        ),
+      ],
     );
   }
 

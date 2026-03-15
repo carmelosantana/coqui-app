@@ -126,7 +126,8 @@ class LocalServerProvider extends ChangeNotifier {
   }) async {
     _updateStatus(LocalServerStatus.stopping);
 
-    if (_info.status == LocalServerStatus.running || _service.isProcessRunning) {
+    if (_info.status == LocalServerStatus.running ||
+        _service.isProcessRunning) {
       await stopProcess();
     }
 

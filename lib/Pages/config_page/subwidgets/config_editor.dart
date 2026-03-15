@@ -1,15 +1,23 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:re_editor/re_editor.dart';
+import 'package:re_highlight/languages/json.dart';
+import 'package:re_highlight/styles/atom-one-dark.dart';
+import 'package:re_highlight/styles/atom-one-light.dart';
 
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'code_find_panel.dart';
 
 /// JSON editor for the server's openclaw.json configuration.
 ///
 /// Fetches the raw config via `GET /api/config`, displays it in a
-/// monospace text field, and saves changes via `PUT /api/config`.
+/// full-featured code editor with JSON syntax highlighting and line numbers,
+/// and saves changes via `PUT /api/config`. Real-time validation runs via
+/// `POST /api/config/validate` with a 600ms debounce after each edit.
 class ConfigEditor extends StatefulWidget {
   const ConfigEditor({super.key});
 
@@ -19,7 +27,10 @@ class ConfigEditor extends StatefulWidget {
 
 class _ConfigEditorState extends State<ConfigEditor>
     with AutomaticKeepAliveClientMixin {
-  final _controller = TextEditingController();
+  late final CodeLineEditingController _controller;
+  late final CodeScrollController _scrollController;
+  late final CodeFindController _findController;
+
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
@@ -29,12 +40,21 @@ class _ConfigEditorState extends State<ConfigEditor>
   /// The last-saved text, used to detect unsaved changes.
   String _lastSavedText = '';
 
+  // Validation state
+  bool _isValidating = false;
+  bool? _isConfigValid; // null = not yet validated
+  List<String> _validationErrors = const [];
+  Timer? _validationDebounce;
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _controller = CodeLineEditingController.fromText('');
+    _scrollController = CodeScrollController();
+    _findController = CodeFindController(_controller);
     _controller.addListener(_onTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadConfig());
   }
@@ -42,7 +62,10 @@ class _ConfigEditorState extends State<ConfigEditor>
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
+    _validationDebounce?.cancel();
     _controller.dispose();
+    _scrollController.dispose();
+    _findController.dispose();
     super.dispose();
   }
 
@@ -50,6 +73,62 @@ class _ConfigEditorState extends State<ConfigEditor>
     final changed = _controller.text != _lastSavedText;
     if (changed != _hasUnsavedChanges) {
       setState(() => _hasUnsavedChanges = changed);
+    }
+    // Clear stale validation state immediately on any keystroke
+    if (_isConfigValid != null || _validationErrors.isNotEmpty) {
+      setState(() {
+        _isConfigValid = null;
+        _validationErrors = const [];
+      });
+    }
+    _scheduleValidation();
+  }
+
+  void _scheduleValidation() {
+    _validationDebounce?.cancel();
+    _validationDebounce =
+        Timer(const Duration(milliseconds: 600), _validateConfig);
+  }
+
+  Future<void> _validateConfig() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    // Fast-fail for broken JSON — skip network call
+    try {
+      jsonDecode(text);
+    } on FormatException catch (e) {
+      setState(() {
+        _isValidating = false;
+        _isConfigValid = false;
+        _validationErrors = ['Invalid JSON: ${e.message}'];
+      });
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _isConfigValid = null;
+      _validationErrors = const [];
+    });
+
+    try {
+      final api =
+          Provider.of<InstanceProvider>(context, listen: false).apiService;
+      final result = await api.validateConfig(text);
+      if (!mounted) return;
+      setState(() {
+        _isValidating = false;
+        _isConfigValid = result.valid;
+        _validationErrors = result.errors;
+      });
+    } catch (_) {
+      // Validation is best-effort; network/auth failures are silently swallowed
+      if (!mounted) return;
+      setState(() {
+        _isValidating = false;
+        _isConfigValid = null;
+      });
     }
   }
 
@@ -80,6 +159,8 @@ class _ConfigEditorState extends State<ConfigEditor>
       setState(() {
         _isLoading = false;
         _hasUnsavedChanges = false;
+        _isConfigValid = null;
+        _validationErrors = const [];
       });
     } on CoquiException catch (e) {
       setState(() {
@@ -222,6 +303,34 @@ class _ConfigEditorState extends State<ConfigEditor>
                 )
               else
                 const Spacer(),
+              // Validation status indicator
+              if (_isValidating)
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (_isConfigValid == true)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                )
+              else if (_isConfigValid == false)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
               if (_hasUnsavedChanges)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -255,28 +364,100 @@ class _ConfigEditorState extends State<ConfigEditor>
           ),
         ),
         const Divider(height: 1),
-        // Editor
+        // Code editor
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: TextField(
-              controller: _controller,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 13,
-                height: 1.5,
+          child: CodeEditor(
+            controller: _controller,
+            scrollController: _scrollController,
+            findController: _findController,
+            wordWrap: false,
+            style: CodeEditorStyle(
+              fontSize: 13,
+              fontFamily: 'GeistMono',
+              fontHeight: 1.5,
+              codeTheme: CodeHighlightTheme(
+                languages: {
+                  'json': CodeHighlightThemeMode(mode: langJson),
+                },
+                theme: Theme.of(context).brightness == Brightness.dark
+                    ? atomOneDarkTheme
+                    : atomOneLightTheme,
               ),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.all(12),
-                isCollapsed: true,
-              ),
+            ),
+            indicatorBuilder:
+                (context, editingController, chunkController, notifier) {
+              return Row(
+                children: [
+                  DefaultCodeLineNumber(
+                    controller: editingController,
+                    notifier: notifier,
+                  ),
+                  DefaultCodeChunkIndicator(
+                    width: 20,
+                    controller: chunkController,
+                    notifier: notifier,
+                  ),
+                ],
+              );
+            },
+            findBuilder: (context, controller, readOnly) =>
+                CodeFindPanelView(controller: controller, readOnly: readOnly),
+            sperator: VerticalDivider(
+              // Note: "sperator" is the correct param name (upstream typo)
+              width: 1,
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
         ),
+        // Validation error panel
+        if (_validationErrors.isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 140),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .errorContainer
+                  .withValues(alpha: 0.15),
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .error
+                      .withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+            child: ListView.builder(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shrinkWrap: true,
+              itemCount: _validationErrors.length,
+              itemBuilder: (context, i) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.circle,
+                      size: 6,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _validationErrors[i],
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontFamily: 'GeistMono',
+                                ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         // Footer hint
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
