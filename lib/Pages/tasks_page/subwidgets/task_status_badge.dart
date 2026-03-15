@@ -31,7 +31,7 @@ class TaskStatusBadge extends StatelessWidget {
     return switch (task.status) {
       'pending' => (cs.onSurfaceVariant, Icons.schedule_outlined),
       'running' => (CoquiColors.chart2, Icons.play_circle_outline),
-      'cancelling' => (Colors.orange, Icons.stop_circle_outlined),
+      'cancelling' => (CoquiColors.warning, Icons.stop_circle_outlined),
       'completed' => (CoquiColors.chart3, Icons.check_circle_outline),
       'failed' => (cs.error, Icons.error_outline),
       'cancelled' => (cs.onSurfaceVariant, Icons.cancel_outlined),

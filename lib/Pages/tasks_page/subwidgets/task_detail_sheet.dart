@@ -211,12 +211,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         const SizedBox(width: 8),
                         IconButton.filled(
                           icon: _isSendingInput
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 18,
                                   height: 18,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white),
+                                      color: Theme.of(context).colorScheme.onPrimary),
                                 )
                               : const Icon(Icons.send),
                           onPressed: _isSendingInput ? null : _sendInput,
@@ -315,6 +315,10 @@ class _ContentCard extends StatelessWidget {
         ? theme.colorScheme.onErrorContainer
         : theme.colorScheme.onSurface;
 
+    final borderColor = isError
+        ? theme.colorScheme.error.withValues(alpha: 0.4)
+        : theme.dividerColor;
+
     return GestureDetector(
       onLongPress: () {
         Clipboard.setData(ClipboardData(text: text));
@@ -331,6 +335,7 @@ class _ContentCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
         ),
         child: Text(
           text,

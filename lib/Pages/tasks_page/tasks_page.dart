@@ -291,8 +291,8 @@ class _TaskListTile extends StatelessWidget {
 
   Color _dotColor(BuildContext context) => switch (task.status) {
         'running' => CoquiColors.chart2,
-        'pending' => Colors.orange,
-        'cancelling' => Colors.orange,
+        'pending' => CoquiColors.warning,
+        'cancelling' => CoquiColors.warning,
         _ => Theme.of(context).colorScheme.onSurfaceVariant,
       };
 

@@ -109,11 +109,12 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                         return FilledButton(
                           onPressed: provider.isCreating ? null : _submit,
                           child: provider.isCreating
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
+                                      strokeWidth: 2,
+                                      color: Theme.of(context).colorScheme.onPrimary),
                                 )
                               : const Text('Start'),
                         );
