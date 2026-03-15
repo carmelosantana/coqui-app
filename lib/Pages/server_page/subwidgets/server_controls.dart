@@ -21,7 +21,7 @@ class ServerControls extends StatelessWidget {
               _buildInstallSection(context, provider),
             if (info.isInstalled) ...[
               _buildProcessSection(context, provider),
-              if (info.status == LocalServerStatus.running) ...[
+                if (info.status == LocalServerStatus.running) ...[
                 const SizedBox(height: 16),
                 _buildConnectionInfo(context, provider),
               ],
@@ -73,10 +73,34 @@ class ServerControls extends StatelessWidget {
     final info = provider.info;
     final isBusy = info.isBusy;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (info.status == LocalServerStatus.stopped ||
-            info.status == LocalServerStatus.error) ...[
+        CheckboxListTile(
+          value: provider.autoApprove,
+          onChanged: isBusy ? null : (v) => provider.setAutoApprove(v ?? false),
+          title: const Text('Auto-approve tools'),
+          subtitle: const Text(
+            'Skip confirmation prompts. Catastrophic commands are still blocked.',
+          ),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        CheckboxListTile(
+          value: provider.unsafe,
+          onChanged: isBusy ? null : (v) => provider.setUnsafe(v ?? false),
+          title: const Text('Unsafe mode'),
+          subtitle: const Text(
+            'Disable PHP function restrictions in php_execute.',
+          ),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (info.status == LocalServerStatus.stopped ||
+                info.status == LocalServerStatus.error) ...[
           Expanded(
             child: FilledButton.icon(
               onPressed: isBusy ? null : () => provider.startProcess(),
@@ -102,8 +126,8 @@ class ServerControls extends StatelessWidget {
             ),
           ),
         ],
-        if (info.status == LocalServerStatus.starting ||
-            info.status == LocalServerStatus.stopping) ...[
+            if (info.status == LocalServerStatus.starting ||
+                info.status == LocalServerStatus.stopping) ...[
           const Expanded(
             child: Center(
               child: SizedBox(
@@ -112,9 +136,11 @@ class ServerControls extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          ),
+              ),
+          ],
         ],
-      ],
+      ),
+    ],
     );
   }
 

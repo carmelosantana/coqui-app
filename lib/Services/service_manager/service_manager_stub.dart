@@ -4,7 +4,12 @@ abstract interface class ServiceManager {
   bool get serviceSupported;
   Future<bool> isServiceInstalled();
   Future<bool> isServiceRunning();
-  Future<void> installService({required String coquiPath, required int port});
+  Future<void> installService({
+    required String coquiPath,
+    required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
+  });
   Future<void> uninstallService();
   Future<void> startService();
   Future<void> stopService();
@@ -26,6 +31,8 @@ class _StubServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {}
 
   @override
