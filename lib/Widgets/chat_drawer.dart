@@ -29,13 +29,18 @@ class ChatDrawer extends StatelessWidget {
         ),
       );
     } else {
-      return SizedBox(
-        width: 300,
-        child: Column(
-          children: [
-            Expanded(child: const ChatNavigationDrawer()),
-            _buildSettingsButton(context),
-          ],
+      return ClipRRect(
+        borderRadius: const BorderRadius.only(
+          bottomRight: Radius.circular(CoquiColors.radiusXl),
+        ),
+        child: SizedBox(
+          width: 300,
+          child: Column(
+            children: [
+              Expanded(child: const ChatNavigationDrawer()),
+              _buildSettingsButton(context),
+            ],
+          ),
         ),
       );
     }

@@ -21,7 +21,9 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     final instanceProvider = Provider.of<InstanceProvider>(context);
 
     return AppBar(
+      centerTitle: false,
       title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Server selector dropdown
           _ServerDropdown(instanceProvider: instanceProvider),
