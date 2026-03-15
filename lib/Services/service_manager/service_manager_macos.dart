@@ -130,7 +130,8 @@ class MacOSServiceManager implements ServiceManager {
     bool unsafe = false,
   }) {
     final flagArgs = StringBuffer();
-    if (autoApprove) flagArgs.write('\n        <string>--auto-approve</string>');
+    if (autoApprove)
+      flagArgs.write('\n        <string>--auto-approve</string>');
     if (unsafe) flagArgs.write('\n        <string>--unsafe</string>');
 
     return '''<?xml version="1.0" encoding="UTF-8"?>

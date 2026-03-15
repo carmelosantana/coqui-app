@@ -70,6 +70,10 @@ dependencies:
   # File picker for chat attachments
   file_picker: ^8.1.6
 
+  # Code editor with syntax highlighting for config editing
+  re_editor: ^0.8.0
+  re_highlight: ^0.0.3
+
   # In-app purchases (iOS/Android subscriptions + supporter donations)
   in_app_purchase: ^3.2.0
 

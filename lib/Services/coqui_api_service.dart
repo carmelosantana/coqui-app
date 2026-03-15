@@ -9,6 +9,7 @@ import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_task.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
@@ -457,6 +458,28 @@ class CoquiApiService {
     _parseResponse(response);
   }
 
+  /// Dry-run validation of a config object without saving.
+  ///
+  /// Returns `(valid: true, errors: [])` on success, or
+  /// `(valid: false, errors: [...])` with a non-empty error list on failure.
+  /// Never throws on a 200 response — invalid configs are not HTTP errors.
+  Future<({bool valid, List<String> errors})> validateConfig(
+    String rawJson,
+  ) async {
+    final response = await http.post(
+      _url('/config/validate'),
+      headers: _headers,
+      body: rawJson,
+    );
+    final body = _parseResponse(response);
+    final valid = body['valid'] as bool? ?? false;
+    final errors = (body['errors'] as List?)
+            ?.map((e) => e as String)
+            .toList() ??
+        const <String>[];
+    return (valid: valid, errors: errors);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
@@ -585,6 +608,83 @@ class CoquiApiService {
     final response = await http.delete(
       _url('/credentials/$key'),
       headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  // ── Background Tasks ────────────────────────────────────────────────
+
+  /// List background tasks, optionally filtered by status.
+  Future<List<CoquiTask>> listTasks({
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': limit.toString()};
+    if (status != null) params['status'] = status;
+
+    final response = await http.get(
+      _url('/tasks', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final tasks = body['tasks'] as List? ?? [];
+    return tasks
+        .map((t) => CoquiTask.fromJson(t as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get detailed information about a specific task.
+  Future<CoquiTask> getTask(String id) async {
+    final response = await http.get(
+      _url('/tasks/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiTask.fromJson(body);
+  }
+
+  /// Create a new background task.
+  Future<CoquiTask> createTask({
+    required String prompt,
+    String role = 'orchestrator',
+    String? title,
+    String? parentSessionId,
+    int maxIterations = 25,
+  }) async {
+    final payload = <String, dynamic>{
+      'prompt': prompt,
+      'role': role,
+      'max_iterations': maxIterations,
+    };
+    if (title != null) payload['title'] = title;
+    if (parentSessionId != null) payload['parent_session_id'] = parentSessionId;
+
+    final response = await http.post(
+      _url('/tasks'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiTask.fromJson(body);
+  }
+
+  /// Cancel a running or pending task.
+  Future<void> cancelTask(String id) async {
+    final response = await http.post(
+      _url('/tasks/$id/cancel'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    _parseResponse(response);
+  }
+
+  /// Inject user input into a running task.
+  Future<void> injectTaskInput(String id, String content) async {
+    final response = await http.post(
+      _url('/tasks/$id/input'),
+      headers: _headers,
+      body: jsonEncode({'content': content}),
     );
     _parseResponse(response);
   }
