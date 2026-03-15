@@ -89,7 +89,7 @@ class _ChatBubbleBody extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: isSentFromUser
-                    ? Theme.of(context).colorScheme.primaryContainer
+                    ? Theme.of(context).colorScheme.secondary
                     : null,
                 border: isSentFromUser
                     ? null
@@ -198,21 +198,21 @@ class _AttachedFileChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.6),
+        color: colorScheme.secondary,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.3),
+          color: colorScheme.outline.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.attach_file, size: 12, color: colorScheme.primary),
+          Icon(Icons.attach_file, size: 12, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 4),
           Text(
             _truncated,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onPrimaryContainer,
+                  color: colorScheme.onSecondary,
                 ),
           ),
         ],
