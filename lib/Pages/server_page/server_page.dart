@@ -78,6 +78,8 @@ class _ServerPageState extends State<ServerPage> {
               const ServiceControls(),
               const SizedBox(height: 24),
               const ServerConfig(),
+              const SizedBox(height: 24),
+              const ServerDangerZone(),
             ],
           ],
         );

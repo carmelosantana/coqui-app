@@ -51,12 +51,14 @@ class LinuxServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {
-    final phpPath = await _resolvePhpPath();
     final unit = _buildUnit(
-      phpPath: phpPath,
       coquiPath: coquiPath,
       port: port,
+      autoApprove: autoApprove,
+      unsafe: unsafe,
     );
 
     final dir = Directory(_unitDir);
@@ -95,17 +97,16 @@ class LinuxServiceManager implements ServiceManager {
     await Process.run('systemctl', ['--user', 'stop', _serviceName]);
   }
 
-  Future<String> _resolvePhpPath() async {
-    final result = await Process.run('which', ['php']);
-    final path = result.stdout.toString().trim();
-    return path.isNotEmpty ? path : '/usr/bin/php';
-  }
-
   String _buildUnit({
-    required String phpPath,
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) {
+    final flags = StringBuffer();
+    if (autoApprove) flags.write(' --auto-approve');
+    if (unsafe) flags.write(' --unsafe');
+
     return '''[Unit]
 Description=Coqui Bot API
 After=network.target
@@ -113,7 +114,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$coquiPath
-ExecStart=$phpPath $coquiPath/bin/coqui api --host 127.0.0.1 --port $port
+ExecStart=/bin/bash $coquiPath/bin/coqui-launcher --api-only --host 127.0.0.1 --port $port${flags.toString()}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

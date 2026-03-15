@@ -28,6 +28,8 @@ class _FallbackServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {}
 
   @override

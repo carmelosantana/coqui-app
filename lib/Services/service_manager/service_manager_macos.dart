@@ -78,12 +78,14 @@ class MacOSServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {
-    final phpPath = await _resolvePhpPath();
     final plist = _buildPlist(
-      phpPath: phpPath,
       coquiPath: coquiPath,
       port: port,
+      autoApprove: autoApprove,
+      unsafe: unsafe,
     );
 
     final plistDir = await _getPlistDir();
@@ -121,25 +123,16 @@ class MacOSServiceManager implements ServiceManager {
     await Process.run('launchctl', ['stop', _label]);
   }
 
-  Future<String> _resolvePhpPath() async {
-    // Use login shell to find php, in case PATH doesn't include Homebrew
-    try {
-      final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
-      final result = await Process.run(
-        shell,
-        ['-l', '-c', 'which php'],
-      );
-      final path = result.stdout.toString().trim();
-      if (path.isNotEmpty && result.exitCode == 0) return path;
-    } catch (_) {}
-    return '/usr/bin/php';
-  }
-
   String _buildPlist({
-    required String phpPath,
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) {
+    final flagArgs = StringBuffer();
+    if (autoApprove) flagArgs.write('\n        <string>--auto-approve</string>');
+    if (unsafe) flagArgs.write('\n        <string>--unsafe</string>');
+
     return '''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -149,13 +142,13 @@ class MacOSServiceManager implements ServiceManager {
     <string>$_label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$phpPath</string>
-        <string>$coquiPath/bin/coqui</string>
-        <string>api</string>
+        <string>/bin/bash</string>
+        <string>$coquiPath/bin/coqui-launcher</string>
+        <string>--api-only</string>
         <string>--host</string>
         <string>127.0.0.1</string>
         <string>--port</string>
-        <string>$port</string>
+        <string>$port</string>${flagArgs.toString()}
     </array>
     <key>WorkingDirectory</key>
     <string>$coquiPath</string>

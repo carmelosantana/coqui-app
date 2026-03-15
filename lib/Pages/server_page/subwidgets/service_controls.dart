@@ -46,6 +46,23 @@ class ServiceControls extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: 12),
+            CheckboxListTile(
+              value: provider.autoApprove,
+              onChanged:
+                  info.isBusy ? null : (v) => provider.setAutoApprove(v ?? false),
+              title: const Text('Auto-approve tools'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            CheckboxListTile(
+              value: provider.unsafe,
+              onChanged:
+                  info.isBusy ? null : (v) => provider.setUnsafe(v ?? false),
+              title: const Text('Unsafe mode'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 4),
             if (!info.serviceInstalled)
               FilledButton.tonalIcon(
                 onPressed: info.isBusy ? null : () => provider.installService(),

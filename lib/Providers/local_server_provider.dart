@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
@@ -19,6 +20,27 @@ class LocalServerProvider extends ChangeNotifier {
 
   LocalServerInfo _info = const LocalServerInfo();
   LocalServerInfo get info => _info;
+
+  // ── Launch flags ──────────────────────────────────────────────────────
+
+  static const _keyAutoApprove = 'local_server_auto_approve';
+  static const _keyUnsafe = 'local_server_unsafe';
+
+  bool get autoApprove =>
+      Hive.box('settings').get(_keyAutoApprove, defaultValue: false) as bool;
+
+  bool get unsafe =>
+      Hive.box('settings').get(_keyUnsafe, defaultValue: false) as bool;
+
+  Future<void> setAutoApprove(bool value) async {
+    await Hive.box('settings').put(_keyAutoApprove, value);
+    notifyListeners();
+  }
+
+  Future<void> setUnsafe(bool value) async {
+    await Hive.box('settings').put(_keyUnsafe, value);
+    notifyListeners();
+  }
 
   final List<String> _logs = [];
   List<String> get logs => List.unmodifiable(_logs);
@@ -93,6 +115,44 @@ class LocalServerProvider extends ChangeNotifier {
     return success;
   }
 
+  /// Uninstall the Coqui server.
+  ///
+  /// Stops any running process and uninstalls the service first to avoid
+  /// locked files. [removeWorkspace] also deletes the `.workspace` directory.
+  /// [removePhpAndComposer] also removes PHP and Composer from the system.
+  Future<bool> uninstall({
+    bool removeWorkspace = false,
+    bool removePhpAndComposer = false,
+  }) async {
+    _updateStatus(LocalServerStatus.stopping);
+
+    if (_info.status == LocalServerStatus.running || _service.isProcessRunning) {
+      await stopProcess();
+    }
+
+    if (_info.serviceInstalled) {
+      await uninstallService();
+    }
+
+    _updateStatus(LocalServerStatus.installing);
+
+    final success = await _service.uninstall(
+      removeWorkspace: removeWorkspace,
+      removePhpAndComposer: removePhpAndComposer,
+    );
+
+    _info = await _service.detectInstallation();
+
+    if (!success) {
+      _info = _info.copyWith(
+        errorMessage: 'Uninstall failed. Check the console for details.',
+      );
+    }
+
+    notifyListeners();
+    return success;
+  }
+
   // ── Process control ───────────────────────────────────────────────────
 
   Future<bool> startProcess() async {
@@ -101,7 +161,11 @@ class LocalServerProvider extends ChangeNotifier {
     // Ensure .env config exists before spawning — recover if missing
     await _ensureConfig();
 
-    final success = await _service.startProcess(port: _info.port);
+    final success = await _service.startProcess(
+      port: _info.port,
+      autoApprove: autoApprove,
+      unsafe: unsafe,
+    );
     if (success) {
       _updateInfo(
         status: LocalServerStatus.running,
@@ -147,6 +211,8 @@ class LocalServerProvider extends ChangeNotifier {
       await _service.serviceManager.installService(
         coquiPath: _service.installPath,
         port: _info.port,
+        autoApprove: autoApprove,
+        unsafe: unsafe,
       );
       _info = _info.copyWith(serviceInstalled: true);
       notifyListeners();
@@ -305,8 +371,16 @@ class LocalServerProvider extends ChangeNotifier {
 
   /// Manual launch command for the user's platform.
   String get manualLaunchCommand {
-    return 'php ${_service.installPath}/bin/coqui api '
-        '--host 127.0.0.1 --port ${_info.port}';
+    final path = _service.installPath;
+    final port = _info.port;
+    final flags = StringBuffer();
+    if (autoApprove) flags.write(' --auto-approve');
+    if (unsafe) flags.write(' --unsafe');
+
+    if (Platform.isWindows) {
+      return 'php $path/bin/coqui api --host 127.0.0.1 --port $port${flags.toString()}';
+    }
+    return '/bin/bash $path/bin/coqui-launcher --api-only --host 127.0.0.1 --port $port${flags.toString()}';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────
