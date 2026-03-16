@@ -102,6 +102,13 @@ class ServiceControls extends StatelessWidget {
                           info.isBusy ? null : () => provider.stopService(),
                       child: const Text('Stop Service'),
                     ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: info.isBusy
+                          ? null
+                          : () => provider.restartService(),
+                      child: const Text('Restart Service'),
+                    ),
                   ],
                   const SizedBox(width: 8),
                   TextButton(

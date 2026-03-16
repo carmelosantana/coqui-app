@@ -40,4 +40,7 @@ class _FallbackServiceManager implements ServiceManager {
 
   @override
   Future<void> stopService() async {}
+
+  @override
+  Future<void> restartService() async {}
 }

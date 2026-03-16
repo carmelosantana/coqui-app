@@ -13,6 +13,7 @@ abstract interface class ServiceManager {
   Future<void> uninstallService();
   Future<void> startService();
   Future<void> stopService();
+  Future<void> restartService();
 }
 
 ServiceManager createServiceManager() => _StubServiceManager();
@@ -43,4 +44,7 @@ class _StubServiceManager implements ServiceManager {
 
   @override
   Future<void> stopService() async {}
+
+  @override
+  Future<void> restartService() async {}
 }
