@@ -30,4 +30,7 @@ class WindowsServiceManager implements ServiceManager {
 
   @override
   Future<void> stopService() async {}
+
+  @override
+  Future<void> restartService() async {}
 }

@@ -238,25 +238,84 @@ class LocalServerProvider extends ChangeNotifier {
   }
 
   Future<void> startService() async {
+    _updateStatus(LocalServerStatus.starting);
     try {
       await _service.serviceManager.startService();
+      _addLog('Service start command sent — waiting for server to become ready...');
+      // Give the service process a moment to spawn before polling health.
+      await Future.delayed(const Duration(seconds: 2));
       _info = _info.copyWith(serviceRunning: true);
       notifyListeners();
       _startHealthPolling();
-      _addLog('Service started.');
+      // Do an immediate health check to verify the server actually came up.
+      final healthy = await _service.checkHealth(port: _info.port);
+      if (healthy) {
+        _updateInfo(
+          status: LocalServerStatus.running,
+          pid: _service.processPid,
+          errorMessage: null,
+        );
+        _addLog('Service started and API is responding.');
+      } else {
+        _addLog('Service started but API health check failed. '
+            'Check the service logs at ~/.coqui/.workspace/logs/api-stderr.log');
+        _updateInfo(status: LocalServerStatus.stopped, errorMessage: null);
+      }
     } catch (e) {
+      _updateInfo(
+        status: LocalServerStatus.stopped,
+        errorMessage: 'Failed to start service: $e',
+      );
       _addLog('Failed to start service: $e');
     }
   }
 
   Future<void> stopService() async {
+    _updateStatus(LocalServerStatus.stopping);
     try {
       await _service.serviceManager.stopService();
-      _info = _info.copyWith(serviceRunning: false);
+      _stopHealthPolling();
+      _info = _info.copyWith(serviceRunning: false, status: LocalServerStatus.stopped);
       notifyListeners();
       _addLog('Service stopped.');
     } catch (e) {
       _addLog('Failed to stop service: $e');
+      // Re-sync state from the OS
+      final running = await _service.serviceManager.isServiceRunning();
+      _info = _info.copyWith(serviceRunning: running);
+      notifyListeners();
+    }
+  }
+
+  Future<void> restartService() async {
+    _updateStatus(LocalServerStatus.starting);
+    _addLog('Restarting service...');
+    try {
+      await _service.serviceManager.restartService();
+      _addLog('Service restart command sent — waiting for server to become ready...');
+      await Future.delayed(const Duration(seconds: 2));
+      _info = _info.copyWith(serviceRunning: true);
+      notifyListeners();
+      _startHealthPolling();
+      final healthy = await _service.checkHealth(port: _info.port);
+      if (healthy) {
+        _updateInfo(
+          status: LocalServerStatus.running,
+          pid: _service.processPid,
+          errorMessage: null,
+        );
+        _addLog('Service restarted and API is responding.');
+      } else {
+        _addLog('Service restarted but API health check failed. '
+            'Check the service logs at ~/.coqui/.workspace/logs/api-stderr.log');
+        _updateInfo(status: LocalServerStatus.stopped, errorMessage: null);
+      }
+    } catch (e) {
+      _updateInfo(
+        status: LocalServerStatus.stopped,
+        errorMessage: 'Failed to restart service: $e',
+      );
+      _addLog('Failed to restart service: $e');
     }
   }
 
@@ -282,6 +341,12 @@ class LocalServerProvider extends ChangeNotifier {
     final newStatus = healthy
         ? LocalServerStatus.running
         : (_info.isInstalled ? LocalServerStatus.stopped : _info.status);
+
+    // Warn in the console when the service dies unexpectedly.
+    if (_info.serviceRunning && !serviceRunning) {
+      _addLog('⚠ Service stopped unexpectedly. '
+          'Check logs at ~/.coqui/.workspace/logs/api-stderr.log');
+    }
 
     if (newStatus != _info.status || serviceRunning != _info.serviceRunning) {
       _info = _info.copyWith(

@@ -89,12 +89,38 @@ class LinuxServiceManager implements ServiceManager {
 
   @override
   Future<void> startService() async {
-    await Process.run('systemctl', ['--user', 'start', _serviceName]);
+    final result = await Process.run(
+        'systemctl', ['--user', 'start', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl start failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
   }
 
   @override
   Future<void> stopService() async {
-    await Process.run('systemctl', ['--user', 'stop', _serviceName]);
+    final result = await Process.run(
+        'systemctl', ['--user', 'stop', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl stop failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
+  }
+
+  @override
+  Future<void> restartService() async {
+    final result = await Process.run(
+        'systemctl', ['--user', 'restart', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl restart failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
   }
 
   String _buildUnit({
