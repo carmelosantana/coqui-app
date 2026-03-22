@@ -68,17 +68,20 @@ class ChatProvider extends ChangeNotifier {
   /// Whether a stream was cancelled by the user.
   final Set<String> _cancelledStreams = {};
 
-  // ── Agent activity state ───────────────────────────────────────────
+  // ── Agent activity state (per-session) ────────────────────────────
 
-  final List<AgentActivityEvent> _currentTurnActivity = [];
-  List<AgentActivityEvent> get currentTurnActivity => _currentTurnActivity;
+  final Map<String, List<AgentActivityEvent>> _sessionActivity = {};
+  final Map<String, int> _sessionIteration = {};
+  final Map<String, String?> _sessionSummary = {};
 
-  int _currentIteration = 0;
-  int get currentIteration => _currentIteration;
+  List<AgentActivityEvent> get currentTurnActivity =>
+      _sessionActivity[currentSession?.id] ?? const [];
+
+  int get currentIteration =>
+      _sessionIteration[currentSession?.id] ?? 0;
 
   /// Summary from the last completed turn.
-  String? _lastTurnSummary;
-  String? get lastTurnSummary => _lastTurnSummary;
+  String? get lastTurnSummary => _sessionSummary[currentSession?.id];
 
   // ── Error state ────────────────────────────────────────────────────
 
@@ -125,9 +128,6 @@ class ChatProvider extends ChangeNotifier {
       // while the new session loads.
       _messages = [];
       _updateDisplayMessages();
-      _currentTurnActivity.clear();
-      _currentIteration = 0;
-      _lastTurnSummary = null;
       _pendingFiles.clear();
 
       _loadCurrentSession();
@@ -140,9 +140,6 @@ class ChatProvider extends ChangeNotifier {
     _currentSessionIndex = -1;
     _messages.clear();
     _updateDisplayMessages();
-    _currentTurnActivity.clear();
-    _currentIteration = 0;
-    _lastTurnSummary = null;
     _pendingFiles.clear();
     notifyListeners();
   }
@@ -192,7 +189,6 @@ class ChatProvider extends ChangeNotifier {
 
     _messages.clear();
     _updateDisplayMessages();
-    _currentTurnActivity.clear();
 
     AnalyticsService.trackEvent('session_created', {'role': role.name});
 
@@ -204,16 +200,22 @@ class ChatProvider extends ChangeNotifier {
     final session = currentSession;
     if (session == null) return;
 
+    final sessionId = session.id;
     _resetChat();
     _sessions.remove(session);
 
+    // Clean up per-session activity state
+    _sessionActivity.remove(sessionId);
+    _sessionIteration.remove(sessionId);
+    _sessionSummary.remove(sessionId);
+
     try {
-      await _apiService.deleteSession(session.id);
+      await _apiService.deleteSession(sessionId);
     } catch (_) {
       // Session may already be deleted server-side
     }
 
-    await _databaseService.deleteSession(session.id);
+    await _databaseService.deleteSession(sessionId);
   }
 
   // ── Message loading ───────────────────────────────────────────────
@@ -258,12 +260,6 @@ class ChatProvider extends ChangeNotifier {
       }
     }
 
-    // Preserve live activity panel when resuming a streaming session.
-    if (!sessionIsStreaming) {
-      _currentTurnActivity.clear();
-      _currentIteration = 0;
-      _lastTurnSummary = null;
-    }
     _pendingFiles.clear();
 
     // Do not forcibly unfocus the input; preserve user typing across loads
@@ -345,6 +341,19 @@ class ChatProvider extends ChangeNotifier {
     // Cache the optimistic message immediately so it persists when switching sessions
     await _databaseService.upsertMessage(userMessage, sessionId: session.id);
 
+    // Set a provisional title from the first user message while the server
+    // generates a proper one via LLM. Overwritten when a 'title' SSE event arrives.
+    if ((session.title == null || session.title!.isEmpty) &&
+        _messages.where((m) => m.role == CoquiMessageRole.user).length <= 1) {
+      final trimmed = text.trim();
+      final provisional = trimmed.length > 50
+          ? '${trimmed.substring(0, 47).trimRight()}…'
+          : trimmed;
+      session.title = provisional;
+      await _databaseService.updateSessionTitle(session.id, provisional);
+      notifyListeners();
+    }
+
     // Start streaming
     await _initializeStream(session, text, fileIds, fileNames);
   }
@@ -370,9 +379,9 @@ class ChatProvider extends ChangeNotifier {
 
     // Set thinking state
     _activeStreams.add(session.id);
-    _currentTurnActivity.clear();
-    _currentIteration = 0;
-    _lastTurnSummary = null;
+    _sessionActivity[session.id] = [];
+    _sessionIteration[session.id] = 0;
+    _sessionSummary[session.id] = null;
     notifyListeners();
 
     try {
@@ -419,7 +428,9 @@ class ChatProvider extends ChangeNotifier {
     /// Helper to add an activity event (handles nullable return from fromSseEvent).
     void addActivity(SseEvent event) {
       final activity = AgentActivityEvent.fromSseEvent(event);
-      if (activity != null) _currentTurnActivity.add(activity);
+      if (activity != null) {
+        _sessionActivity.putIfAbsent(session.id, () => []).add(activity);
+      }
     }
 
     /// Helper to create or update the streaming assistant message.
@@ -463,46 +474,34 @@ class ChatProvider extends ChangeNotifier {
 
         switch (event.type) {
           case SseEventType.agentStart:
-            if (isViewing) {
-              addActivity(event);
-              stateChanged = true;
-            }
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.iteration:
-            if (isViewing) {
-              _currentIteration = event.iterationNumber;
-              addActivity(event);
-              stateChanged = true;
-            }
+            _sessionIteration[session.id] = event.iterationNumber;
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.toolCall:
-            if (isViewing) {
-              addActivity(event);
-              stateChanged = true;
-            }
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.toolResult:
-            if (isViewing) {
-              addActivity(event);
-              stateChanged = true;
-            }
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.childStart:
-            if (isViewing) {
-              addActivity(event);
-              stateChanged = true;
-            }
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.childEnd:
-            if (isViewing) {
-              addActivity(event);
-              stateChanged = true;
-            }
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.textDelta:
@@ -575,8 +574,8 @@ class ChatProvider extends ChangeNotifier {
               final secs = (duration / 1000).toStringAsFixed(1);
               parts.add('${secs}s');
             }
+            _sessionSummary[session.id] = parts.join(' · ');
             if (isViewing) {
-              _lastTurnSummary = parts.join(' · ');
               stateChanged = true;
             } else {
               // For background sessions: mark as unread or error appropriately
@@ -609,6 +608,15 @@ class ChatProvider extends ChangeNotifier {
             }
             break;
 
+          case SseEventType.warning:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.connected:
+            // No-op — server signals stream is ready; turn_process_id is informational
+            break;
+
           case SseEventType.unknown:
             break;
         }
@@ -625,6 +633,10 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
+
+    // Skip post-stream work if the user cancelled — server auto-cancels
+    // the turn process when the HTTP connection closes.
+    if (_cancelledStreams.contains(session.id)) return;
 
     // After stream completes, re-fetch messages from server to get real IDs.
     // Preserve any local attachedFileNames by matching on user-message index
@@ -852,6 +864,9 @@ class ChatProvider extends ChangeNotifier {
     _resetChat();
     _sessions.clear();
     _sessionErrors.clear();
+    _sessionActivity.clear();
+    _sessionIteration.clear();
+    _sessionSummary.clear();
     notifyListeners();
 
     await refreshSessions();

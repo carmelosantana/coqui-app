@@ -256,7 +256,9 @@ class ChatNavigationDrawer extends StatelessWidget {
                 ),
                 label: Expanded(
                   child: Text(
-                    session.title ?? 'Untitled',
+                    session.title?.isNotEmpty == true
+                        ? session.title!
+                        : _sessionFallbackTitle(session.createdAt),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -266,6 +268,15 @@ class ChatNavigationDrawer extends StatelessWidget {
         );
       },
     );
+  }
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _sessionFallbackTitle(DateTime createdAt) {
+    return 'Chat · ${_months[createdAt.month - 1]} ${createdAt.day}';
   }
 }
 
