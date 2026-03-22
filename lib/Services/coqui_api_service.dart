@@ -9,6 +9,7 @@ import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_task.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
@@ -20,27 +21,36 @@ import 'package:coqui_app/Models/sse_event.dart';
 class CoquiApiService {
   String _baseUrl;
   String _apiKey;
+  String _apiVersion;
 
   String get baseUrl => _baseUrl;
   String get apiKey => _apiKey;
+  String get apiVersion => _apiVersion;
 
   CoquiApiService({
     String baseUrl = 'http://localhost:8080',
     String apiKey = '',
+    String apiVersion = 'v1',
   })  : _baseUrl = baseUrl,
-        _apiKey = apiKey;
+        _apiKey = apiKey,
+        _apiVersion = apiVersion;
 
   /// Update the connection configuration.
-  void configure({String? baseUrl, String? apiKey}) {
+  void configure({String? baseUrl, String? apiKey, String? apiVersion}) {
     if (baseUrl != null) _baseUrl = baseUrl;
     if (apiKey != null) _apiKey = apiKey;
+    if (apiVersion != null) _apiVersion = apiVersion;
   }
 
   /// Construct a full API URL from a path.
+  ///
+  /// Paths are relative to the versioned API prefix (e.g. `/sessions`).
+  /// The method prepends `/api/{version}` automatically.
   Uri _url(String path, [Map<String, String>? queryParams]) {
     final base = Uri.parse(_baseUrl);
     final segments = base.pathSegments.where((s) => s.isNotEmpty).toList();
-    final extra = path.split('/').where((s) => s.isNotEmpty).toList();
+    final versionedPath = '/api/$_apiVersion$path';
+    final extra = versionedPath.split('/').where((s) => s.isNotEmpty).toList();
     return base.replace(
       pathSegments: [...segments, ...extra],
       queryParameters: queryParams,
@@ -119,9 +129,8 @@ class CoquiApiService {
   /// Check server health. Returns the health response or throws.
   Future<Map<String, dynamic>> healthCheck() async {
     try {
-      final response = await http
-          .get(_url('/api/health'))
-          .timeout(const Duration(seconds: 5));
+      final response =
+          await http.get(_url('/health')).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -131,12 +140,15 @@ class CoquiApiService {
         statusCode: response.statusCode,
       );
     } on TimeoutException {
-      throw CoquiException('Connection timed out');
+      throw CoquiException(
+        'Connection timed out. The server may be unresponsive.',
+        code: 'timeout',
+      );
     } on http.ClientException catch (e) {
-      throw CoquiException('Connection failed: ${e.message}');
+      throw CoquiException.friendly(e);
     } catch (e) {
       if (e is CoquiException) rethrow;
-      throw CoquiException('Connection failed: $e');
+      throw CoquiException.friendly(e);
     }
   }
 
@@ -145,7 +157,7 @@ class CoquiApiService {
   /// List sessions, ordered by most recently updated.
   Future<List<CoquiSession>> listSessions({int limit = 50}) async {
     final response = await http.get(
-      _url('/api/sessions', {'limit': limit.toString()}),
+      _url('/sessions', {'limit': limit.toString()}),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -160,7 +172,7 @@ class CoquiApiService {
   Future<CoquiSession> createSession(
       {String modelRole = 'orchestrator'}) async {
     final response = await http.post(
-      _url('/api/sessions'),
+      _url('/sessions'),
       headers: _headers,
       body: jsonEncode({'model_role': modelRole}),
     );
@@ -171,7 +183,7 @@ class CoquiApiService {
   /// Get a session by ID.
   Future<CoquiSession?> getSession(String id) async {
     final response = await http.get(
-      _url('/api/sessions/$id'),
+      _url('/sessions/$id'),
       headers: _headers,
     );
 
@@ -184,7 +196,7 @@ class CoquiApiService {
   /// Delete a session and all associated data.
   Future<void> deleteSession(String id) async {
     final response = await http.delete(
-      _url('/api/sessions/$id'),
+      _url('/sessions/$id'),
       headers: _headers,
     );
     _parseResponse(response);
@@ -196,7 +208,7 @@ class CoquiApiService {
     if (title != null) body['title'] = title;
 
     final response = await http.patch(
-      _url('/api/sessions/$id'),
+      _url('/sessions/$id'),
       headers: _headers,
       body: jsonEncode(body),
     );
@@ -209,7 +221,7 @@ class CoquiApiService {
   /// List all messages in a session.
   Future<List<CoquiMessage>> listMessages(String sessionId) async {
     final response = await http.get(
-      _url('/api/sessions/$sessionId/messages'),
+      _url('/sessions/$sessionId/messages'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -234,7 +246,7 @@ class CoquiApiService {
   }) async* {
     final request = http.Request(
       'POST',
-      _url('/api/sessions/$sessionId/messages'),
+      _url('/sessions/$sessionId/messages'),
     );
     request.headers.addAll(_headers);
     final body = <String, dynamic>{'prompt': prompt};
@@ -245,7 +257,7 @@ class CoquiApiService {
     try {
       response = await request.send();
     } on http.ClientException catch (e) {
-      throw CoquiException('Connection failed: ${e.message}');
+      throw CoquiException.friendly(e);
     }
 
     // For non-200 responses, read the body and parse the error envelope
@@ -289,7 +301,7 @@ class CoquiApiService {
     String prompt,
   ) async {
     final response = await http.post(
-      _url('/api/sessions/$sessionId/messages', {'stream': 'false'}),
+      _url('/sessions/$sessionId/messages', {'stream': 'false'}),
       headers: _headers,
       body: jsonEncode({'prompt': prompt}),
     );
@@ -309,7 +321,7 @@ class CoquiApiService {
   ) async {
     final request = http.MultipartRequest(
       'POST',
-      _url('/api/sessions/$sessionId/files'),
+      _url('/sessions/$sessionId/files'),
     );
 
     if (_apiKey.isNotEmpty) {
@@ -360,12 +372,20 @@ class CoquiApiService {
     return switch (ext) {
       // Images
       'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
-      'png'           => MediaType('image', 'png'),
-      'gif'           => MediaType('image', 'gif'),
-      'webp'          => MediaType('image', 'webp'),
+      'png' => MediaType('image', 'png'),
+      'gif' => MediaType('image', 'gif'),
+      'webp' => MediaType('image', 'webp'),
       // Plain text
-      'txt' || 'log' || 'ini' || 'conf' ||
-      'sh' || 'bash' || 'zsh' || 'fish' || 'env' => MediaType('text', 'plain'),
+      'txt' ||
+      'log' ||
+      'ini' ||
+      'conf' ||
+      'sh' ||
+      'bash' ||
+      'zsh' ||
+      'fish' ||
+      'env' =>
+        MediaType('text', 'plain'),
       // Markdown
       'md' || 'markdown' => MediaType('text', 'markdown'),
       // CSV
@@ -394,7 +414,7 @@ class CoquiApiService {
   /// List all turns in a session.
   Future<List<CoquiTurn>> listTurns(String sessionId) async {
     final response = await http.get(
-      _url('/api/sessions/$sessionId/turns'),
+      _url('/sessions/$sessionId/turns'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -411,7 +431,7 @@ class CoquiApiService {
     String turnId,
   ) async {
     final response = await http.get(
-      _url('/api/sessions/$sessionId/turns/$turnId'),
+      _url('/sessions/$sessionId/turns/$turnId'),
       headers: _headers,
     );
     return _parseResponse(response);
@@ -422,16 +442,48 @@ class CoquiApiService {
   /// Get the full server configuration.
   Future<Map<String, dynamic>> getConfig() async {
     final response = await http.get(
-      _url('/api/config'),
+      _url('/config'),
       headers: _headers,
     );
     return _parseResponse(response);
   }
 
+  /// Update the server configuration (openclaw.json).
+  Future<void> updateConfig(String rawJson) async {
+    final response = await http.put(
+      _url('/config'),
+      headers: _headers,
+      body: rawJson,
+    );
+    _parseResponse(response);
+  }
+
+  /// Dry-run validation of a config object without saving.
+  ///
+  /// Returns `(valid: true, errors: [])` on success, or
+  /// `(valid: false, errors: [...])` with a non-empty error list on failure.
+  /// Never throws on a 200 response — invalid configs are not HTTP errors.
+  Future<({bool valid, List<String> errors})> validateConfig(
+    String rawJson,
+  ) async {
+    final response = await http.post(
+      _url('/config/validate'),
+      headers: _headers,
+      body: rawJson,
+    );
+    final body = _parseResponse(response);
+    final valid = body['valid'] as bool? ?? false;
+    final errors = (body['errors'] as List?)
+            ?.map((e) => e as String)
+            .toList() ??
+        const <String>[];
+    return (valid: valid, errors: errors);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
-      _url('/api/config/roles'),
+      _url('/config/roles'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -445,7 +497,7 @@ class CoquiApiService {
   /// Get a single role with full details including instructions.
   Future<CoquiRole> getRole(String name) async {
     final response = await http.get(
-      _url('/api/config/roles/$name'),
+      _url('/config/roles/$name'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -471,7 +523,7 @@ class CoquiApiService {
     if (model != null) payload['model'] = model;
 
     final response = await http.post(
-      _url('/api/config/roles'),
+      _url('/config/roles'),
       headers: _headers,
       body: jsonEncode(payload),
     );
@@ -496,7 +548,7 @@ class CoquiApiService {
     if (instructions != null) payload['instructions'] = instructions;
 
     final response = await http.patch(
-      _url('/api/config/roles/$name'),
+      _url('/config/roles/$name'),
       headers: _headers,
       body: jsonEncode(payload),
     );
@@ -507,7 +559,7 @@ class CoquiApiService {
   /// Delete a custom role.
   Future<void> deleteRole(String name) async {
     final response = await http.delete(
-      _url('/api/config/roles/$name'),
+      _url('/config/roles/$name'),
       headers: _headers,
     );
     _parseResponse(response);
@@ -516,7 +568,7 @@ class CoquiApiService {
   /// List all available models from all providers.
   Future<List<Map<String, dynamic>>> listModels() async {
     final response = await http.get(
-      _url('/api/config/models'),
+      _url('/config/models'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -532,7 +584,7 @@ class CoquiApiService {
   /// Returns a list of maps with `key` and `is_set` fields.
   Future<List<Map<String, dynamic>>> listCredentials() async {
     final response = await http.get(
-      _url('/api/credentials'),
+      _url('/credentials'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -544,7 +596,7 @@ class CoquiApiService {
   /// Set a credential.
   Future<void> setCredential(String key, String value) async {
     final response = await http.post(
-      _url('/api/credentials'),
+      _url('/credentials'),
       headers: _headers,
       body: jsonEncode({'key': key, 'value': value}),
     );
@@ -554,8 +606,85 @@ class CoquiApiService {
   /// Delete a credential.
   Future<void> deleteCredential(String key) async {
     final response = await http.delete(
-      _url('/api/credentials/$key'),
+      _url('/credentials/$key'),
       headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  // ── Background Tasks ────────────────────────────────────────────────
+
+  /// List background tasks, optionally filtered by status.
+  Future<List<CoquiTask>> listTasks({
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': limit.toString()};
+    if (status != null) params['status'] = status;
+
+    final response = await http.get(
+      _url('/tasks', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final tasks = body['tasks'] as List? ?? [];
+    return tasks
+        .map((t) => CoquiTask.fromJson(t as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get detailed information about a specific task.
+  Future<CoquiTask> getTask(String id) async {
+    final response = await http.get(
+      _url('/tasks/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiTask.fromJson(body);
+  }
+
+  /// Create a new background task.
+  Future<CoquiTask> createTask({
+    required String prompt,
+    String role = 'orchestrator',
+    String? title,
+    String? parentSessionId,
+    int maxIterations = 25,
+  }) async {
+    final payload = <String, dynamic>{
+      'prompt': prompt,
+      'role': role,
+      'max_iterations': maxIterations,
+    };
+    if (title != null) payload['title'] = title;
+    if (parentSessionId != null) payload['parent_session_id'] = parentSessionId;
+
+    final response = await http.post(
+      _url('/tasks'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiTask.fromJson(body);
+  }
+
+  /// Cancel a running or pending task.
+  Future<void> cancelTask(String id) async {
+    final response = await http.post(
+      _url('/tasks/$id/cancel'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    _parseResponse(response);
+  }
+
+  /// Inject user input into a running task.
+  Future<void> injectTaskInput(String id, String content) async {
+    final response = await http.post(
+      _url('/tasks/$id/input'),
+      headers: _headers,
+      body: jsonEncode({'content': content}),
     );
     _parseResponse(response);
   }

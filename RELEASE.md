@@ -1,275 +1,273 @@
 # Coqui App Release Guide
 
-This guide covers final checks and release steps for iOS, Android, macOS, and Windows.
+Complete release automation for iOS (TestFlight), macOS (signed DMG), Android (APK), Linux, Windows, and Web (Vercel WASM).
 
-## 0) Unified Builder (Recommended)
-
-Use [scripts/build.sh](scripts/build.sh) to standardize icon prep + build + open steps.
+## Quick Start
 
 ```bash
-# macOS debug
-./scripts/build.sh --platform macos --mode debug
+# First time — set up all signing certificates and secrets
+scripts/release.sh setup
 
-# iOS release (IPA)
-./scripts/build.sh --platform ios --mode release
+# Release a new version
+scripts/release.sh tag patch        # 0.0.1 → 0.0.2 → CI builds everything
 
-# Android release (AAB)
-./scripts/build.sh --platform android --mode release
-
-# All possible targets on current host
-./scripts/build.sh --platform all --mode debug
+# Upload iOS to TestFlight
+scripts/release.sh publish
 ```
 
-Notes:
-- `build.sh` removes previous platform artifact outputs before rebuilding to avoid stale executable confusion.
-- `--platform all` skips unsupported targets on the current host with warnings.
-- Windows desktop builds should run on a Windows host (or Windows CI runner). Wine automation is not a reliable Flutter desktop release path.
+## First-Time Setup
 
-## 1) Repo Cleanup Before Release
-
-Run these commands from project root:
+The setup wizard walks you through everything interactively. Run it once on your Mac:
 
 ```bash
-git status --short
-flutter clean
-flutter pub get
+scripts/release.sh setup
 ```
 
-Then verify no local-only artifacts are staged:
+This covers:
+
+1. **Prerequisites check** — Xcode, Flutter, Java, GitHub CLI
+2. **Apple Distribution certificate** — generates CSR, guides you through Apple Developer portal, imports cert, exports `.p12`
+3. **App-specific password** — for notarization and TestFlight uploads
+4. **Provisioning profiles** — iOS Distribution + macOS Developer ID
+5. **Android keystore** — generates `.jks`, creates `key.properties`
+6. **GitHub secrets** — pushes all 15 secrets via `gh secret set`
+7. **Vercel tokens** — for web deployment to `app.coquibot.ai`
+
+All signing artifacts are stored in `~/.coqui-release/` (outside the repo, survives clones). You can re-run any step independently:
 
 ```bash
-git status --short
+scripts/release-setup.sh apple       # Apple certificates only
+scripts/release-setup.sh profiles    # Provisioning profiles only
+scripts/release-setup.sh android     # Android keystore only
+scripts/release-setup.sh github      # Push secrets to GitHub
+scripts/release-setup.sh vercel      # Vercel deployment setup
+scripts/release-setup.sh verify      # Dashboard of all requirements
 ```
 
-Expected tracked changes should be source/config/assets only (no `build/`, no platform ephemerals, no temporary backups).
+## Release Workflow
 
-## 2) Global Pre-Release Checklist
-
-- Confirm app version in `pubspec.yaml` (`version: x.y.z+build`).
-- Confirm app name/bundle identifiers are final for each platform.
-- Confirm launcher icons and splash assets are correct (see Icon Pipeline below).
-- Run static checks and tests:
+### 1. Tag a Release
 
 ```bash
-flutter analyze
-flutter test
+scripts/release.sh tag patch         # 0.0.1 → 0.0.2
+scripts/release.sh tag minor         # 0.0.2 → 0.1.0
+scripts/release.sh tag major         # 0.1.0 → 1.0.0
+scripts/release.sh tag 2.0.0         # Explicit version
 ```
 
-- Run at least one smoke test per platform target you ship.
-- Confirm production API URL/auth behavior in app settings flow.
+This command:
 
-## 2.1) Icon Pipeline
+- Validates the codebase (`flutter analyze` + `flutter test`)
+- Bumps the version in `pubspec.yaml`
+- Commits and tags `vX.Y.Z`
+- Pushes to GitHub (triggers CI)
 
-Each platform uses a different source icon. The build script (`build.sh`) and `make icons` handle this automatically.
+### 2. CI Builds Everything
 
-| Platform | Source file | Notes |
-|----------|-------------|-------|
-| macOS | `coqui-icon-macos.png` | Auto-generated from `coqui-icon.png` at 83% inner size. Sequoia/Tahoe applies its own rounded-rect mask; without padding the icon appears oversized vs system apps. |
-| iOS | `coqui.png` | Square, no alpha channel. App Store rejects icons with alpha. iOS clips its own rounded rect. |
-| Android | `coqui-icon.png` | Primary icon with round corners and alpha. Android applies adaptive mask (circle/squircle). |
-| Windows | `coqui.png` | Square .ico, no transparency. Standard Windows convention. |
-| Linux | `coqui-icon.png` | Round-corner icon with alpha. |
+Pushing a `v*` tag triggers `.github/workflows/release.yml`:
 
-To regenerate all platform icons:
-
-```bash
-make icons
+```
+Tag push → Validate → Build 6 platforms (parallel) → GitHub Release → Vercel deploy
 ```
 
-Or manually:
+| Platform | Artifact | Distribution |
+|----------|----------|-------------|
+| Android | `Coqui-{ver}-android.apk` | GitHub Release (sideload) |
+| macOS | `Coqui-{ver}-macos-arm64.dmg` | GitHub Release (signed + notarized) |
+| iOS | `Coqui-{ver}-ios.ipa` | TestFlight (uploaded separately) |
+| Linux | `Coqui-{ver}-linux-x64.tar.gz` | GitHub Release |
+| Windows | `Coqui-{ver}-windows-x64.zip` | GitHub Release |
+| Web | WASM | Vercel (`app.coquibot.ai`) |
+
+All artifacts include SHA-256 checksums in `SHA256SUMS.txt`.
+
+### 3. Publish iOS to TestFlight
+
+After CI produces the IPA (or after a local build):
 
 ```bash
-./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 83% --output assets/images/coqui-icon-macos.png
-dart run flutter_launcher_icons
+scripts/release.sh publish
 ```
 
-The per-platform source mapping is defined in the `flutter_launcher_icons` section of `pubspec.yaml`.
+This validates the IPA and uploads it to App Store Connect via `xcrun altool`. The script guides you through first-time App Store Connect setup if needed.
 
-## 3) iOS Release (TestFlight / App Store)
-
-Prerequisites:
-- Apple Developer Program membership (required for App Store and TestFlight).
-- Valid signing certificate + provisioning profile in Xcode.
-
-Steps:
-1. Open `ios/Runner.xcworkspace` in Xcode.
-2. Set Team, Bundle Identifier, Version, Build Number.
-3. In Flutter project:
+### 4. Check Status
 
 ```bash
-flutter build ipa --release
+scripts/release.sh status
 ```
 
-4. Upload using Xcode Organizer or Transporter.
-5. In App Store Connect:
-   - Add build to TestFlight.
-   - Complete metadata, privacy details, screenshots.
-   - Submit for review when ready.
+Shows current version, signing readiness, git state, and next steps.
 
-Notes:
-- If icon validation fails due alpha channel, set `remove_alpha_ios: true` in `flutter_launcher_icons` config and regenerate icons.
+## Local Builds
 
-## 3.1) Apple Security & Compliance Checklist
-
-Before uploading to TestFlight/App Store, verify:
-
-- **Signing and identity**
-   - Distribution certificate and provisioning profiles are valid.
-   - Bundle identifier and Team ID match App Store Connect app record.
-
-- **Privacy and permissions**
-   - `Info.plist` usage strings are present for every permission your app touches.
-   - App Privacy answers in App Store Connect match actual data behavior.
-
-- **Binary hardening and integrity**
-   - Release build only (`flutter build ipa --release`).
-   - No debug flags/logging toggles enabled for production.
-   - Dependencies are up-to-date and from trusted sources.
-
-- **App icon / asset validation**
-   - No alpha channel in iOS app icons if App Store validation rejects it (`remove_alpha_ios: true`).
-   - Launch screen assets render correctly on light/dark mode.
-
-- **Runtime trust and warnings**
-   - For App Store distribution, Apple signing avoids Gatekeeper warnings on user devices.
-   - For direct macOS distribution outside App Store, sign with Developer ID and notarize (`notarytool`) to avoid security warnings.
-
-- **Submission hygiene**
-   - TestFlight smoke test on real devices before review submission.
-   - Crash-free startup and core chat flow validated.
-
-## 4) Android Release (Play Store)
-
-Prerequisites:
-- Release keystore and secure key properties setup.
-
-Steps:
-1. Configure signing (`android/key.properties` and Gradle signing config).
-2. Build app bundle:
+Build signed artifacts locally without pushing to GitHub:
 
 ```bash
-flutter build appbundle --release
+scripts/release.sh build --platform macos    # Signed + notarized DMG
+scripts/release.sh build --platform ios      # Signed IPA
+scripts/release.sh build --platform android  # Signed APK
+scripts/release.sh build --platform web      # WASM build
+scripts/release.sh build --platform all      # All supported on this OS
 ```
 
-3. Upload `.aab` in Google Play Console.
-4. Complete release notes, store listing, and staged rollout.
+The build command validates signing prerequisites before building and provides clear remediation steps if anything is missing.
 
-Optional APK build:
+## Required GitHub Secrets
+
+The setup wizard (`scripts/release-setup.sh github`) pushes all of these automatically:
+
+| Secret | Source | Purpose |
+|--------|--------|---------|
+| `APPLE_CERTIFICATE_P12` | `.p12` export from Keychain | Code signing (iOS + macOS) |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` | Unlock cert in CI |
+| `APPLE_TEAM_ID` | Apple Developer account | Certificate identity |
+| `APPLE_ID` | Your Apple ID email | Notarization + TestFlight |
+| `APPLE_APP_SPECIFIC_PASSWORD` | appleid.apple.com | Notarization + TestFlight |
+| `KEYCHAIN_PASSWORD` | Auto-generated random | CI temp keychain |
+| `IOS_PROVISIONING_PROFILE` | Apple Developer portal | iOS app signing |
+| `MACOS_PROVISIONING_PROFILE` | Apple Developer portal | macOS DMG signing |
+| `ANDROID_KEYSTORE_BASE64` | Generated `.jks` | Android APK signing |
+| `ANDROID_KEYSTORE_PASSWORD` | Chosen during setup | Unlock keystore |
+| `ANDROID_KEY_ALIAS` | `coqui` (default) | Key within keystore |
+| `ANDROID_KEY_PASSWORD` | Chosen during setup | Unlock key |
+| `VERCEL_TOKEN` | vercel.com/account/tokens | Web deployment |
+| `VERCEL_ORG_ID` | Vercel project settings | Web deployment |
+| `VERCEL_PROJECT_ID` | Vercel project settings | Web deployment |
+
+## App Store Connect First Submission
+
+The very first iOS release requires creating an app record:
+
+1. Go to [App Store Connect](https://appstoreconnect.apple.com/apps)
+2. Click **+** → **New App**
+3. Fill in:
+   - Platform: **iOS**
+   - Name: **Coqui**
+   - Primary Language: **English (US)**
+   - Bundle ID: **ai.coquibot.app**
+   - SKU: **coqui-app**
+4. Complete the app information:
+   - **Privacy**: describe data collection (Coqui stores all data locally — no server-side tracking)
+   - **Age Rating**: complete the questionnaire
+   - **Category**: Developer Tools
+5. On the Version page:
+   - Add screenshots for required device sizes
+   - Write description, keywords, support URL
+   - Set pricing
+
+The `scripts/release.sh publish` command prints this checklist and provides the direct URLs.
+
+### Screenshots
+
+Take screenshots from the iOS Simulator (`Simulator → File → Save Screen` or `⌘S`):
+
+| Device | Size | Required |
+|--------|------|----------|
+| iPhone 15 Pro Max (6.7") | 1290 × 2796 | Yes |
+| iPhone 14 Plus (6.5") | 1284 × 2778 | Yes (or use 6.7") |
+| iPad Pro 12.9" | 2048 × 2732 | If iPad-compatible |
+
+## CI/CD Pipeline
+
+### Continuous Integration (`ci.yml`)
+
+Every push to `main` and every PR:
+
+1. **Analyze & Test** — `flutter analyze` + `flutter test`
+2. **Build Android** (smoke) — debug APK
+3. **Build iOS** (smoke) — debug build, no codesign
+4. **Build Web** (smoke) — WASM release
+
+### Release Pipeline (`release.yml`)
+
+Triggered by `v*` tag:
+
+1. **Validate** — analyze + test (gates all builds)
+2. **Build** — 6 platforms in parallel (Android, macOS, iOS, Linux, Windows, Web)
+3. **Release** — GitHub Release with all artifacts + checksums
+4. **Deploy** — Web build to Vercel production
+
+## Icon Pipeline
+
+Each platform uses a different source icon:
+
+| Platform | Source | Rationale |
+|----------|--------|-----------|
+| macOS | `coqui-icon-macos.png` (auto-padded) | Sequoia/Tahoe dock sizing |
+| iOS | `coqui.png` | No alpha (App Store requirement) |
+| Android | `coqui-icon.png` | Round corners, adaptive mask |
+| Windows | `coqui.png` | Square `.ico` |
+| Linux | `coqui-icon.png` | Round corners with alpha |
+
+Regenerate all icons: `make icons`
+
+## Build Recovery
+
+When builds break after updates:
 
 ```bash
-flutter build apk --release
+make fix-ios       # Clean + reinstall CocoaPods + clear Xcode cache
+make fix-android   # Clean + Gradle clean
+make rebuild       # Full clean rebuild from scratch
 ```
 
-## 5) macOS Release
-
-Prerequisites:
-- Apple signing identity for Developer ID (outside Mac App Store) or Mac App Store certs.
-
-Steps:
-1. Build release app:
+Or use the build script with `--clean`:
 
 ```bash
-flutter build macos --release
+./scripts/build.sh --platform macos --mode debug --clean
 ```
 
-2. Archive/sign/notarize using Xcode tooling (`xcodebuild`, `notarytool`) based on distribution method.
-3. Validate app launch on a clean macOS machine/profile.
+## Troubleshooting
 
-## 6) Windows Release
+### "No signing identity found"
 
-Steps:
-1. Build release bundle:
+Run `scripts/release-setup.sh apple` to create or select a certificate. If you have a certificate but it's not detected, open Keychain Access and verify it's in "My Certificates" with a green checkmark.
+
+### "Provisioning profile doesn't match"
+
+The profile must match both the bundle ID (`ai.coquibot.app`) and the signing certificate. Download a new profile from the Apple Developer portal that references your current certificate: `scripts/release-setup.sh profiles`
+
+### "keytool not found"
+
+Install Java JDK 17+: `brew install openjdk@17`
+
+### iOS build fails with "No such module 'Flutter'"
 
 ```bash
-flutter build windows --release
+make fix-ios
 ```
 
-2. Package installer (MSIX/Inno Setup/etc.) per your distribution channel.
-3. Code-sign installer and binaries.
-4. Validate install/upgrade/uninstall on a clean Windows VM.
+### Android signing fails locally
 
-## 7) Web Release (WASM)
-
-The web build produces static files served by any web server. No server-side code.
-
-Steps:
-1. Build release with WASM:
+Verify `android/key.properties` exists and points to a valid keystore:
 
 ```bash
-flutter build web --wasm --release
+cat android/key.properties
 ```
 
-2. Test locally:
+If missing, run: `scripts/release-setup.sh android`
+
+### CI build fails
+
+1. Check that all GitHub secrets are set: `scripts/release-setup.sh verify`
+2. Look at the specific failing job in GitHub Actions for error details
+3. Common issue: expired certificates — re-run `scripts/release-setup.sh apple` and `scripts/release-setup.sh github`
+
+### TestFlight upload fails
+
+- **Authentication error**: regenerate app-specific password at [appleid.apple.com](https://appleid.apple.com/account/manage)
+- **Bundle ID mismatch**: ensure App Store Connect app record uses `ai.coquibot.app`
+- **Version already exists**: bump the version with `scripts/release.sh tag patch`
+- **Alternative upload**: use Transporter (free on Mac App Store) — drag and drop the `.ipa` file
+
+## Makefile Targets
 
 ```bash
-cd build/web && python3 -m http.server 8080
-# → Open http://localhost:8080 and verify app loads
-```
-
-3. Deploy via Docker:
-
-```bash
-docker compose -f compose.web.yaml build
-docker compose -f compose.web.yaml up -d
-```
-
-4. Or deploy to Vercel (pre-built, no server-side build):
-
-```bash
-cd build/web && npx vercel --prod
-```
-
-The project includes a `vercel.json` that handles SPA routing, COOP/COEP headers, and caching — no additional configuration needed. Do NOT build on Vercel (Flutter is not available there). Always deploy the pre-built `build/web/` output.
-
-5. Or deploy to other static hosting (Cloudflare Pages, Netlify, etc.):
-
-```bash
-cd build/web && vercel --prod
-```
-
-Notes:
-- Ensure `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers are set (required for SQLite WASM / OPFS).
-- CORS must be configured on the Coqui API server (`--cors-origin`).
-- See [docs/WEB.md](docs/WEB.md) for full deployment documentation.
-
-## 8) Final Verification Matrix
-
-Before publishing, validate:
-- Fresh install works.
-- Existing-user upgrade works.
-- API connectivity and auth errors are user-friendly.
-- Role selection and chat flow work.
-- Tool output rendering and session persistence work.
-- App icon and splash assets render correctly on device.
-- Web: WASM loads in Chrome, Firefox, Safari.
-- Web: SQLite WASM storage persists across page reloads.
-- Web: PWA install works ("Add to Home Screen").
-
-## 8) Recommended Release Commands (Quick Sequence)
-
-```bash
-flutter clean
-flutter pub get
-flutter analyze
-flutter test
-flutter build ipa --release        # macOS host, iOS release
-flutter build appbundle --release  # Android release
-flutter build macos --release      # macOS desktop
-flutter build windows --release    # Windows desktop (on Windows host)
-flutter build web --wasm --release # Web (WASM)
-```
-
-## 9) GitHub Release Hygiene
-
-- Commit only source/config/docs/assets required by runtime.
-- Do not commit local environment files, build output, or temp artifacts.
-- Tag release after CI/local verification.
-
-Example:
-
-```bash
-git add .
-git commit -m "chore: prepare release vX.Y.Z"
-git tag vX.Y.Z
-git push origin main --tags
+make release-setup    # Run setup wizard
+make release-status   # Show release readiness
+make release-verify   # Verify all signing requirements
+make release-build    # Build all platforms
+make release-tag      # Tag and push (prompts for version)
+make release-publish  # Upload iOS to TestFlight
 ```

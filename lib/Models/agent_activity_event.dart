@@ -59,8 +59,15 @@ class AgentActivityEvent {
           label: 'Error',
           detail: event.errorMessage,
         ),
+      SseEventType.warning => AgentActivityEvent(
+          type: AgentActivityType.warning,
+          label: 'Warning',
+          detail: event.warningMessage,
+        ),
       // text_delta is handled by the streaming message, not the activity panel
       SseEventType.textDelta => null,
+      // connected/unknown events have no meaningful activity representation
+      SseEventType.connected || SseEventType.unknown => null,
       _ => AgentActivityEvent(
           type: AgentActivityType.info,
           label: event.type.name,
@@ -89,5 +96,6 @@ enum AgentActivityType {
   childStart,
   childEnd,
   error,
+  warning,
   info,
 }

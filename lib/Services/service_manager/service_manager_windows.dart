@@ -18,6 +18,8 @@ class WindowsServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {}
 
   @override
@@ -28,4 +30,7 @@ class WindowsServiceManager implements ServiceManager {
 
   @override
   Future<void> stopService() async {}
+
+  @override
+  Future<void> restartService() async {}
 }

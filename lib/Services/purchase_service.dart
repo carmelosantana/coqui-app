@@ -50,7 +50,7 @@ class PurchaseService {
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   Future<void> initialize() async {
-    if (!PlatformInfo.isIOS) return;
+    if (!PlatformInfo.isIOS && !PlatformInfo.isAndroid) return;
 
     final iap = InAppPurchase.instance;
     storeAvailable = await iap.isAvailable();
@@ -74,7 +74,9 @@ class PurchaseService {
 
   /// Initiate a purchase for the given product ID.
   Future<bool> purchase(String productId) async {
-    if (!PlatformInfo.isIOS || !storeAvailable) return false;
+    if ((!PlatformInfo.isIOS && !PlatformInfo.isAndroid) || !storeAvailable) {
+      return false;
+    }
 
     final product = products.cast<ProductDetails?>().firstWhere(
           (p) => p!.id == productId,
@@ -90,7 +92,9 @@ class PurchaseService {
 
   /// Restore previous purchases (e.g. after reinstall / new device).
   Future<void> restorePurchases() async {
-    if (!PlatformInfo.isIOS || !storeAvailable) return;
+    if ((!PlatformInfo.isIOS && !PlatformInfo.isAndroid) || !storeAvailable) {
+      return;
+    }
     await InAppPurchase.instance.restorePurchases();
   }
 

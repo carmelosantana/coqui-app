@@ -89,7 +89,7 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.ibrahimcetin" "\0"
+            VALUE "CompanyName", "Coqui Bot" "\0"
             VALUE "FileDescription", "Coqui" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "coqui" "\0"

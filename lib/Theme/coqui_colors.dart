@@ -80,6 +80,12 @@ abstract final class CoquiColors {
   static const chart4 = Color(0xFF37B880); // oklch(0.70 0.14 160)
   static const chart5 = Color(0xFF7B9B59); // oklch(0.65 0.10 130)
 
+  // ── Semantic status colors (shared) ────────────────────────────────────
+
+  /// Amber-600 — used for transitional/cautionary states (cancelling, provisioning).
+  /// Matches the web design system's warning token.
+  static const warning = Color(0xFFD97706);
+
   // ── Border radius (matches website --radius: 0.625rem = 10px) ─────────
 
   static const double radius = 10.0;

@@ -51,12 +51,14 @@ class LinuxServiceManager implements ServiceManager {
   Future<void> installService({
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {
-    final phpPath = await _resolvePhpPath();
     final unit = _buildUnit(
-      phpPath: phpPath,
       coquiPath: coquiPath,
       port: port,
+      autoApprove: autoApprove,
+      unsafe: unsafe,
     );
 
     final dir = Directory(_unitDir);
@@ -87,25 +89,50 @@ class LinuxServiceManager implements ServiceManager {
 
   @override
   Future<void> startService() async {
-    await Process.run('systemctl', ['--user', 'start', _serviceName]);
+    final result = await Process.run(
+        'systemctl', ['--user', 'start', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl start failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
   }
 
   @override
   Future<void> stopService() async {
-    await Process.run('systemctl', ['--user', 'stop', _serviceName]);
+    final result = await Process.run(
+        'systemctl', ['--user', 'stop', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl stop failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
   }
 
-  Future<String> _resolvePhpPath() async {
-    final result = await Process.run('which', ['php']);
-    final path = result.stdout.toString().trim();
-    return path.isNotEmpty ? path : '/usr/bin/php';
+  @override
+  Future<void> restartService() async {
+    final result = await Process.run(
+        'systemctl', ['--user', 'restart', _serviceName]);
+    if (result.exitCode != 0) {
+      final err = result.stderr.toString().trim();
+      throw Exception(
+          'systemctl restart failed (exit ${result.exitCode})'
+          '${err.isNotEmpty ? ": $err" : ""}');
+    }
   }
 
   String _buildUnit({
-    required String phpPath,
     required String coquiPath,
     required int port,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) {
+    final flags = StringBuffer();
+    if (autoApprove) flags.write(' --auto-approve');
+    if (unsafe) flags.write(' --unsafe');
+
     return '''[Unit]
 Description=Coqui Bot API
 After=network.target
@@ -113,7 +140,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$coquiPath
-ExecStart=$phpPath $coquiPath/bin/coqui api --host 127.0.0.1 --port $port
+ExecStart=/bin/bash $coquiPath/bin/coqui-launcher --api-only --host 127.0.0.1 --port $port${flags.toString()}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

@@ -3,7 +3,9 @@ import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
+import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -27,13 +29,18 @@ class ChatDrawer extends StatelessWidget {
         ),
       );
     } else {
-      return SizedBox(
-        width: 300,
-        child: Column(
-          children: [
-            Expanded(child: const ChatNavigationDrawer()),
-            _buildSettingsButton(context),
-          ],
+      return ClipRRect(
+        borderRadius: const BorderRadius.only(
+          bottomRight: Radius.circular(CoquiColors.radiusXl),
+        ),
+        child: SizedBox(
+          width: 300,
+          child: Column(
+            children: [
+              Expanded(child: const ChatNavigationDrawer()),
+              _buildSettingsButton(context),
+            ],
+          ),
         ),
       );
     }
@@ -45,9 +52,9 @@ class ChatDrawer extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Row(
         children: [
-          if (PlatformInfo.isDesktop) _buildServerButton(context),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
             onPressed: () {
               if (ResponsiveBreakpoints.of(context).isMobile) {
                 Navigator.pop(context);
@@ -55,8 +62,76 @@ class ChatDrawer extends StatelessWidget {
               Navigator.pushNamed(context, '/settings');
             },
           ),
+          _buildTasksButton(context),
+          _buildConfigButton(context),
+          if (PlatformInfo.isDesktop) _buildServerButton(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildTasksButton(BuildContext context) {
+    return Consumer<TaskProvider>(
+      builder: (context, taskProvider, _) {
+        final hasActive = taskProvider.hasActiveTasks;
+        return IconButton(
+          icon: Stack(
+            children: [
+              const Icon(Icons.task_outlined),
+              if (hasActive)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: CoquiColors.chart2,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          tooltip: 'Background Tasks',
+          onPressed: () {
+            if (ResponsiveBreakpoints.of(context).isMobile) {
+              Navigator.pop(context);
+            }
+            Navigator.pushNamed(context, '/tasks');
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildConfigButton(BuildContext context) {
+    return Consumer<InstanceProvider>(
+      builder: (context, instanceProvider, _) {
+        final hasInstance = instanceProvider.hasActiveInstance;
+
+        return IconButton(
+          icon: const Icon(Icons.build_outlined),
+          tooltip: hasInstance
+              ? 'Server configuration'
+              : 'Connect to a server first',
+          color: hasInstance
+              ? null
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+          onPressed: hasInstance
+              ? () {
+                  if (ResponsiveBreakpoints.of(context).isMobile) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/config');
+                }
+              : null,
+        );
+      },
     );
   }
 
@@ -108,6 +183,7 @@ class ChatDrawer extends StatelessWidget {
       },
     );
   }
+
 }
 
 class ChatNavigationDrawer extends StatelessWidget {
@@ -180,7 +256,9 @@ class ChatNavigationDrawer extends StatelessWidget {
                 ),
                 label: Expanded(
                   child: Text(
-                    session.title ?? 'Untitled',
+                    session.title?.isNotEmpty == true
+                        ? session.title!
+                        : _sessionFallbackTitle(session.createdAt),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -190,6 +268,15 @@ class ChatNavigationDrawer extends StatelessWidget {
         );
       },
     );
+  }
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _sessionFallbackTitle(DateTime createdAt) {
+    return 'Chat · ${_months[createdAt.month - 1]} ${createdAt.day}';
   }
 }
 

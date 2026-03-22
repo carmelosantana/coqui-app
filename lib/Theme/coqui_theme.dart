@@ -246,6 +246,18 @@ abstract final class CoquiTheme {
         ),
       ),
 
+      // ── FAB: use primary color (lime), not primaryContainer ──────────
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(CoquiColors.radiusMd),
+        ),
+      ),
+
       // ── Icon ─────────────────────────────────────────────────────────
       iconTheme: IconThemeData(
         color: colorScheme.onSurface,

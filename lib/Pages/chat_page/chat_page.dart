@@ -30,7 +30,7 @@ class _ChatPageState extends State<ChatPage> {
   CoquiRole? _selectedRole;
 
   // Cached preset suggestions — only regenerated on new conversation
-  List<ChatPreset> _presets = ChatPresets.randomPresets;
+  final List<ChatPreset> _presets = ChatPresets.randomPresets;
 
   // Text field controller for the chat prompt
   final _textFieldController = TextEditingController();
@@ -211,11 +211,6 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  void _resetChat() {
-    _selectedRole = null;
-    _presets = ChatPresets.randomPresets;
-  }
-
   /// Horizontal row of file chips shown above the text field when files are
   /// pending. Smoothly animates in and out as files are added or cleared.
   Widget _buildFileChipsRow(ChatProvider chatProvider) {
@@ -307,7 +302,7 @@ class _ChatPageState extends State<ChatPage> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to create session: $e'),
+              content: Text(CoquiException.friendly(e).message),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );

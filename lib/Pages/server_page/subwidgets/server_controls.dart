@@ -73,47 +73,73 @@ class ServerControls extends StatelessWidget {
     final info = provider.info;
     final isBusy = info.isBusy;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (info.status == LocalServerStatus.stopped ||
-            info.status == LocalServerStatus.error) ...[
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: isBusy ? null : () => provider.startProcess(),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start'),
-            ),
+        CheckboxListTile(
+          value: provider.autoApprove,
+          onChanged: isBusy ? null : (v) => provider.setAutoApprove(v ?? false),
+          title: const Text('Auto-approve tools'),
+          subtitle: const Text(
+            'Skip confirmation prompts. Catastrophic commands are still blocked.',
           ),
-        ],
-        if (info.status == LocalServerStatus.running) ...[
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: isBusy ? null : () => provider.stopProcess(),
-              icon: const Icon(Icons.stop),
-              label: const Text('Stop'),
-            ),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        CheckboxListTile(
+          value: provider.unsafe,
+          onChanged: isBusy ? null : (v) => provider.setUnsafe(v ?? false),
+          title: const Text('Unsafe mode'),
+          subtitle: const Text(
+            'Disable PHP function restrictions in php_execute.',
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: isBusy ? null : () => provider.restartProcess(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Restart'),
-            ),
-          ),
-        ],
-        if (info.status == LocalServerStatus.starting ||
-            info.status == LocalServerStatus.stopping) ...[
-          const Expanded(
-            child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (info.status == LocalServerStatus.stopped ||
+                info.status == LocalServerStatus.error) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : () => provider.startProcess(),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start'),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+            if (info.status == LocalServerStatus.running) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : () => provider.stopProcess(),
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isBusy ? null : () => provider.restartProcess(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Restart'),
+                ),
+              ),
+            ],
+            if (info.status == LocalServerStatus.starting ||
+                info.status == LocalServerStatus.stopping) ...[
+              const Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }
