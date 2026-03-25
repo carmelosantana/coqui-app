@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+
+Name=Coqui
+Comment=AI agent chat client
+Categories=Utility;Development;Chat;
+Keywords=ai;chat;agent;coqui;llm
+
+Icon=ai.coquibot.app
+Exec=coqui
+Terminal=false
+StartupNotify=true

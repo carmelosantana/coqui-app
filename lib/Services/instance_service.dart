@@ -14,7 +14,13 @@ class InstanceService {
 
   Future<void> initialize() async {
     if (_initialized) return;
-    _box = await Hive.openBox(_boxName);
+    try {
+      _box = await Hive.openBox(_boxName);
+    } catch (e) {
+      // Stale or incompatible data — reset the box.
+      await Hive.deleteBoxFromDisk(_boxName);
+      _box = await Hive.openBox(_boxName);
+    }
     _initialized = true;
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/request_state.dart';
 import 'package:async/async.dart';
 
@@ -66,7 +67,7 @@ class _SelectionBottomSheetState<T> extends State<SelectionBottomSheet<T>> {
       }
     } catch (e) {
       _state = RequestState.error;
-      _errorMessage = e.toString();
+      _errorMessage = CoquiException.friendly(e).message;
     }
 
     if (mounted) {

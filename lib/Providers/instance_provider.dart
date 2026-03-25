@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Services/analytics_service.dart';
@@ -22,6 +24,12 @@ class InstanceProvider extends ChangeNotifier {
 
   bool get hasActiveInstance => _activeInstance != null;
 
+  bool? _isOnline;
+  bool? get isOnline => _isOnline;
+
+  Timer? _healthTimer;
+  bool _isCheckingHealth = false;
+
   InstanceProvider({
     required InstanceService instanceService,
     required CoquiApiService apiService,
@@ -39,9 +47,12 @@ class InstanceProvider extends ChangeNotifier {
       _apiService.configure(
         baseUrl: _activeInstance!.baseUrl,
         apiKey: _activeInstance!.apiKey,
+        apiVersion: _activeInstance!.apiVersion,
       );
+      _checkHealth();
     }
 
+    _startHealthTimer();
     notifyListeners();
   }
 
@@ -105,7 +116,51 @@ class InstanceProvider extends ChangeNotifier {
       _apiService.configure(
         baseUrl: _activeInstance!.baseUrl,
         apiKey: _activeInstance!.apiKey,
+        apiVersion: _activeInstance!.apiVersion,
       );
+      _isOnline = null; // Show checking status
+      _checkHealth();
     }
+  }
+
+  void _startHealthTimer() {
+    _healthTimer?.cancel();
+    _healthTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _checkHealth();
+    });
+  }
+
+  Future<void> _checkHealth() async {
+    if (_isCheckingHealth) return;
+    _isCheckingHealth = true;
+
+    try {
+      if (_activeInstance == null) {
+        if (_isOnline != null) {
+          _isOnline = null;
+          notifyListeners();
+        }
+        return;
+      }
+
+      await _apiService.healthCheck();
+      if (_isOnline != true) {
+        _isOnline = true;
+        notifyListeners();
+      }
+    } catch (_) {
+      if (_isOnline != false) {
+        _isOnline = false;
+        notifyListeners();
+      }
+    } finally {
+      _isCheckingHealth = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _healthTimer?.cancel();
+    super.dispose();
   }
 }

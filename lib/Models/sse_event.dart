@@ -102,6 +102,12 @@ class SseEvent {
   /// Session title from a 'title' event.
   String get titleText => data['title'] as String? ?? '';
 
+  /// Warning message from a 'warning' event.
+  String get warningMessage => data['message'] as String? ?? '';
+
+  /// Turn process ID from a 'connected' event.
+  String get turnProcessId => data['turn_process_id'] as String? ?? '';
+
   /// Duration in ms from a 'complete' event.
   int get durationMs => data['duration_ms'] as int? ?? 0;
 
@@ -128,6 +134,8 @@ enum SseEventType {
   error,
   complete,
   title,
+  warning,
+  connected,
   unknown;
 
   factory SseEventType.fromString(String type) {
@@ -143,6 +151,8 @@ enum SseEventType {
       'error' => SseEventType.error,
       'complete' => SseEventType.complete,
       'title' => SseEventType.title,
+      'warning' => SseEventType.warning,
+      'connected' => SseEventType.connected,
       _ => SseEventType.unknown,
     };
   }

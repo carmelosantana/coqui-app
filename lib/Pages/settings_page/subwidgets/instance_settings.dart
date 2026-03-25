@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/request_state.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -327,14 +328,7 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
       _connectionState = RequestState.success;
     } catch (e) {
       _connectionState = RequestState.error;
-      // Catches SocketException (native) and ClientException/XMLHttpRequest errors (web).
-      if (e.toString().contains('SocketException') ||
-          e.toString().contains('ClientException') ||
-          e.toString().contains('XMLHttpRequest')) {
-        _connectionError = 'Could not connect to server.';
-      } else {
-        _connectionError = 'Connection failed: $e';
-      }
+      _connectionError = CoquiException.friendly(e).message;
     }
 
     if (mounted) setState(() {});
