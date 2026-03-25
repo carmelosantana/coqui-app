@@ -3,14 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:re_editor/re_editor.dart';
-import 'package:re_highlight/languages/json.dart';
-import 'package:re_highlight/styles/atom-one-dark.dart';
-import 'package:re_highlight/styles/atom-one-light.dart';
 
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
-import 'code_find_panel.dart';
+import 'platform_code_editor.dart';
 
 /// JSON editor for the server's openclaw.json configuration.
 ///
@@ -27,9 +23,7 @@ class ConfigEditor extends StatefulWidget {
 
 class _ConfigEditorState extends State<ConfigEditor>
     with AutomaticKeepAliveClientMixin {
-  late final CodeLineEditingController _controller;
-  late final CodeScrollController _scrollController;
-  late final CodeFindController _findController;
+  late final ConfigEditorController _controller;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -52,9 +46,7 @@ class _ConfigEditorState extends State<ConfigEditor>
   @override
   void initState() {
     super.initState();
-    _controller = CodeLineEditingController.fromText('');
-    _scrollController = CodeScrollController();
-    _findController = CodeFindController(_controller);
+    _controller = ConfigEditorController();
     _controller.addListener(_onTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadConfig());
   }
@@ -64,8 +56,6 @@ class _ConfigEditorState extends State<ConfigEditor>
     _controller.removeListener(_onTextChanged);
     _validationDebounce?.cancel();
     _controller.dispose();
-    _scrollController.dispose();
-    _findController.dispose();
     super.dispose();
   }
 
@@ -366,48 +356,7 @@ class _ConfigEditorState extends State<ConfigEditor>
         const Divider(height: 1),
         // Code editor
         Expanded(
-          child: CodeEditor(
-            controller: _controller,
-            scrollController: _scrollController,
-            findController: _findController,
-            wordWrap: false,
-            style: CodeEditorStyle(
-              fontSize: 13,
-              fontFamily: 'GeistMono',
-              fontHeight: 1.5,
-              codeTheme: CodeHighlightTheme(
-                languages: {
-                  'json': CodeHighlightThemeMode(mode: langJson),
-                },
-                theme: Theme.of(context).brightness == Brightness.dark
-                    ? atomOneDarkTheme
-                    : atomOneLightTheme,
-              ),
-            ),
-            indicatorBuilder:
-                (context, editingController, chunkController, notifier) {
-              return Row(
-                children: [
-                  DefaultCodeLineNumber(
-                    controller: editingController,
-                    notifier: notifier,
-                  ),
-                  DefaultCodeChunkIndicator(
-                    width: 20,
-                    controller: chunkController,
-                    notifier: notifier,
-                  ),
-                ],
-              );
-            },
-            findBuilder: (context, controller, readOnly) =>
-                CodeFindPanelView(controller: controller, readOnly: readOnly),
-            sperator: VerticalDivider(
-              // Note: "sperator" is the correct param name (upstream typo)
-              width: 1,
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-          ),
+          child: PlatformCodeEditor(controller: _controller),
         ),
         // Validation error panel
         if (_validationErrors.isNotEmpty)
