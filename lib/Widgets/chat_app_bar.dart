@@ -5,7 +5,6 @@ import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
-import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
@@ -168,97 +167,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 /// Dropdown for quick server switching directly in the app bar.
-class _ServerDropdown extends StatefulWidget {
+class _ServerDropdown extends StatelessWidget {
   final InstanceProvider instanceProvider;
 
   const _ServerDropdown({required this.instanceProvider});
 
-  @override
-  State<_ServerDropdown> createState() => _ServerDropdownState();
-}
-
-class _ServerDropdownState extends State<_ServerDropdown> {
-  /// null = unknown/checking, true = reachable, false = unreachable
-  bool? _isHealthy;
-  String? _lastCheckedInstanceId;
-  Timer? _healthTimer;
-  bool _isChecking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkHealth();
-    _healthTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _checkHealth(),
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _ServerDropdown oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final activeId = widget.instanceProvider.activeInstance?.id;
-    if (activeId != _lastCheckedInstanceId) {
-      _checkHealth();
-    }
-  }
-
-  @override
-  void dispose() {
-    _healthTimer?.cancel();
-    _healthTimer = null;
-    super.dispose();
-  }
-
-  Future<void> _checkHealth() async {
-    if (_isChecking) return;
-    _isChecking = true;
-
-    try {
-      final active = widget.instanceProvider.activeInstance;
-      if (active == null) {
-        if (_isHealthy != null || _lastCheckedInstanceId != null) {
-          setState(() {
-            _isHealthy = null;
-            _lastCheckedInstanceId = null;
-          });
-        }
-        return;
-      }
-
-      final instanceChanged = _lastCheckedInstanceId != active.id;
-      _lastCheckedInstanceId = active.id;
-      if (instanceChanged) {
-        setState(() => _isHealthy = null); // show checking state
-      }
-
-      final testService = CoquiApiService(
-        baseUrl: active.baseUrl,
-        apiKey: active.apiKey,
-        apiVersion: active.apiVersion,
-      );
-
-      try {
-        await testService.healthCheck();
-        if (mounted &&
-            _lastCheckedInstanceId == active.id &&
-            _isHealthy != true) {
-          setState(() => _isHealthy = true);
-        }
-      } catch (_) {
-        if (mounted &&
-            _lastCheckedInstanceId == active.id &&
-            _isHealthy != false) {
-          setState(() => _isHealthy = false);
-        }
-      }
-    } finally {
-      _isChecking = false;
-    }
-  }
-
   Color _statusColor(BuildContext context) {
-    return switch (_isHealthy) {
+    return switch (instanceProvider.isOnline) {
       true => Colors.green,
       false => Theme.of(context).colorScheme.error,
       null => Theme.of(context).colorScheme.onSurfaceVariant,
@@ -267,8 +182,8 @@ class _ServerDropdownState extends State<_ServerDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    final instances = widget.instanceProvider.instances;
-    final active = widget.instanceProvider.activeInstance;
+    final instances = instanceProvider.instances;
+    final active = instanceProvider.activeInstance;
 
     if (instances.isEmpty) {
       return Row(
@@ -326,7 +241,7 @@ class _ServerDropdownState extends State<_ServerDropdown> {
       tooltip: 'Switch server',
       offset: const Offset(0, 40),
       onSelected: (id) {
-        widget.instanceProvider.setActiveInstance(id);
+        instanceProvider.setActiveInstance(id);
       },
       itemBuilder: (context) => instances.map((instance) {
         final isActive = instance.id == active?.id;
