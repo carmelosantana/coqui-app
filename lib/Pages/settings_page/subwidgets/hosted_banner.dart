@@ -108,7 +108,9 @@ class _HostedBannerState extends State<HostedBanner> {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: () {
-                  launchUrlString('${AppConstants.hostedUrl}/pricing');
+                  launchUrlString(
+                    '${AppConstants.hostedUrl}/pricing?utm_source=app&utm_medium=banner&utm_campaign=hosted',
+                  );
                 },
                 child: const Text('Learn More'),
               ),

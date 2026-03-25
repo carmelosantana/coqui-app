@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Pages/config_page/config_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
+import 'package:coqui_app/Pages/tasks_page/tasks_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
+import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
@@ -16,6 +19,8 @@ import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:app_links/app_links.dart';
+import 'package:coqui_app/Utils/material_color_adapter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +38,19 @@ void main() async {
     await Hive.initFlutter();
   }
 
-  await Hive.openBox('settings');
+  // Register adapters before opening any boxes.
+  Hive.registerAdapter(MaterialColorAdapter());
+
+  // Open settings box with recovery for stale/incompatible data.
+  // Previous builds stored objects (auth, SaaS models) whose adapters have
+  // since been removed — reading those entries triggers HiveError with an
+  // unknown typeId. Deleting the box and re-opening resets to defaults.
+  try {
+    await Hive.openBox('settings');
+  } catch (e) {
+    await Hive.deleteBoxFromDisk('settings');
+    await Hive.openBox('settings');
+  }
 
   // Create services
   final apiService = CoquiApiService();
@@ -41,7 +58,7 @@ void main() async {
   final instanceService = InstanceService();
   final purchaseService = PurchaseService();
 
-  // Initialize in-app purchase listener (no-op on non-iOS).
+  // Initialize in-app purchase listener (iOS / Android supporter donations).
   await purchaseService.initialize();
 
   runApp(
@@ -72,6 +89,11 @@ void main() async {
           ),
         ),
         ChangeNotifierProvider(
+          create: (_) => TaskProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
           create: (_) => SupporterProvider(
             purchaseService: purchaseService,
           ),
@@ -90,8 +112,34 @@ void main() async {
   );
 }
 
-class CoquiApp extends StatelessWidget {
+class CoquiApp extends StatefulWidget {
   const CoquiApp({super.key});
+
+  @override
+  State<CoquiApp> createState() => _CoquiAppState();
+}
+
+class _CoquiAppState extends State<CoquiApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final AppLinks _appLinks;
+
+  @override
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  void _initDeepLinks() {
+    _appLinks = AppLinks();
+    _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    // Deep link handler — extend here for chat priming, toolkit install, etc.
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +150,7 @@ class CoquiApp extends StatelessWidget {
       builder: (context, box, _) {
         final themeName = _supporterThemeName;
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           title: AppConstants.appName,
           theme: CoquiTheme.light(themeName: themeName),
           darkTheme: CoquiTheme.dark(themeName: themeName),
@@ -131,6 +180,18 @@ class CoquiApp extends StatelessWidget {
             if (settings.name == '/server' && PlatformInfo.isDesktop) {
               return MaterialPageRoute(
                 builder: (context) => const ServerPage(),
+              );
+            }
+
+            if (settings.name == '/config') {
+              return MaterialPageRoute(
+                builder: (context) => const ConfigPage(),
+              );
+            }
+
+            if (settings.name == '/tasks') {
+              return MaterialPageRoute(
+                builder: (context) => const TasksPage(),
               );
             }
 

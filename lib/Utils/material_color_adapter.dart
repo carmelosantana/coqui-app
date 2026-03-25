@@ -7,15 +7,17 @@ class MaterialColorAdapter extends TypeAdapter<MaterialColor> {
 
   @override
   MaterialColor read(BinaryReader reader) {
-    final value = reader.readInt();
+    final colorValue = reader.readInt();
     return Colors.primaries.firstWhere(
-      (color) => color.value == value,
+      // Hive stores the ARGB32 int — compare using the same representation.
+      // ignore: deprecated_member_use
+      (color) => color.value == colorValue,
       orElse: () => Colors.grey,
     );
   }
 
   @override
   void write(BinaryWriter writer, MaterialColor obj) {
-    writer.writeInt(obj.value);
+    writer.writeInt(obj.toARGB32());
   }
 }

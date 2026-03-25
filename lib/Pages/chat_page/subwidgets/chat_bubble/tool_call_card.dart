@@ -198,7 +198,7 @@ class _ToolCallCardState extends State<ToolCallCard> {
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
                       color: widget.resultSuccess == true
-                          ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                          ? colorScheme.surfaceContainerHigh
                           : colorScheme.errorContainer.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(6.0),
                     ),

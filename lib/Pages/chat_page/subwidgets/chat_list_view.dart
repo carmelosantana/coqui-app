@@ -306,6 +306,7 @@ class _ActivityEventRow extends StatelessWidget {
       AgentActivityType.childStart => Icons.account_tree_rounded,
       AgentActivityType.childEnd => Icons.account_tree_rounded,
       AgentActivityType.error => Icons.error_outline,
+      AgentActivityType.warning => Icons.warning_amber_rounded,
       AgentActivityType.info => Icons.info_outline,
     };
   }

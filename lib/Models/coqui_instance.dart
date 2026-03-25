@@ -9,6 +9,7 @@ class CoquiInstance {
   final String name;
   final String baseUrl;
   final String apiKey;
+  final String apiVersion;
   final bool isActive;
 
   CoquiInstance({
@@ -16,6 +17,7 @@ class CoquiInstance {
     required this.name,
     required this.baseUrl,
     required this.apiKey,
+    this.apiVersion = 'v1',
     this.isActive = false,
   }) : id = id ?? const Uuid().v4();
 
@@ -25,6 +27,7 @@ class CoquiInstance {
       name: map['name'] as String,
       baseUrl: map['base_url'] as String,
       apiKey: map['api_key'] as String,
+      apiVersion: (map['api_version'] as String?) ?? 'v1',
       isActive: (map['is_active'] as int?) == 1,
     );
   }
@@ -35,6 +38,7 @@ class CoquiInstance {
       'name': name,
       'base_url': baseUrl,
       'api_key': apiKey,
+      'api_version': apiVersion,
       'is_active': isActive ? 1 : 0,
     };
   }
@@ -43,6 +47,7 @@ class CoquiInstance {
     String? name,
     String? baseUrl,
     String? apiKey,
+    String? apiVersion,
     bool? isActive,
   }) {
     return CoquiInstance(
@@ -50,6 +55,7 @@ class CoquiInstance {
       name: name ?? this.name,
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
+      apiVersion: apiVersion ?? this.apiVersion,
       isActive: isActive ?? this.isActive,
     );
   }

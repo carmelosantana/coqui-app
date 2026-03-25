@@ -17,6 +17,7 @@ Options:
   --padding PERCENT       Alternate to --inner-size (mutually exclusive)
   --no-icons              Skip icon padding + launcher icon generation
   --no-open               Do not open built artifact/folder after build
+  --clean                 Run full clean + dependency reinstall before building
   --dry-run               Print commands without executing
   -h, --help              Show this help
 
@@ -48,6 +49,7 @@ innerSize="83%"
 padding=""
 runIcons='true'
 openAfterBuild='true'
+runClean='false'
 dryRun='false'
 
 while [[ $# -gt 0 ]]; do
@@ -82,6 +84,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-open)
       openAfterBuild='false'
+      shift
+      ;;
+    --clean)
+      runClean='true'
       shift
       ;;
     --dry-run)
@@ -389,6 +395,24 @@ resolveTargets() {
 info "Host platform: $hostPlatform"
 info "Requested platform: $platform"
 info "Build mode: $mode"
+
+if [[ "$runClean" == 'true' ]]; then
+  info "Running full clean before build..."
+  runCmd "cd '$projectRoot' && flutter clean"
+  runCmd "cd '$projectRoot' && flutter pub get"
+
+  if [[ "$hostPlatform" == 'macos' ]]; then
+    runCmd "cd '$projectRoot/ios' && rm -rf Pods Podfile.lock && pod install --repo-update"
+    runCmd "cd '$projectRoot/macos' && rm -rf Pods Podfile.lock && pod install --repo-update"
+    runCmd "rm -rf ~/Library/Developer/Xcode/DerivedData/Runner-*"
+  fi
+
+  local androidSdk
+  androidSdk="$(resolveAndroidSdkPath)"
+  if [[ -n "$androidSdk" ]]; then
+    runCmd "cd '$projectRoot/android' && ./gradlew clean"
+  fi
+fi
 
 runIconPipeline
 

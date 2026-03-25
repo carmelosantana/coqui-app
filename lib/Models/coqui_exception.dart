@@ -33,6 +33,58 @@ class CoquiException implements Exception {
     );
   }
 
+  /// Wrap any exception into a user-friendly [CoquiException].
+  ///
+  /// If [error] is already a [CoquiException], it is returned as-is.
+  /// Transport-level errors (socket failures, client exceptions) are
+  /// mapped to a clear connection message. Everything else gets a
+  /// generic fallback — raw exception text is never exposed.
+  factory CoquiException.friendly(Object error) {
+    if (error is CoquiException) return error;
+
+    final text = error.toString();
+
+    if (text.contains('SocketException') ||
+        text.contains('ClientException') ||
+        text.contains('XMLHttpRequest') ||
+        text.contains('Connection refused') ||
+        text.contains('Connection reset')) {
+      return CoquiException(
+        'Unable to connect to the server. Please ensure your Coqui API '
+        'server is running and try again.',
+        code: 'connection_failed',
+      );
+    }
+
+    if (text.contains('TimeoutException') || text.contains('timed out')) {
+      return CoquiException(
+        'Connection timed out. The server may be unresponsive.',
+        code: 'timeout',
+      );
+    }
+
+    if (text.contains('401') || text.contains('Unauthorized')) {
+      return CoquiException(
+        'Authentication failed. Please check your API key and try again.',
+        code: 'unauthorized',
+        statusCode: 401,
+      );
+    }
+
+    if (text.contains('403') || text.contains('Forbidden')) {
+      return CoquiException(
+        'Access denied. You do not have permission for this action.',
+        code: 'forbidden',
+        statusCode: 403,
+      );
+    }
+
+    return CoquiException(
+      'An unexpected error occurred. Please try again.',
+      code: 'unknown',
+    );
+  }
+
   /// Seconds to wait before retrying (from rate limit response).
   int? get retryAfter {
     final value = details?['retry_after'];
@@ -94,6 +146,12 @@ class CoquiException implements Exception {
 
   /// Whether this error indicates an internal server error.
   bool get isInternalError => code == 'internal_error';
+
+  /// Whether this error indicates a connection failure.
+  bool get isConnectionFailed => code == 'connection_failed';
+
+  /// Whether this error indicates a timeout.
+  bool get isTimeout => code == 'timeout';
 
   @override
   String toString() => message;

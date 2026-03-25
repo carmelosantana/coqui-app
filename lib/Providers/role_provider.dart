@@ -33,7 +33,7 @@ class RoleProvider extends ChangeNotifier {
     } on CoquiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Failed to load roles: $e';
+      _error = CoquiException.friendly(e).message;
     } finally {
       _isLoading = false;
       notifyListeners();

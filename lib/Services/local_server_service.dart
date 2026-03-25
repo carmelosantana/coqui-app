@@ -97,6 +97,7 @@ class LocalServerService {
   String get installPath => '$_home/.coqui';
 
   String get _binPath => '$installPath/bin/coqui';
+  String get _launcherPath => '$installPath/bin/coqui-launcher';
   String get _versionFile => '$installPath/.coqui-version';
   String get _workspacePath => '$installPath/.workspace';
   String get _envFile => '$_workspacePath/.env';
@@ -115,7 +116,7 @@ class LocalServerService {
         final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
         final result = await Process.run(
           shell,
-          ['-l', '-c', 'echo \$PATH'],
+          ['-l', '-c', 'echo \$PATH 2>/dev/null'],
         );
         if (result.exitCode == 0) {
           final loginPath = result.stdout.toString().trim();
@@ -263,7 +264,7 @@ class LocalServerService {
 
     final process = await Process.start(
       'bash',
-      ['-l', scriptFile.path, '--non-interactive'],
+      [scriptFile.path, '--non-interactive', '--quiet'],
       environment: env,
       // Redirect stdin from /dev/null so sudo cannot prompt for a password.
       // The symlink step will fall back to ~/.local/bin instead.
@@ -312,6 +313,7 @@ class LocalServerService {
         'Bypass',
         '-File',
         scriptFile.path,
+        '-Quiet',
       ],
       environment: env,
     );
@@ -337,6 +339,144 @@ class LocalServerService {
   Future<bool> update() async {
     _log('Checking for updates...');
     return install();
+  }
+
+  // ── Uninstall ─────────────────────────────────────────────────────────
+
+  static const _uninstallerUrlUnix =
+      'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/uninstall.sh';
+  static const _uninstallerUrlWindows =
+      'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/uninstall.ps1';
+
+  /// Uninstall the Coqui server. Streams output to [logStream].
+  ///
+  /// [removeWorkspace] — also deletes the `.workspace` directory (sessions,
+  /// packages, logs).
+  /// [removePhpAndComposer] — also removes PHP and Composer from the system.
+  Future<bool> uninstall({
+    bool removeWorkspace = false,
+    bool removePhpAndComposer = false,
+  }) async {
+    _log('Starting Coqui server uninstall...');
+    await _resolveHome();
+
+    try {
+      if (Platform.isWindows) {
+        return await _uninstallWindows(
+          removeWorkspace: removeWorkspace,
+          removePhpAndComposer: removePhpAndComposer,
+        );
+      } else {
+        return await _uninstallUnix(
+          removeWorkspace: removeWorkspace,
+          removePhpAndComposer: removePhpAndComposer,
+        );
+      }
+    } catch (e) {
+      _log('Uninstall failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _uninstallUnix({
+    required bool removeWorkspace,
+    required bool removePhpAndComposer,
+  }) async {
+    _log('Downloading uninstaller...');
+    final response = await http.get(Uri.parse(_uninstallerUrlUnix));
+    if (response.statusCode != 200) {
+      _log('Failed to download uninstaller (HTTP ${response.statusCode})');
+      return false;
+    }
+
+    final tempDir = Directory.systemTemp.createTempSync('coqui_uninstall_');
+    final scriptFile = File('${tempDir.path}/uninstall.sh');
+    scriptFile.writeAsStringSync(response.body);
+
+    await Process.run('chmod', ['+x', scriptFile.path]);
+
+    _log('Running uninstaller...');
+    final env = await _loginEnvironment();
+    env['COQUI_INSTALL_DIR'] = installPath;
+    env['TERM'] = 'dumb';
+    env['SUDO_ASKPASS'] = '/bin/false';
+
+    final args = [scriptFile.path, '--force', '--quiet'];
+    if (!removeWorkspace) args.add('--keep-workspace');
+    if (removePhpAndComposer) args.add('--all');
+
+    final process = await Process.start(
+      'bash',
+      args,
+      environment: env,
+      mode: ProcessStartMode.normal,
+    );
+    process.stdin.close();
+
+    await _pipeProcessOutput(process);
+    final exitCode = await process.exitCode;
+
+    tempDir.deleteSync(recursive: true);
+
+    if (exitCode == 0) {
+      _log('Uninstall completed successfully.');
+      return true;
+    } else {
+      _log('Uninstaller exited with code $exitCode');
+      return false;
+    }
+  }
+
+  Future<bool> _uninstallWindows({
+    required bool removeWorkspace,
+    required bool removePhpAndComposer,
+  }) async {
+    _log('Downloading uninstaller...');
+    final response = await http.get(Uri.parse(_uninstallerUrlWindows));
+    if (response.statusCode != 200) {
+      _log('Failed to download uninstaller (HTTP ${response.statusCode})');
+      return false;
+    }
+
+    final tempDir = Directory.systemTemp.createTempSync('coqui_uninstall_');
+    final scriptFile = File('${tempDir.path}\\uninstall.ps1');
+    scriptFile.writeAsStringSync(response.body);
+
+    _log('Running uninstaller...');
+    final env = await _loginEnvironment();
+    env['COQUI_INSTALL_DIR'] = installPath;
+    env['TERM'] = 'dumb';
+
+    final args = [
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      scriptFile.path,
+      '-Force',
+      '-Quiet',
+    ];
+    if (!removeWorkspace) args.add('-KeepWorkspace');
+    if (removePhpAndComposer) args.add('-All');
+
+    final process = await Process.start(
+      'powershell',
+      args,
+      environment: env,
+    );
+    process.stdin.close();
+
+    await _pipeProcessOutput(process);
+    final exitCode = await process.exitCode;
+
+    tempDir.deleteSync(recursive: true);
+
+    if (exitCode == 0) {
+      _log('Uninstall completed successfully.');
+      return true;
+    } else {
+      _log('Uninstaller exited with code $exitCode');
+      return false;
+    }
   }
 
   // ── Configuration ─────────────────────────────────────────────────────
@@ -391,19 +531,19 @@ class LocalServerService {
   // ── Process management ────────────────────────────────────────────────
 
   /// Start the Coqui API server as a child process.
+  ///
+  /// On Unix, uses `bin/coqui-launcher --api-only` when the launcher is
+  /// present (handles restart logic and crash recovery). Falls back to
+  /// `php bin/coqui api` when the launcher is missing or on Windows.
   Future<bool> startProcess({
     int port = defaultPort,
     String host = defaultHost,
+    bool autoApprove = false,
+    bool unsafe = false,
   }) async {
     if (_serverProcess != null) {
       _log('Server process is already running.');
       return true;
-    }
-
-    final phpAvailable = await isPhpAvailable();
-    if (!phpAvailable) {
-      _log('Error: PHP is not available in PATH.');
-      return false;
     }
 
     if (!File(_binPath).existsSync()) {
@@ -415,12 +555,49 @@ class LocalServerService {
 
     try {
       final env = await _loginEnvironment();
-      _serverProcess = await Process.start(
-        'php',
-        [_binPath, 'api', '--host', host, '--port', '$port'],
-        workingDirectory: installPath,
-        environment: env,
-      );
+      final useLauncher =
+          !Platform.isWindows && File(_launcherPath).existsSync();
+
+      if (useLauncher) {
+        final args = [
+          _launcherPath,
+          '--api-only',
+          '--host',
+          host,
+          '--port',
+          '$port',
+          if (autoApprove) '--auto-approve',
+          if (unsafe) '--unsafe',
+        ];
+        _serverProcess = await Process.start(
+          '/bin/bash',
+          args,
+          workingDirectory: installPath,
+          environment: env,
+        );
+      } else {
+        final phpAvailable = await isPhpAvailable();
+        if (!phpAvailable) {
+          _log('Error: PHP is not available in PATH.');
+          return false;
+        }
+        final args = [
+          _binPath,
+          'api',
+          '--host',
+          host,
+          '--port',
+          '$port',
+          if (autoApprove) '--auto-approve',
+          if (unsafe) '--unsafe',
+        ];
+        _serverProcess = await Process.start(
+          'php',
+          args,
+          workingDirectory: installPath,
+          environment: env,
+        );
+      }
 
       _pipeProcessOutput(_serverProcess!);
 
@@ -486,7 +663,7 @@ class LocalServerService {
   /// Check if the Coqui API at the given port is responding.
   Future<bool> checkHealth({int port = defaultPort}) async {
     try {
-      final uri = Uri.parse('http://127.0.0.1:$port/api/health');
+      final uri = Uri.parse('http://127.0.0.1:$port/api/v1/health');
       final response = await http.get(uri).timeout(
             const Duration(seconds: 3),
           );
