@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Services/purchase_service.dart';
@@ -50,7 +49,7 @@ class SupporterProvider extends ChangeNotifier {
   // ── Store products ─────────────────────────────────────────────────────
 
   bool get storeAvailable => _purchaseService.storeAvailable;
-  List<ProductDetails> get products => _purchaseService.products;
+  List<StubProductDetails> get products => _purchaseService.products;
 
   // ── Theme selection ────────────────────────────────────────────────────
 

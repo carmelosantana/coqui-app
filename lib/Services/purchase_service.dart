@@ -1,10 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
-
-import 'package:coqui_app/Platform/platform_info.dart';
 
 /// Product identifiers for one-time supporter donations.
 ///
@@ -17,16 +12,32 @@ class SupporterProducts {
   static const allIds = {small, medium, large};
 }
 
+/// Stub replacing [ProductDetails] from in_app_purchase while IAP is disabled.
+///
+/// Re-enable by restoring the `in_app_purchase` dependency and reverting this
+/// file to the original implementation.
+class StubProductDetails {
+  final String id;
+  final String price;
+  final double rawPrice;
+
+  const StubProductDetails({
+    required this.id,
+    required this.price,
+    this.rawPrice = 0.0,
+  });
+}
+
 /// Wraps the `in_app_purchase` plugin for iOS supporter donations.
 ///
-/// On non-iOS platforms this is a no-op — all purchase methods return
-/// immediately without interacting with any store.
+/// Currently stubbed — IAP is disabled until the backend is ready.
+/// On all platforms this is a no-op.
+// TODO: Restore in_app_purchase dependency and revert this file for IAP launch.
 class PurchaseService {
   final _settingsBox = Hive.box('settings');
-  StreamSubscription<List<PurchaseDetails>>? _subscription;
 
   /// Products fetched from the App Store.
-  List<ProductDetails> products = [];
+  List<StubProductDetails> products = [];
 
   /// Whether the store is available and ready.
   bool storeAvailable = false;
@@ -50,87 +61,23 @@ class PurchaseService {
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   Future<void> initialize() async {
-    if (!PlatformInfo.isIOS && !PlatformInfo.isAndroid) return;
-
-    final iap = InAppPurchase.instance;
-    storeAvailable = await iap.isAvailable();
-    if (!storeAvailable) return;
-
-    // Listen for purchase updates (completions, failures, restores).
-    _subscription = iap.purchaseStream.listen(
-      _onPurchaseUpdate,
-      onDone: () => _subscription?.cancel(),
-      onError: (_) {},
-    );
-
-    await _loadProducts();
+    // No-op while IAP is disabled.
   }
 
   void dispose() {
-    _subscription?.cancel();
+    // No-op while IAP is disabled.
   }
 
   // ── Public API ─────────────────────────────────────────────────────────
 
   /// Initiate a purchase for the given product ID.
   Future<bool> purchase(String productId) async {
-    if ((!PlatformInfo.isIOS && !PlatformInfo.isAndroid) || !storeAvailable) {
-      return false;
-    }
-
-    final product = products.cast<ProductDetails?>().firstWhere(
-          (p) => p!.id == productId,
-          orElse: () => null,
-        );
-    if (product == null) return false;
-
-    final purchaseParam = PurchaseParam(productDetails: product);
-    // Non-consumable: user buys once, unlocks forever.
-    return InAppPurchase.instance
-        .buyNonConsumable(purchaseParam: purchaseParam);
+    // No-op while IAP is disabled.
+    return false;
   }
 
   /// Restore previous purchases (e.g. after reinstall / new device).
   Future<void> restorePurchases() async {
-    if ((!PlatformInfo.isIOS && !PlatformInfo.isAndroid) || !storeAvailable) {
-      return;
-    }
-    await InAppPurchase.instance.restorePurchases();
-  }
-
-  // ── Internals ──────────────────────────────────────────────────────────
-
-  Future<void> _loadProducts() async {
-    final response = await InAppPurchase.instance
-        .queryProductDetails(SupporterProducts.allIds);
-    if (response.notFoundIDs.isNotEmpty) {
-      debugPrint('IAP: products not found: ${response.notFoundIDs.join(', ')}');
-    }
-    products = response.productDetails
-      ..sort((a, b) => a.rawPrice.compareTo(b.rawPrice));
-    onProductsLoaded?.call();
-  }
-
-  void _onPurchaseUpdate(List<PurchaseDetails> purchases) {
-    for (final purchase in purchases) {
-      _handlePurchase(purchase);
-    }
-  }
-
-  Future<void> _handlePurchase(PurchaseDetails purchase) async {
-    if (purchase.status == PurchaseStatus.purchased ||
-        purchase.status == PurchaseStatus.restored) {
-      // Grant supporter status.
-      await _settingsBox.put(_isSupporterKey, true);
-      onSupporterStatusChanged?.call();
-    } else if (purchase.status == PurchaseStatus.error) {
-      onPurchaseError?.call(
-          purchase.error?.message ?? 'Purchase failed. Please try again.');
-    }
-
-    // Always complete pending purchases to avoid store warnings.
-    if (purchase.pendingCompletePurchase) {
-      await InAppPurchase.instance.completePurchase(purchase);
-    }
+    // No-op while IAP is disabled.
   }
 }

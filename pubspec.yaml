@@ -74,9 +74,6 @@ dependencies:
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
 
-  # In-app purchases (iOS/Android subscriptions + supporter donations)
-  in_app_purchase: ^3.2.0
-
   # Deep link handling for deep links (chat priming, server shortcuts, etc.)
   app_links: ^6.4.0
 
