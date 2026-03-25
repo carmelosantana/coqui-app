@@ -846,16 +846,29 @@ class ChatProvider extends ChangeNotifier {
 
   /// Track the last active instance ID to detect changes.
   String? _lastActiveInstanceId;
+  bool? _lastActiveInstanceOnline;
 
   /// Called by ChangeNotifierProxyProvider when InstanceProvider updates.
   /// Only triggers a refresh when the active instance actually changes.
   void listenToInstanceChanges(InstanceProvider instanceProvider) {
+    bool changedId = false;
+
     final newId = instanceProvider.activeInstance?.id;
     if (newId != _lastActiveInstanceId) {
       _lastActiveInstanceId = newId;
-      if (newId != null) {
-        onInstanceChanged();
-      }
+      changedId = true;
+    }
+
+    final newOnline = instanceProvider.isOnline;
+    bool justCameOnline = newOnline == true && _lastActiveInstanceOnline != true;
+    _lastActiveInstanceOnline = newOnline;
+
+    if (changedId && newId != null) {
+      onInstanceChanged();
+    } else if (justCameOnline) {
+      // If we didn't just change the instance ID, but the current instance came online,
+      // fetch sessions to populate the UI.
+      refreshSessions();
     }
   }
 
