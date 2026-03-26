@@ -65,3 +65,5 @@ android/app/*.jks
 *.jks
 *.keystore
 *.p12
+.vercel
+.env*.local
