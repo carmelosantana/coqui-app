@@ -8,7 +8,7 @@ import 'package:coqui_app/Theme/theme.dart';
 
 /// Settings section for supporter donations and perks.
 ///
-/// On iOS: shows IAP donation tiers and unlocked perks (themes, icons).
+/// On iOS and Android: shows IAP donation tiers and unlocked perks.
 /// On other platforms: shows a link to GitHub Sponsors.
 class SupporterSettings extends StatelessWidget {
   const SupporterSettings({super.key});

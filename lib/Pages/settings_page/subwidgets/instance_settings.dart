@@ -67,6 +67,7 @@ class _InstanceSettingsState extends State<InstanceSettings> {
     BuildContext context, {
     CoquiInstance? existing,
   }) async {
+    final instanceProvider = context.read<InstanceProvider>();
     final result = await showDialog<CoquiInstance>(
       context: context,
       builder: (context) => _InstanceFormDialog(existing: existing),
@@ -74,9 +75,6 @@ class _InstanceSettingsState extends State<InstanceSettings> {
 
     if (result == null) return;
     if (!mounted) return;
-
-    final instanceProvider =
-        Provider.of<InstanceProvider>(context, listen: false);
 
     if (existing != null) {
       await instanceProvider.updateInstance(result);
@@ -87,6 +85,7 @@ class _InstanceSettingsState extends State<InstanceSettings> {
 
   Future<void> _confirmDelete(
       BuildContext context, CoquiInstance instance) async {
+    final instanceProvider = context.read<InstanceProvider>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -107,9 +106,6 @@ class _InstanceSettingsState extends State<InstanceSettings> {
 
     if (confirmed != true) return;
     if (!mounted) return;
-
-    final instanceProvider =
-        Provider.of<InstanceProvider>(context, listen: false);
     await instanceProvider.removeInstance(instance.id);
   }
 }
@@ -233,7 +229,7 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
               }),
               decoration: InputDecoration(
                 labelText: 'Server URL',
-                hintText: 'http://localhost:8080',
+                hintText: 'http://localhost:3300',
                 border: const OutlineInputBorder(),
                 errorText: _connectionError,
               ),

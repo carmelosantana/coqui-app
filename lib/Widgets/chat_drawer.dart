@@ -115,9 +115,9 @@ class ChatDrawer extends StatelessWidget {
         final hasInstance = instanceProvider.hasActiveInstance;
 
         return IconButton(
-          icon: const Icon(Icons.build_outlined),
+          icon: const Icon(Icons.key_outlined),
           tooltip: hasInstance
-              ? 'Server configuration'
+              ? 'Credentials'
               : 'Connect to a server first',
           color: hasInstance
               ? null

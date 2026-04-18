@@ -8,8 +8,7 @@ import 'package:coqui_app/Services/purchase_service.dart';
 /// Manages supporter status, selected theme, and selected app icon.
 ///
 /// Perk unlocking is gated behind [isSupporter], which currently checks
-/// for one-time donations. Future subscription purchases will also set
-/// this flag.
+/// for one-time donations.
 class SupporterProvider extends ChangeNotifier {
   final PurchaseService _purchaseService;
   final _settingsBox = Hive.box('settings');
@@ -42,8 +41,7 @@ class SupporterProvider extends ChangeNotifier {
 
   /// Whether the user has unlocked supporter perks.
   ///
-  /// Currently only set by one-time IAP donations. Future subscription
-  /// purchases will also grant supporter status.
+  /// Currently only set by one-time IAP donations.
   bool get isSupporter => _purchaseService.isSupporter;
 
   // ── Store products ─────────────────────────────────────────────────────

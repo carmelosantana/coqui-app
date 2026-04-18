@@ -17,7 +17,7 @@ import 'package:coqui_app/Models/sse_event.dart';
 ///
 /// Handles all communication with a Coqui instance including
 /// session management, prompt submission with SSE streaming,
-/// role/config retrieval, and credential management.
+/// role retrieval, and credential management.
 class CoquiApiService {
   String _baseUrl;
   String _apiKey;
@@ -28,7 +28,7 @@ class CoquiApiService {
   String get apiVersion => _apiVersion;
 
   CoquiApiService({
-    String baseUrl = 'http://localhost:8080',
+    String baseUrl = 'http://localhost:3300',
     String apiKey = '',
     String apiVersion = 'v1',
   })  : _baseUrl = baseUrl,
@@ -437,49 +437,6 @@ class CoquiApiService {
     return _parseResponse(response);
   }
 
-  // ── Configuration ──────────────────────────────────────────────────
-
-  /// Get the full server configuration.
-  Future<Map<String, dynamic>> getConfig() async {
-    final response = await http.get(
-      _url('/config'),
-      headers: _headers,
-    );
-    return _parseResponse(response);
-  }
-
-  /// Update the server configuration (openclaw.json).
-  Future<void> updateConfig(String rawJson) async {
-    final response = await http.put(
-      _url('/config'),
-      headers: _headers,
-      body: rawJson,
-    );
-    _parseResponse(response);
-  }
-
-  /// Dry-run validation of a config object without saving.
-  ///
-  /// Returns `(valid: true, errors: [])` on success, or
-  /// `(valid: false, errors: [...])` with a non-empty error list on failure.
-  /// Never throws on a 200 response — invalid configs are not HTTP errors.
-  Future<({bool valid, List<String> errors})> validateConfig(
-    String rawJson,
-  ) async {
-    final response = await http.post(
-      _url('/config/validate'),
-      headers: _headers,
-      body: rawJson,
-    );
-    final body = _parseResponse(response);
-    final valid = body['valid'] as bool? ?? false;
-    final errors = (body['errors'] as List?)
-            ?.map((e) => e as String)
-            .toList() ??
-        const <String>[];
-    return (valid: valid, errors: errors);
-  }
-
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
@@ -502,67 +459,6 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
     return CoquiRole.fromJson(body);
-  }
-
-  /// Create a new custom role.
-  Future<CoquiRole> createRole({
-    required String name,
-    required String instructions,
-    String? displayName,
-    String? description,
-    String accessLevel = 'readonly',
-    String? model,
-  }) async {
-    final payload = <String, dynamic>{
-      'name': name,
-      'instructions': instructions,
-      'access_level': accessLevel,
-    };
-    if (displayName != null) payload['display_name'] = displayName;
-    if (description != null) payload['description'] = description;
-    if (model != null) payload['model'] = model;
-
-    final response = await http.post(
-      _url('/config/roles'),
-      headers: _headers,
-      body: jsonEncode(payload),
-    );
-    final body = _parseResponse(response);
-    return CoquiRole.fromJson(body);
-  }
-
-  /// Update an existing role.
-  Future<CoquiRole> updateRole(
-    String name, {
-    String? displayName,
-    String? description,
-    String? accessLevel,
-    String? model,
-    String? instructions,
-  }) async {
-    final payload = <String, dynamic>{};
-    if (displayName != null) payload['display_name'] = displayName;
-    if (description != null) payload['description'] = description;
-    if (accessLevel != null) payload['access_level'] = accessLevel;
-    if (model != null) payload['model'] = model;
-    if (instructions != null) payload['instructions'] = instructions;
-
-    final response = await http.patch(
-      _url('/config/roles/$name'),
-      headers: _headers,
-      body: jsonEncode(payload),
-    );
-    final body = _parseResponse(response);
-    return CoquiRole.fromJson(body);
-  }
-
-  /// Delete a custom role.
-  Future<void> deleteRole(String name) async {
-    final response = await http.delete(
-      _url('/config/roles/$name'),
-      headers: _headers,
-    );
-    _parseResponse(response);
   }
 
   /// List all available models from all providers.

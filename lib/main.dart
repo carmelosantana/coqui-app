@@ -42,7 +42,7 @@ void main() async {
   Hive.registerAdapter(MaterialColorAdapter());
 
   // Open settings box with recovery for stale/incompatible data.
-  // Previous builds stored objects (auth, SaaS models) whose adapters have
+  // Previous builds stored legacy objects whose adapters have
   // since been removed — reading those entries triggers HiveError with an
   // unknown typeId. Deleting the box and re-opening resets to defaults.
   try {

@@ -30,7 +30,7 @@ class StubProductDetails {
 
 /// Wraps the `in_app_purchase` plugin for iOS supporter donations.
 ///
-/// Currently stubbed — IAP is disabled until the backend is ready.
+/// Currently stubbed — IAP is disabled until the native purchase flow is restored.
 /// On all platforms this is a no-op.
 // TODO: Restore in_app_purchase dependency and revert this file for IAP launch.
 class PurchaseService {
