@@ -8,6 +8,7 @@ class CoquiSession {
   final String id;
   final String modelRole;
   final String model;
+  final String? profile;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int tokenCount;
@@ -19,6 +20,7 @@ class CoquiSession {
     required this.id,
     required this.modelRole,
     required this.model,
+    this.profile,
     required this.createdAt,
     required this.updatedAt,
     this.tokenCount = 0,
@@ -30,6 +32,7 @@ class CoquiSession {
       id: json['id'] as String,
       modelRole: json['model_role'] as String? ?? 'orchestrator',
       model: json['model'] as String? ?? '',
+        profile: json['profile'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
@@ -46,6 +49,7 @@ class CoquiSession {
       id: map['id'] as String,
       modelRole: map['model_role'] as String,
       model: map['model'] as String? ?? '',
+      profile: map['profile'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
       tokenCount: map['token_count'] as int? ?? 0,
@@ -58,11 +62,32 @@ class CoquiSession {
       'id': id,
       'model_role': modelRole,
       'model': model,
+      'profile': profile,
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt.millisecondsSinceEpoch,
       'token_count': tokenCount,
       'title': title,
     };
+  }
+
+  CoquiSession copyWith({
+    String? modelRole,
+    String? model,
+    String? profile,
+    String? title,
+    int? tokenCount,
+    DateTime? updatedAt,
+  }) {
+    return CoquiSession(
+      id: id,
+      modelRole: modelRole ?? this.modelRole,
+      model: model ?? this.model,
+      profile: profile ?? this.profile,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      tokenCount: tokenCount ?? this.tokenCount,
+      title: title ?? this.title,
+    );
   }
 
   @override

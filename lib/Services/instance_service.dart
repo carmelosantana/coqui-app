@@ -8,6 +8,8 @@ import 'package:coqui_app/Models/coqui_instance.dart';
 /// and switch between them.
 class InstanceService {
   static const String _boxName = 'instances';
+  static const String defaultInstanceName = 'Local Coqui';
+  static const String defaultInstanceUrl = 'http://localhost:3300';
 
   late Box _box;
   bool _initialized = false;
@@ -22,6 +24,20 @@ class InstanceService {
       _box = await Hive.openBox(_boxName);
     }
     _initialized = true;
+  }
+
+  /// Seed a localhost default instance when the user has none configured yet.
+  Future<void> ensureDefaultInstance() async {
+    if (getInstances().isNotEmpty) return;
+
+    final instance = CoquiInstance(
+      name: defaultInstanceName,
+      baseUrl: defaultInstanceUrl,
+      apiKey: '',
+      isActive: true,
+    );
+
+    await _box.put(instance.id, instance.toMap());
   }
 
   /// Get all configured instances.

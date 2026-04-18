@@ -35,13 +35,14 @@ class DatabaseService {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onCreate: (Database db, int version) async {
           await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
 instance_id TEXT,
 model_role TEXT NOT NULL,
 model TEXT,
+profile TEXT,
 created_at INTEGER NOT NULL,
 updated_at INTEGER NOT NULL,
 token_count INTEGER DEFAULT 0,
@@ -58,6 +59,11 @@ tool_call_id TEXT,
 created_at INTEGER NOT NULL,
 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 ) WITHOUT ROWID;''');
+        },
+        onUpgrade: (Database db, int oldVersion, int newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute('ALTER TABLE sessions ADD COLUMN profile TEXT');
+          }
         },
       ),
     );

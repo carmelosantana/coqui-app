@@ -40,6 +40,7 @@ class InstanceProvider extends ChangeNotifier {
 
   Future<void> _initialize() async {
     await _instanceService.initialize();
+    await _instanceService.ensureDefaultInstance();
     _instances = _instanceService.getInstances();
     _activeInstance = _instanceService.getActiveInstance();
 

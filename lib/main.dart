@@ -56,10 +56,6 @@ void main() async {
   final apiService = CoquiApiService();
   final databaseService = DatabaseService();
   final instanceService = InstanceService();
-  final purchaseService = PurchaseService();
-
-  // Initialize in-app purchase listener (iOS / Android supporter donations).
-  await purchaseService.initialize();
 
   runApp(
     MultiProvider(
@@ -94,9 +90,7 @@ void main() async {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => SupporterProvider(
-            purchaseService: purchaseService,
-          ),
+          create: (_) => SupporterProvider(),
         ),
         if (PlatformInfo.isDesktop)
           ChangeNotifierProvider(

@@ -14,6 +14,7 @@ import 'package:coqui_app/Services/analytics_service.dart';
 import 'package:coqui_app/Widgets/chat_app_bar.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
 import 'subwidgets/subwidgets.dart';
@@ -28,6 +29,7 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   // Selected role for new session creation
   CoquiRole? _selectedRole;
+  String? _selectedProfile;
 
   // Cached preset suggestions — only regenerated on new conversation
   final List<ChatPreset> _presets = ChatPresets.randomPresets;
@@ -128,9 +130,24 @@ class _ChatPageState extends State<ChatPage> {
           );
         } else {
           return ChatEmpty(
-            child: ChatSelectRoleButton(
-              currentRoleName: _selectedRole?.name,
-              onPressed: () => _showRoleSelectionBottomSheet(context),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ChatSelectRoleButton(
+                  currentRoleName: _selectedRole?.name,
+                  onPressed: () => _showRoleSelectionBottomSheet(context),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => _showProfileSelectionDialog(context),
+                  icon: const Icon(Icons.person_outline),
+                  label: Text(
+                    _selectedProfile == null || _selectedProfile!.isEmpty
+                        ? 'Optional profile'
+                        : 'Profile: $_selectedProfile',
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -286,27 +303,29 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
 
+      final messenger = ScaffoldMessenger.of(context);
+      final errorColor = Theme.of(context).colorScheme.error;
+
       try {
-        await chatProvider.createNewSession(roleToUse);
+        await chatProvider.createNewSession(
+          roleToUse,
+          profile: _selectedProfile,
+        );
       } on CoquiException catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.message),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: errorColor,
+          ),
+        );
         return;
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(CoquiException.friendly(e).message),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(CoquiException.friendly(e).message),
+            backgroundColor: errorColor,
+          ),
+        );
         return;
       }
 
@@ -347,6 +366,23 @@ class _ChatPageState extends State<ChatPage> {
       AnalyticsService.trackEvent('role_selected', {'role': selectedRole.name});
       setState(() {
         _selectedRole = selectedRole;
+      });
+    }
+  }
+
+  Future<void> _showProfileSelectionDialog(BuildContext context) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    final selectedProfile = await showProfilePickerDialog(
+      context: context,
+      title: 'Select a Profile',
+      fetchProfiles: chatProvider.fetchKnownProfiles,
+      initialValue: _selectedProfile,
+    );
+
+    if (selectedProfile != null && mounted) {
+      setState(() {
+        _selectedProfile = selectedProfile.isEmpty ? null : selectedProfile;
       });
     }
   }

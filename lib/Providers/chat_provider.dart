@@ -179,8 +179,11 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Create a new session with the given role.
-  Future<void> createNewSession(CoquiRole role) async {
-    final session = await _apiService.createSession(modelRole: role.name);
+  Future<void> createNewSession(CoquiRole role, {String? profile}) async {
+    final session = await _apiService.createSession(
+      modelRole: role.name,
+      profile: profile,
+    );
 
     _sessions.insert(0, session);
     _currentSessionIndex = 0;
@@ -190,7 +193,10 @@ class ChatProvider extends ChangeNotifier {
     _messages.clear();
     _updateDisplayMessages();
 
-    AnalyticsService.trackEvent('session_created', {'role': role.name});
+    AnalyticsService.trackEvent('session_created', {
+      'role': role.name,
+      if (profile != null && profile.isNotEmpty) 'profile': profile,
+    });
 
     notifyListeners();
   }
@@ -842,6 +848,24 @@ class ChatProvider extends ChangeNotifier {
     return await _apiService.getRoles();
   }
 
+  /// Return known profile names from current or recently fetched sessions.
+  Future<List<String>> fetchKnownProfiles() async {
+    var sessions = _sessions;
+    if (sessions.isEmpty) {
+      sessions = await _apiService.listSessions(limit: 100);
+    }
+
+    final profiles = sessions
+        .map((session) => session.profile)
+        .whereType<String>()
+        .where((profile) => profile.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    return profiles;
+  }
+
   // ── Instance switching ────────────────────────────────────────────
 
   /// Track the last active instance ID to detect changes.
@@ -890,19 +914,52 @@ class ChatProvider extends ChangeNotifier {
   /// Rename a session via the API and update local state.
   Future<void> renameSession(String sessionId, String newTitle) async {
     try {
-      await _apiService.updateSession(sessionId, title: newTitle);
-
-      // Update local state
-      final index = _sessions.indexWhere((s) => s.id == sessionId);
-      if (index >= 0) {
-        _sessions[index].title = newTitle;
-      }
-
-      await _databaseService.updateSessionTitle(sessionId, newTitle);
+      final updated = await _apiService.updateSession(sessionId, title: newTitle);
+      final renamed = updated.copyWith(title: newTitle);
+      _replaceSession(renamed);
+      await _databaseService.upsertSession(renamed);
       notifyListeners();
     } on CoquiException catch (e) {
       _sessionErrors[sessionId] = e;
       notifyListeners();
+    }
+  }
+
+  Future<void> updateSessionRole(String sessionId, String roleName) async {
+    try {
+      final updated = await _apiService.updateSession(
+        sessionId,
+        modelRole: roleName,
+      );
+      _replaceSession(updated);
+      await _databaseService.upsertSession(updated);
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateSessionProfile(String sessionId, String? profile) async {
+    try {
+      final updated = await _apiService.updateSession(
+        sessionId,
+        profile: profile,
+        clearProfile: profile == null || profile.isEmpty,
+      );
+      _replaceSession(updated);
+      await _databaseService.upsertSession(updated);
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
+  void _replaceSession(CoquiSession updatedSession) {
+    final index = _sessions.indexWhere((session) => session.id == updatedSession.id);
+    if (index >= 0) {
+      _sessions[index] = updatedSession;
     }
   }
 }

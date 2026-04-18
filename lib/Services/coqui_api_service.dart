@@ -5,11 +5,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_session_file.dart';
 import 'package:coqui_app/Models/coqui_task.dart';
+import 'package:coqui_app/Models/coqui_task_event.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
@@ -170,11 +173,16 @@ class CoquiApiService {
 
   /// Create a new session with the given role.
   Future<CoquiSession> createSession(
-      {String modelRole = 'orchestrator'}) async {
+      {String modelRole = 'orchestrator', String? profile}) async {
+    final payload = <String, dynamic>{'model_role': modelRole};
+    if (profile != null && profile.isNotEmpty) {
+      payload['profile'] = profile;
+    }
+
     final response = await http.post(
       _url('/sessions'),
       headers: _headers,
-      body: jsonEncode({'model_role': modelRole}),
+      body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
     return CoquiSession.fromJson(body);
@@ -203,9 +211,21 @@ class CoquiApiService {
   }
 
   /// Update a session (e.g. title).
-  Future<CoquiSession> updateSession(String id, {String? title}) async {
+  Future<CoquiSession> updateSession(
+    String id, {
+    String? title,
+    String? modelRole,
+    String? profile,
+    bool clearProfile = false,
+  }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
+    if (modelRole != null) body['model_role'] = modelRole;
+    if (clearProfile) {
+      body['profile'] = '';
+    } else if (profile != null) {
+      body['profile'] = profile;
+    }
 
     final response = await http.patch(
       _url('/sessions/$id'),
@@ -358,6 +378,46 @@ class CoquiApiService {
     final uploaded = body['files'] as List? ?? [];
     return uploaded
         .map((f) => (f as Map<String, dynamic>)['id'] as String)
+        .toList();
+  }
+
+  /// List files previously uploaded for a session.
+  Future<List<CoquiSessionFile>> listSessionFiles(String sessionId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/files'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final files = body['files'] as List? ?? [];
+    return files
+        .map((f) => CoquiSessionFile.fromJson(f as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Delete a previously uploaded session file.
+  Future<void> deleteSessionFile(String sessionId, String fileId) async {
+    final response = await http.delete(
+      _url('/sessions/$sessionId/files/$fileId'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  /// Build a direct URL for a session file.
+  Uri getSessionFileUrl(String sessionId, String fileId) {
+    return _url('/sessions/$sessionId/files/$fileId');
+  }
+
+  /// List child agent runs recorded under a session.
+  Future<List<CoquiChildRun>> listChildRuns(String sessionId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/child-runs'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final runs = body['child_runs'] as List? ?? [];
+    return runs
+        .map((r) => CoquiChildRun.fromJson(r as Map<String, dynamic>))
         .toList();
   }
 
@@ -546,6 +606,7 @@ class CoquiApiService {
     String role = 'orchestrator',
     String? title,
     String? parentSessionId,
+    String? profile,
     int maxIterations = 25,
   }) async {
     final payload = <String, dynamic>{
@@ -555,6 +616,7 @@ class CoquiApiService {
     };
     if (title != null) payload['title'] = title;
     if (parentSessionId != null) payload['parent_session_id'] = parentSessionId;
+    if (profile != null && profile.isNotEmpty) payload['profile'] = profile;
 
     final response = await http.post(
       _url('/tasks'),
@@ -563,6 +625,52 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
     return CoquiTask.fromJson(body);
+  }
+
+  /// Stream task lifecycle and progress events via SSE.
+  Stream<CoquiTaskEvent> streamTaskEvents(
+    String taskId, {
+    int? sinceId,
+  }) async* {
+    final params = <String, String>{};
+    if (sinceId != null) {
+      params['since_id'] = sinceId.toString();
+    }
+
+    final request = http.Request('GET', _url('/tasks/$taskId/events', params));
+    request.headers['Accept'] = 'text/event-stream';
+    if (_apiKey.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $_apiKey';
+    }
+
+    http.StreamedResponse response;
+    try {
+      response = await request.send();
+    } on http.ClientException catch (e) {
+      throw CoquiException.friendly(e);
+    }
+
+    if (response.statusCode != 200) {
+      await _throwStreamedError(response);
+    }
+
+    var buffer = '';
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      buffer += chunk;
+
+      while (buffer.contains('\n\n')) {
+        final index = buffer.indexOf('\n\n');
+        final block = buffer.substring(0, index).trim();
+        buffer = buffer.substring(index + 2);
+
+        if (block.isEmpty) continue;
+        yield CoquiTaskEvent.fromSseBlock(block);
+      }
+    }
+
+    if (buffer.trim().isNotEmpty) {
+      yield CoquiTaskEvent.fromSseBlock(buffer.trim());
+    }
   }
 
   /// Cancel a running or pending task.

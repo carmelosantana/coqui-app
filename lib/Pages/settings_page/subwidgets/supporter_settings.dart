@@ -6,10 +6,7 @@ import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
 import 'package:coqui_app/Theme/theme.dart';
 
-/// Settings section for supporter donations and perks.
-///
-/// On iOS and Android: shows IAP donation tiers and unlocked perks.
-/// On other platforms: shows a link to GitHub Sponsors.
+/// Settings section for supporter perks and external support links.
 class SupporterSettings extends StatelessWidget {
   const SupporterSettings({super.key});
 
@@ -25,9 +22,7 @@ class SupporterSettings extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  (PlatformInfo.isIOS || PlatformInfo.isAndroid)
-                      ? 'Perks'
-                      : 'Support',
+                  supporter.isSupporter ? 'Perks' : 'Support',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -128,8 +123,8 @@ class _SupporterCta extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Make a one-time donation to help sustain Coqui and unlock fun '
-            'customization perks like custom color themes and alternate app icons.',
+            'Support Coqui via GitHub Sponsors. Native in-app supporter '
+            'purchases are currently disabled while this flow is being redesigned.',
             style: textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.7),
             ),
@@ -142,66 +137,16 @@ class _SupporterCta extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          if (PlatformInfo.isIOS || PlatformInfo.isAndroid) ...[
-            _DonationTiers(supporter: supporter),
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton.icon(
-                onPressed: () => supporter.restorePurchases(),
-                icon: const Icon(Icons.restore, size: 18),
-                label: const Text('Restore Purchases'),
-              ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => launchUrlString(SupporterSettings._sponsorUrl),
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: const Text('Support via GitHub Sponsors'),
             ),
-          ] else ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => launchUrlString(SupporterSettings._sponsorUrl),
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Donate via GitHub Sponsors'),
-              ),
-            ),
-          ],
+          ),
         ],
       ),
-    );
-  }
-}
-
-// ── Donation tiers (iOS only) ───────────────────────────────────────────────
-
-class _DonationTiers extends StatelessWidget {
-  final SupporterProvider supporter;
-
-  const _DonationTiers({required this.supporter});
-
-  @override
-  Widget build(BuildContext context) {
-    if (supporter.products.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: supporter.products.map((product) {
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: FilledButton(
-              onPressed: () => supporter.purchase(product.id),
-              child: Text(product.price),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 }

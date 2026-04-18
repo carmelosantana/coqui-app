@@ -14,6 +14,7 @@ class CreateTaskSheet extends StatefulWidget {
 class _CreateTaskSheetState extends State<CreateTaskSheet> {
   final _promptController = TextEditingController();
   final _titleController = TextEditingController();
+  final _profileController = TextEditingController();
   String _selectedRole = 'orchestrator';
   int _maxIterations = 25;
 
@@ -35,6 +36,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
   void dispose() {
     _promptController.dispose();
     _titleController.dispose();
+    _profileController.dispose();
     super.dispose();
   }
 
@@ -48,10 +50,12 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
     }
 
     final title = _titleController.text.trim();
+        final profile = _profileController.text.trim();
     final task = await context.read<TaskProvider>().createTask(
           prompt: prompt,
           role: _selectedRole,
           title: title.isEmpty ? null : title,
+          profile: profile.isEmpty ? null : profile,
           maxIterations: _maxIterations,
         );
 
@@ -155,6 +159,19 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                       controller: _titleController,
                       decoration: const InputDecoration(
                         hintText: 'A short label for this task',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Profile (optional)',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _profileController,
+                      decoration: const InputDecoration(
+                        hintText: 'manual profile name',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),

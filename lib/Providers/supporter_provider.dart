@@ -3,30 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:coqui_app/Platform/platform_info.dart';
-import 'package:coqui_app/Services/purchase_service.dart';
 
 /// Manages supporter status, selected theme, and selected app icon.
 ///
-/// Perk unlocking is gated behind [isSupporter], which currently checks
-/// for one-time donations.
+/// Supporter state is currently local-only and keyed off the persisted
+/// `is_supporter` flag while purchase flows are disabled.
 class SupporterProvider extends ChangeNotifier {
-  final PurchaseService _purchaseService;
   final _settingsBox = Hive.box('settings');
 
-  SupporterProvider({required PurchaseService purchaseService})
-      : _purchaseService = purchaseService {
-    _purchaseService.onSupporterStatusChanged = () => notifyListeners();
-    _purchaseService.onProductsLoaded = () => notifyListeners();
-    _purchaseService.onPurchaseError = (msg) {
-      _lastError = msg;
-      notifyListeners();
-    };
-  }
+  SupporterProvider();
 
   // ── Hive keys ──────────────────────────────────────────────────────────
 
   static const _selectedThemeKey = 'selected_theme';
   static const _selectedIconKey = 'selected_icon';
+  static const _isSupporterKey = 'is_supporter';
 
   // ── Error state ────────────────────────────────────────────────────────
 
@@ -40,14 +31,8 @@ class SupporterProvider extends ChangeNotifier {
   // ── Supporter status ───────────────────────────────────────────────────
 
   /// Whether the user has unlocked supporter perks.
-  ///
-  /// Currently only set by one-time IAP donations.
-  bool get isSupporter => _purchaseService.isSupporter;
-
-  // ── Store products ─────────────────────────────────────────────────────
-
-  bool get storeAvailable => _purchaseService.storeAvailable;
-  List<StubProductDetails> get products => _purchaseService.products;
+  bool get isSupporter =>
+      _settingsBox.get(_isSupporterKey, defaultValue: false) == true;
 
   // ── Theme selection ────────────────────────────────────────────────────
 
@@ -91,17 +76,5 @@ class SupporterProvider extends ChangeNotifier {
       _lastError = e.message ?? 'Failed to change app icon.';
       notifyListeners();
     }
-  }
-
-  // ── Purchase actions ───────────────────────────────────────────────────
-
-  Future<void> purchase(String productId) async {
-    _lastError = null;
-    await _purchaseService.purchase(productId);
-  }
-
-  Future<void> restorePurchases() async {
-    _lastError = null;
-    await _purchaseService.restorePurchases();
   }
 }

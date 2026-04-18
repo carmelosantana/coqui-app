@@ -180,7 +180,6 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
 
   RequestState _connectionState = RequestState.uninitialized;
   String? _connectionError;
-  String? _apiKeyError;
 
   @override
   void initState() {
@@ -238,10 +237,10 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
             TextField(
               controller: _apiKeyController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'API Key',
-                border: const OutlineInputBorder(),
-                errorText: _apiKeyError,
+                helperText: 'Optional for local localhost servers',
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
@@ -304,18 +303,10 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
     }
 
     final apiKey = _apiKeyController.text.trim();
-    if (apiKey.isEmpty) {
-      setState(() {
-        _apiKeyError = 'API key is required.';
-        _connectionState = RequestState.error;
-      });
-      return;
-    }
 
     setState(() {
       _connectionState = RequestState.loading;
       _connectionError = null;
-      _apiKeyError = null;
     });
 
     try {
@@ -337,18 +328,11 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
 
     if (name.isEmpty || url.isEmpty) return;
 
-    if (apiKey.isEmpty) {
-      setState(() {
-        _apiKeyError = 'API key is required.';
-      });
-      return;
-    }
-
     final instance = CoquiInstance(
       id: widget.existing?.id ?? const Uuid().v4(),
       name: name,
       baseUrl: url,
-      apiKey: apiKey.isEmpty ? '' : apiKey,
+      apiKey: apiKey,
       isActive: widget.existing?.isActive ?? false,
     );
 
