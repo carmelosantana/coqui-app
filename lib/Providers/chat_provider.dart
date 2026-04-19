@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/agent_activity_event.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/sse_event.dart';
@@ -149,6 +150,7 @@ class ChatProvider extends ChangeNotifier {
   /// Load sessions from the server and sync to local cache.
   Future<void> refreshSessions() async {
     try {
+      final selectedSessionId = currentSession?.id;
       final serverSessions = await _apiService.listSessions(limit: 100);
 
       // Prefer server-provided titles; fall back to cached title for
@@ -163,6 +165,12 @@ class ChatProvider extends ChangeNotifier {
       }
 
       _sessions = serverSessions;
+
+      if (selectedSessionId != null) {
+        _currentSessionIndex = _sessions.indexWhere(
+          (session) => session.id == selectedSessionId,
+        );
+      }
 
       // Cache all sessions
       for (final session in serverSessions) {
@@ -199,6 +207,32 @@ class ChatProvider extends ChangeNotifier {
     });
 
     notifyListeners();
+  }
+
+  /// Resolve or create the latest interactive session for the given scope.
+  Future<void> resolveSessionScope(CoquiRole role, {String? profile}) async {
+    final resolved = await _apiService.resolveSession(
+      modelRole: role.name,
+      profile: profile,
+    );
+
+    final session = resolved.session;
+    _upsertSessionAtTop(session);
+    _currentSessionIndex = 0;
+
+    await _databaseService.upsertSession(session);
+
+    _messages.clear();
+    _updateDisplayMessages();
+    notifyListeners();
+
+    await _loadCurrentSession();
+
+    AnalyticsService.trackEvent('session_resolved', {
+      'role': role.name,
+      'created': resolved.created,
+      if (profile != null && profile.isNotEmpty) 'profile': profile,
+    });
   }
 
   /// Delete the current session.
@@ -848,22 +882,9 @@ class ChatProvider extends ChangeNotifier {
     return await _apiService.getRoles();
   }
 
-  /// Return known profile names from current or recently fetched sessions.
-  Future<List<String>> fetchKnownProfiles() async {
-    var sessions = _sessions;
-    if (sessions.isEmpty) {
-      sessions = await _apiService.listSessions(limit: 100);
-    }
-
-    final profiles = sessions
-        .map((session) => session.profile)
-        .whereType<String>()
-        .where((profile) => profile.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-
-    return profiles;
+  /// Fetch available profiles from the server.
+  Future<List<CoquiProfile>> fetchAvailableProfiles() async {
+    return await _apiService.getProfiles();
   }
 
   // ── Instance switching ────────────────────────────────────────────
@@ -961,5 +982,10 @@ class ChatProvider extends ChangeNotifier {
     if (index >= 0) {
       _sessions[index] = updatedSession;
     }
+  }
+
+  void _upsertSessionAtTop(CoquiSession session) {
+    _sessions.removeWhere((existing) => existing.id == session.id);
+    _sessions.insert(0, session);
   }
 }

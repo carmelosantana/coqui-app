@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
@@ -186,6 +187,28 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
     return CoquiSession.fromJson(body);
+  }
+
+  /// Resolve the latest interactive session for a scope, or create one.
+  Future<({CoquiSession session, bool created})> resolveSession({
+    String modelRole = 'orchestrator',
+    String? profile,
+  }) async {
+    final payload = <String, dynamic>{'model_role': modelRole};
+    if (profile != null && profile.isNotEmpty) {
+      payload['profile'] = profile;
+    }
+
+    final response = await http.post(
+      _url('/sessions/resolve'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    final created = body['created'] as bool? ?? false;
+    final sessionId = body['id'] as String;
+    final session = await getSession(sessionId) ?? CoquiSession.fromJson(body);
+    return (session: session, created: created);
   }
 
   /// Get a session by ID.
@@ -508,6 +531,24 @@ class CoquiApiService {
     final roles = body['roles'] as List? ?? [];
     return roles
         .map((r) => CoquiRole.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get available personality profiles with descriptions.
+  Future<List<CoquiProfile>> getProfiles() async {
+    final response = await http.get(
+      _url('/config/profiles'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final defaultProfile = body['default_profile'] as String?;
+    final profiles = body['profiles'] as List? ?? [];
+    return profiles
+        .map((profile) => CoquiProfile.fromJson(
+              profile as Map<String, dynamic>,
+              isDefault: (profile['name'] as String?) == defaultProfile,
+            ))
         .toList();
   }
 

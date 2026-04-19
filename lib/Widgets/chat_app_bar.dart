@@ -113,14 +113,19 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     final selectedProfile = await showProfilePickerDialog(
       context: context,
       title: 'Session Profile',
-      fetchProfiles: chatProvider.fetchKnownProfiles,
+      fetchProfiles: chatProvider.fetchAvailableProfiles,
       initialValue: session.profile,
     );
 
     if (selectedProfile != null && context.mounted) {
-      await chatProvider.updateSessionProfile(
-        session.id,
-        selectedProfile.isEmpty ? null : selectedProfile,
+      final nextProfile = selectedProfile.isEmpty ? null : selectedProfile;
+      if (nextProfile == session.profile) {
+        return;
+      }
+
+      await chatProvider.resolveSessionScope(
+        CoquiRole(name: session.modelRole, model: session.model),
+        profile: nextProfile,
       );
     }
   }

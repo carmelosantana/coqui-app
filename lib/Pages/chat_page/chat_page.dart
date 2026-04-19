@@ -307,10 +307,14 @@ class _ChatPageState extends State<ChatPage> {
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
-        await chatProvider.createNewSession(
-          roleToUse,
-          profile: _selectedProfile,
-        );
+        if (_selectedProfile != null && _selectedProfile!.isNotEmpty) {
+          await chatProvider.resolveSessionScope(
+            roleToUse,
+            profile: _selectedProfile,
+          );
+        } else {
+          await chatProvider.createNewSession(roleToUse);
+        }
       } on CoquiException catch (e) {
         messenger.showSnackBar(
           SnackBar(
@@ -376,7 +380,7 @@ class _ChatPageState extends State<ChatPage> {
     final selectedProfile = await showProfilePickerDialog(
       context: context,
       title: 'Select a Profile',
-      fetchProfiles: chatProvider.fetchKnownProfiles,
+      fetchProfiles: chatProvider.fetchAvailableProfiles,
       initialValue: _selectedProfile,
     );
 
