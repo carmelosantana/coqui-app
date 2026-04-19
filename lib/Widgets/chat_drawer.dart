@@ -116,9 +116,7 @@ class ChatDrawer extends StatelessWidget {
 
         return IconButton(
           icon: const Icon(Icons.key_outlined),
-          tooltip: hasInstance
-              ? 'Credentials'
-              : 'Connect to a server first',
+          tooltip: hasInstance ? 'Credentials' : 'Connect to a server first',
           color: hasInstance
               ? null
               : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -183,7 +181,6 @@ class ChatDrawer extends StatelessWidget {
       },
     );
   }
-
 }
 
 class ChatNavigationDrawer extends StatelessWidget {
@@ -271,8 +268,18 @@ class ChatNavigationDrawer extends StatelessWidget {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   static String _sessionFallbackTitle(DateTime createdAt) {

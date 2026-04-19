@@ -27,11 +27,10 @@ class TaskProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isCreating => _isCreating;
-    List<CoquiTaskEvent> eventsForTask(String taskId) =>
+  List<CoquiTaskEvent> eventsForTask(String taskId) =>
       List.unmodifiable(_taskEvents[taskId] ?? const []);
 
-  List<CoquiTask> get activeTasks =>
-      _tasks.where((t) => t.isActive).toList();
+  List<CoquiTask> get activeTasks => _tasks.where((t) => t.isActive).toList();
 
   bool get hasActiveTasks => _tasks.any((t) => t.isActive);
 
@@ -142,7 +141,8 @@ class TaskProvider extends ChangeNotifier {
   }
 
   Future<void> watchTask(String id) async {
-    if ((_taskEvents[id]?.isNotEmpty ?? false) || _taskStreams.containsKey(id)) {
+    if ((_taskEvents[id]?.isNotEmpty ?? false) ||
+        _taskStreams.containsKey(id)) {
       return;
     }
     _startTaskStream(id);

@@ -50,7 +50,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
     }
 
     final title = _titleController.text.trim();
-        final profile = _profileController.text.trim();
+    final profile = _profileController.text.trim();
     final task = await context.read<TaskProvider>().createTask(
           prompt: prompt,
           role: _selectedRole,
@@ -118,7 +118,9 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                                   height: 16,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Theme.of(context).colorScheme.onPrimary),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary),
                                 )
                               : const Text('Start'),
                         );

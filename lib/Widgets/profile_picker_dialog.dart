@@ -89,7 +89,8 @@ Future<String?> showProfilePickerDialog({
                           subtitle: profile.description.isNotEmpty
                               ? Text(profile.description)
                               : Text(profile.name),
-                          onTap: () => Navigator.pop(sheetContext, profile.name),
+                          onTap: () =>
+                              Navigator.pop(sheetContext, profile.name),
                         );
                       },
                     ),

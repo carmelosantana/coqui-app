@@ -101,7 +101,8 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     if (selectedRole != null &&
         selectedRole.name != currentSession.modelRole &&
         context.mounted) {
-      await chatProvider.updateSessionRole(currentSession.id, selectedRole.name);
+      await chatProvider.updateSessionRole(
+          currentSession.id, selectedRole.name);
     }
   }
 
@@ -325,7 +326,8 @@ class _SessionFilesSheetState extends State<_SessionFilesSheet> {
       return;
     }
 
-    launchUrlString(api.getSessionFileUrl(widget.sessionId, file.id).toString());
+    launchUrlString(
+        api.getSessionFileUrl(widget.sessionId, file.id).toString());
   }
 
   @override
@@ -358,22 +360,26 @@ class _SessionFilesSheetState extends State<_SessionFilesSheet> {
                           ? const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(24),
-                                child: Text('No uploaded files for this session.'),
+                                child:
+                                    Text('No uploaded files for this session.'),
                               ),
                             )
                           : ListView.separated(
                               controller: scrollController,
                               padding: const EdgeInsets.all(16),
                               itemCount: _files.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final file = _files[index];
                                 return Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceContainerHighest,
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: theme.dividerColor),
+                                    border:
+                                        Border.all(color: theme.dividerColor),
                                   ),
                                   child: Row(
                                     children: [
@@ -385,7 +391,8 @@ class _SessionFilesSheetState extends State<_SessionFilesSheet> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               file.originalName,
@@ -396,8 +403,10 @@ class _SessionFilesSheetState extends State<_SessionFilesSheet> {
                                             const SizedBox(height: 4),
                                             Text(
                                               '${file.mimeType} · ${file.sizeLabel}',
-                                              style: theme.textTheme.bodySmall?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                             ),
                                           ],
@@ -499,25 +508,30 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                           ? const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(24),
-                                child: Text('No child runs recorded for this session.'),
+                                child: Text(
+                                    'No child runs recorded for this session.'),
                               ),
                             )
                           : ListView.separated(
                               controller: scrollController,
                               padding: const EdgeInsets.all(16),
                               itemCount: _runs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final run = _runs[index];
                                 return Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceContainerHighest,
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: theme.dividerColor),
+                                    border:
+                                        Border.all(color: theme.dividerColor),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '${run.agentRole} · iteration ${run.parentIteration}',
@@ -526,8 +540,10 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                                       const SizedBox(height: 4),
                                       Text(
                                         run.model,
-                                        style: theme.textTheme.labelSmall?.copyWith(
-                                          color: theme.colorScheme.onSurfaceVariant,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
                                         ),
                                       ),
                                       const SizedBox(height: 12),
@@ -539,8 +555,10 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                                         const SizedBox(height: 8),
                                         Text(
                                           run.resultPreview,
-                                          style: theme.textTheme.bodySmall?.copyWith(
-                                            color: theme.colorScheme.onSurfaceVariant,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
                                           ),
                                         ),
                                       ],

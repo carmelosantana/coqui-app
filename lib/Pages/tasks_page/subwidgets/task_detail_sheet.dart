@@ -40,8 +40,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
-    final updated =
-        await context.read<TaskProvider>().refreshTask(_task.id);
+    final updated = await context.read<TaskProvider>().refreshTask(_task.id);
     if (mounted && updated != null) {
       setState(() => _task = updated);
     }
@@ -52,8 +51,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     setState(() => _isCancelling = true);
     await context.read<TaskProvider>().cancelTask(_task.id);
     if (mounted) {
-      final updated =
-          await context.read<TaskProvider>().refreshTask(_task.id);
+      final updated = await context.read<TaskProvider>().refreshTask(_task.id);
       if (mounted && updated != null) setState(() => _task = updated);
       setState(() => _isCancelling = false);
     }
@@ -102,8 +100,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ),
             // Header row
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
@@ -139,8 +136,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.stop_circle_outlined),
                       tooltip: 'Cancel task',
@@ -237,7 +233,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                   height: 18,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Theme.of(context).colorScheme.onPrimary),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary),
                                 )
                               : const Icon(Icons.send),
                           onPressed: _isSendingInput ? null : _sendInput,

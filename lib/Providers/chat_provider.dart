@@ -78,8 +78,7 @@ class ChatProvider extends ChangeNotifier {
   List<AgentActivityEvent> get currentTurnActivity =>
       _sessionActivity[currentSession?.id] ?? const [];
 
-  int get currentIteration =>
-      _sessionIteration[currentSession?.id] ?? 0;
+  int get currentIteration => _sessionIteration[currentSession?.id] ?? 0;
 
   /// Summary from the last completed turn.
   String? get lastTurnSummary => _sessionSummary[currentSession?.id];
@@ -905,7 +904,8 @@ class ChatProvider extends ChangeNotifier {
     }
 
     final newOnline = instanceProvider.isOnline;
-    bool justCameOnline = newOnline == true && _lastActiveInstanceOnline != true;
+    bool justCameOnline =
+        newOnline == true && _lastActiveInstanceOnline != true;
     _lastActiveInstanceOnline = newOnline;
 
     if (changedId && newId != null) {
@@ -935,7 +935,8 @@ class ChatProvider extends ChangeNotifier {
   /// Rename a session via the API and update local state.
   Future<void> renameSession(String sessionId, String newTitle) async {
     try {
-      final updated = await _apiService.updateSession(sessionId, title: newTitle);
+      final updated =
+          await _apiService.updateSession(sessionId, title: newTitle);
       final renamed = updated.copyWith(title: newTitle);
       _replaceSession(renamed);
       await _databaseService.upsertSession(renamed);
@@ -978,7 +979,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _replaceSession(CoquiSession updatedSession) {
-    final index = _sessions.indexWhere((session) => session.id == updatedSession.id);
+    final index =
+        _sessions.indexWhere((session) => session.id == updatedSession.id);
     if (index >= 0) {
       _sessions[index] = updatedSession;
     }

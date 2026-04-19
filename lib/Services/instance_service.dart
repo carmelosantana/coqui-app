@@ -63,9 +63,8 @@ class InstanceService {
   Future<void> addInstance(CoquiInstance instance) async {
     // If this is the first instance, make it active
     final instances = getInstances();
-    final toSave = instances.isEmpty
-        ? instance.copyWith(isActive: true)
-        : instance;
+    final toSave =
+        instances.isEmpty ? instance.copyWith(isActive: true) : instance;
 
     await _box.put(toSave.id, toSave.toMap());
   }

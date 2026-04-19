@@ -32,7 +32,7 @@ class CoquiSession {
       id: json['id'] as String,
       modelRole: json['model_role'] as String? ?? 'orchestrator',
       model: json['model'] as String? ?? '',
-        profile: json['profile'] as String?,
+      profile: json['profile'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
