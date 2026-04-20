@@ -7,13 +7,14 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Services/instance_service.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 
 /// State management for the local Coqui server.
 ///
 /// Wraps [LocalServerService] and provides reactive state updates via
-/// [ChangeNotifier]. Handles installation, process/service lifecycle,
-/// periodic health polling, and auto-configuring a local [CoquiInstance].
+/// [ChangeNotifier]. Handles installation, process lifecycle, periodic health
+/// polling, and auto-configuring a local [CoquiInstance].
 class LocalServerProvider extends ChangeNotifier {
   final LocalServerService _service;
   final InstanceProvider _instanceProvider;
@@ -60,7 +61,7 @@ class LocalServerProvider extends ChangeNotifier {
   // ── Initialization ────────────────────────────────────────────────────
 
   Future<void> _initialize() async {
-    _info = await _service.detectInstallation();
+    await refresh();
     notifyListeners();
   }
 
@@ -93,16 +94,21 @@ class LocalServerProvider extends ChangeNotifier {
 
     // Re-detect after config write
     _info = await _service.detectInstallation();
-    notifyListeners();
 
     // Auto-create local instance in the app
     await _autoConfigureInstance(apiKey: apiKey, port: port);
+    await _refreshInstanceConfigMismatch();
+    notifyListeners();
 
     return true;
   }
 
   /// Re-run the installer to update.
   Future<bool> update() async {
+    if (!await _guardInstanceConfigSync(action: 'update')) {
+      return false;
+    }
+
     _updateStatus(LocalServerStatus.updating);
 
     final success = await _service.update();
@@ -110,6 +116,8 @@ class LocalServerProvider extends ChangeNotifier {
     if (!success) {
       _updateStatus(LocalServerStatus.error,
           errorMessage: 'Update failed. Check the console for details.');
+    } else {
+      await _refreshInstanceConfigMismatch();
     }
     notifyListeners();
     return success;
@@ -117,25 +125,19 @@ class LocalServerProvider extends ChangeNotifier {
 
   /// Uninstall the Coqui server.
   ///
-  /// Stops any running process and uninstalls the service first to avoid
-  /// locked files. [removeWorkspace] also deletes the `.workspace` directory.
+  /// Stops any running process before uninstalling. [removeWorkspace] also
+  /// deletes the `.workspace` directory.
   /// [removePhpAndComposer] also removes PHP and Composer from the system.
   Future<bool> uninstall({
     bool removeWorkspace = false,
     bool removePhpAndComposer = false,
   }) async {
-    _updateStatus(LocalServerStatus.stopping);
+    _updateStatus(LocalServerStatus.uninstalling);
 
     if (_info.status == LocalServerStatus.running ||
         _service.isProcessRunning) {
       await stopProcess();
     }
-
-    if (_info.serviceInstalled) {
-      await uninstallService();
-    }
-
-    _updateStatus(LocalServerStatus.installing);
 
     final success = await _service.uninstall(
       removeWorkspace: removeWorkspace,
@@ -143,6 +145,7 @@ class LocalServerProvider extends ChangeNotifier {
     );
 
     _info = await _service.detectInstallation();
+    await _refreshInstanceConfigMismatch();
 
     if (!success) {
       _info = _info.copyWith(
@@ -157,6 +160,10 @@ class LocalServerProvider extends ChangeNotifier {
   // ── Process control ───────────────────────────────────────────────────
 
   Future<bool> startProcess() async {
+    if (!await _guardInstanceConfigSync(action: 'start')) {
+      return false;
+    }
+
     _updateStatus(LocalServerStatus.starting);
 
     // Ensure .env config exists before spawning — recover if missing
@@ -195,128 +202,12 @@ class LocalServerProvider extends ChangeNotifier {
   }
 
   Future<void> restartProcess() async {
-    await stopProcess();
-    await startProcess();
-  }
-
-  // ── Service control ───────────────────────────────────────────────────
-
-  bool get serviceSupported => _service.serviceManager.serviceSupported;
-
-  Future<void> installService() async {
-    if (!_info.isInstalled) {
-      _addLog('Cannot set up service — server is not installed.');
+    if (!await _guardInstanceConfigSync(action: 'restart')) {
       return;
     }
-    try {
-      await _service.serviceManager.installService(
-        coquiPath: _service.installPath,
-        port: _info.port,
-        autoApprove: autoApprove,
-        unsafe: unsafe,
-      );
-      _info = _info.copyWith(serviceInstalled: true);
-      notifyListeners();
-      _addLog('Service installed successfully.');
-    } catch (e) {
-      _addLog('Failed to install service: $e');
-    }
-  }
 
-  Future<void> uninstallService() async {
-    try {
-      await _service.serviceManager.uninstallService();
-      _info = _info.copyWith(
-        serviceInstalled: false,
-        serviceRunning: false,
-      );
-      notifyListeners();
-      _addLog('Service uninstalled.');
-    } catch (e) {
-      _addLog('Failed to uninstall service: $e');
-    }
-  }
-
-  Future<void> startService() async {
-    _updateStatus(LocalServerStatus.starting);
-    try {
-      await _service.serviceManager.startService();
-      _addLog('Service start command sent — waiting for server to become ready...');
-      // Give the service process a moment to spawn before polling health.
-      await Future.delayed(const Duration(seconds: 2));
-      _info = _info.copyWith(serviceRunning: true);
-      notifyListeners();
-      _startHealthPolling();
-      // Do an immediate health check to verify the server actually came up.
-      final healthy = await _service.checkHealth(port: _info.port);
-      if (healthy) {
-        _updateInfo(
-          status: LocalServerStatus.running,
-          pid: _service.processPid,
-          errorMessage: null,
-        );
-        _addLog('Service started and API is responding.');
-      } else {
-        _addLog('Service started but API health check failed. '
-            'Check the service logs at ~/.coqui/.workspace/logs/api-stderr.log');
-        _updateInfo(status: LocalServerStatus.stopped, errorMessage: null);
-      }
-    } catch (e) {
-      _updateInfo(
-        status: LocalServerStatus.stopped,
-        errorMessage: 'Failed to start service: $e',
-      );
-      _addLog('Failed to start service: $e');
-    }
-  }
-
-  Future<void> stopService() async {
-    _updateStatus(LocalServerStatus.stopping);
-    try {
-      await _service.serviceManager.stopService();
-      _stopHealthPolling();
-      _info = _info.copyWith(serviceRunning: false, status: LocalServerStatus.stopped);
-      notifyListeners();
-      _addLog('Service stopped.');
-    } catch (e) {
-      _addLog('Failed to stop service: $e');
-      // Re-sync state from the OS
-      final running = await _service.serviceManager.isServiceRunning();
-      _info = _info.copyWith(serviceRunning: running);
-      notifyListeners();
-    }
-  }
-
-  Future<void> restartService() async {
-    _updateStatus(LocalServerStatus.starting);
-    _addLog('Restarting service...');
-    try {
-      await _service.serviceManager.restartService();
-      _addLog('Service restart command sent — waiting for server to become ready...');
-      await Future.delayed(const Duration(seconds: 2));
-      _info = _info.copyWith(serviceRunning: true);
-      notifyListeners();
-      _startHealthPolling();
-      final healthy = await _service.checkHealth(port: _info.port);
-      if (healthy) {
-        _updateInfo(
-          status: LocalServerStatus.running,
-          pid: _service.processPid,
-          errorMessage: null,
-        );
-        _addLog('Service restarted and API is responding.');
-      } else {
-        _addLog('Service restarted but API health check failed. '
-            'Check the service logs at ~/.coqui/.workspace/logs/api-stderr.log');
-        _updateInfo(status: LocalServerStatus.stopped, errorMessage: null);
-      }
-    } catch (e) {
-      _updateInfo(
-        status: LocalServerStatus.stopped,
-        errorMessage: 'Failed to restart service: $e',
-      );
-      _addLog('Failed to restart service: $e');
-    }
+    await stopProcess();
+    await _startManagedProcess();
   }
 
   // ── Health polling ────────────────────────────────────────────────────
@@ -336,22 +227,18 @@ class LocalServerProvider extends ChangeNotifier {
 
   Future<void> _pollHealth() async {
     final healthy = await _service.checkHealth(port: _info.port);
-    final serviceRunning = await _service.serviceManager.isServiceRunning();
 
     final newStatus = healthy
         ? LocalServerStatus.running
         : (_info.isInstalled ? LocalServerStatus.stopped : _info.status);
 
-    // Warn in the console when the service dies unexpectedly.
-    if (_info.serviceRunning && !serviceRunning) {
-      _addLog('⚠ Service stopped unexpectedly. '
-          'Check logs at ~/.coqui/.workspace/logs/api-stderr.log');
+    if (_info.status == LocalServerStatus.running && !healthy) {
+      _addLog('Local server is no longer responding on port ${_info.port}.');
     }
 
-    if (newStatus != _info.status || serviceRunning != _info.serviceRunning) {
+    if (newStatus != _info.status || _info.pid != _service.processPid) {
       _info = _info.copyWith(
         status: newStatus,
-        serviceRunning: serviceRunning,
         pid: _service.processPid,
       );
       notifyListeners();
@@ -361,6 +248,7 @@ class LocalServerProvider extends ChangeNotifier {
   /// Manually refresh the server state.
   Future<void> refresh() async {
     _info = await _service.detectInstallation();
+    await _refreshInstanceConfigMismatch();
     notifyListeners();
   }
 
@@ -370,22 +258,21 @@ class LocalServerProvider extends ChangeNotifier {
     String? apiKey,
     required int port,
   }) async {
-    // Check if a local instance already exists
-    final existing = _instanceProvider.instances.where(
-      (i) =>
-          i.baseUrl.contains('localhost:$port') ||
-          i.baseUrl.contains('127.0.0.1:$port'),
-    );
+    final existing = _findLocalInstance(port);
+    final baseUrl = 'http://127.0.0.1:$port';
 
-    if (existing.isNotEmpty) {
-      // Update existing local instance
-      final updated = existing.first.copyWith(apiKey: apiKey ?? '');
+    if (existing != null) {
+      final updated = existing.copyWith(
+        name: InstanceService.defaultInstanceName,
+        baseUrl: baseUrl,
+        apiKey: apiKey ?? existing.apiKey,
+      );
       await _instanceProvider.updateInstance(updated);
       _addLog('Updated existing local server instance.');
     } else {
       final instance = CoquiInstance(
-        name: 'Local Server',
-        baseUrl: 'http://127.0.0.1:$port',
+        name: InstanceService.defaultInstanceName,
+        baseUrl: baseUrl,
         apiKey: apiKey ?? '',
       );
       await _instanceProvider.addInstance(instance);
@@ -399,8 +286,10 @@ class LocalServerProvider extends ChangeNotifier {
   /// API key, writes config, and updates the active instance so the app
   /// and server stay in sync.
   Future<void> _ensureConfig() async {
-    final envPath = '${_service.installPath}/workspace/.env';
-    if (File(envPath).existsSync()) return;
+    if (File(_service.envPath).existsSync()) {
+      await _refreshInstanceConfigMismatch();
+      return;
+    }
 
     _addLog('No .env found — generating server configuration...');
     final apiKey = _service.generateApiKey();
@@ -408,6 +297,22 @@ class LocalServerProvider extends ChangeNotifier {
     await _service.writeConfig(apiKey: apiKey, port: port);
     _info = await _service.detectInstallation();
     await _autoConfigureInstance(apiKey: apiKey, port: port);
+    await _refreshInstanceConfigMismatch();
+  }
+
+  Future<bool> syncInstanceFromConfig() async {
+    final config = await _service.readConfig();
+    if (config.apiKey == null || config.apiKey!.isEmpty) {
+      _addLog(
+          'Cannot sync local instance — COQUI_API_KEY is missing from ~/.coqui/.workspace/.env.');
+      return false;
+    }
+
+    await _autoConfigureInstance(apiKey: config.apiKey, port: config.port);
+    await _refreshInstanceConfigMismatch();
+    _updateInfo(errorMessage: null);
+    _addLog('Local server instance synced from ~/.coqui/.workspace/.env.');
+    return true;
   }
 
   // ── Logging ───────────────────────────────────────────────────────────
@@ -434,6 +339,7 @@ class LocalServerProvider extends ChangeNotifier {
 
   int get port => _info.port;
   String get installPath => _service.installPath;
+  String get workspacePath => _service.workspacePath;
 
   /// Manual launch command for the user's platform.
   String get manualLaunchCommand {
@@ -443,10 +349,83 @@ class LocalServerProvider extends ChangeNotifier {
     if (autoApprove) flags.write(' --auto-approve');
     if (unsafe) flags.write(' --unsafe');
 
-    if (Platform.isWindows) {
-      return 'php $path/bin/coqui api --host 127.0.0.1 --port $port${flags.toString()}';
+    return '/bin/bash "$path/bin/coqui-launcher" --api-only --host 127.0.0.1 --port $port${flags.toString()}';
+  }
+
+  Future<bool> _startManagedProcess() async {
+    _updateStatus(LocalServerStatus.starting);
+
+    await _ensureConfig();
+
+    final success = await _service.startProcess(
+      port: _info.port,
+      autoApprove: autoApprove,
+      unsafe: unsafe,
+    );
+    if (success) {
+      _updateInfo(
+        status: LocalServerStatus.running,
+        pid: _service.processPid,
+        errorMessage: null,
+      );
+      _startHealthPolling();
+    } else {
+      _updateInfo(
+        status: LocalServerStatus.error,
+        errorMessage: 'Failed to start server. Check the console for details.',
+      );
     }
-    return '/bin/bash $path/bin/coqui-launcher --api-only --host 127.0.0.1 --port $port${flags.toString()}';
+    return success;
+  }
+
+  Future<void> _refreshInstanceConfigMismatch() async {
+    if (!_info.isInstalled) {
+      _info = _info.copyWith(instanceConfigMismatch: false);
+      return;
+    }
+
+    final config = await _service.readConfig();
+    final localInstance = _findLocalInstance(config.port);
+    final mismatch = config.apiKey != null &&
+        (localInstance == null || localInstance.apiKey != config.apiKey);
+
+    _info = _info.copyWith(
+      apiKey: config.apiKey,
+      port: config.port,
+      instanceConfigMismatch: mismatch,
+    );
+  }
+
+  Future<bool> _guardInstanceConfigSync({required String action}) async {
+    await _refreshInstanceConfigMismatch();
+    if (!_info.instanceConfigMismatch) {
+      notifyListeners();
+      return true;
+    }
+
+    _info = _info.copyWith(
+      errorMessage:
+          'Local server instance is out of sync with ~/.coqui/.workspace/.env.',
+    );
+    _addLog(
+        'Sync the local server instance from ~/.coqui/.workspace/.env before attempting to $action the server.');
+    return false;
+  }
+
+  CoquiInstance? _findLocalInstance(int port) {
+    for (final instance in _instanceProvider.instances) {
+      final uri = Uri.tryParse(instance.baseUrl);
+      if (uri == null) continue;
+
+      final uriPort =
+          uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+      final isLocalHost = uri.host == '127.0.0.1' || uri.host == 'localhost';
+      if (isLocalHost && uriPort == port) {
+        return instance;
+      }
+    }
+
+    return null;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────

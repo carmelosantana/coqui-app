@@ -4,6 +4,8 @@ Cross-platform Flutter client for the [Coqui](https://github.com/AgentCoqui/coqu
 
 Connect to a Coqui API server, manage sessions, and chat with your agent in real-time via SSE streaming. Supports multiple server instances with role-based session creation.
 
+On macOS and Linux, the desktop app can install and manage a local Coqui server for you. On Windows, local hosting is manual: run Coqui through WSL2 or Docker, then connect to it from the app as a normal server instance.
+
 ## Platforms
 
 - Linux
@@ -38,8 +40,13 @@ flutter pub get
 flutter run
 ```
 
-3. Open **Settings**, add your Coqui server URL and API key, and test the connection.
-4. Start a new chat by selecting a role.
+1. Open **Settings**, add your Coqui server URL and API key, and test the connection.
+2. Start a new chat by selecting a role.
+
+### Desktop Local Server
+
+- macOS and Linux: use the **Local Server** page to install Coqui into `~/.coqui`, manage the local API process, and sync the app with `~/.coqui/.workspace/.env`.
+- Windows: use WSL2 or Docker to run Coqui manually, then add that server in **Settings**.
 
 ## Building
 

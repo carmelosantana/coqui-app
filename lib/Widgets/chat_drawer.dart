@@ -134,6 +134,19 @@ class ChatDrawer extends StatelessWidget {
   }
 
   Widget _buildServerButton(BuildContext context) {
+    if (!PlatformInfo.isManagedLocalServerSupported) {
+      return IconButton(
+        icon: const Icon(Icons.dns_outlined),
+        tooltip: 'Local Server',
+        onPressed: () {
+          if (ResponsiveBreakpoints.of(context).isMobile) {
+            Navigator.pop(context);
+          }
+          Navigator.pushNamed(context, '/server');
+        },
+      );
+    }
+
     return Consumer<LocalServerProvider>(
       builder: (context, provider, _) {
         final status = provider.info.status;
@@ -143,7 +156,8 @@ class ChatDrawer extends StatelessWidget {
           LocalServerStatus.starting ||
           LocalServerStatus.stopping ||
           LocalServerStatus.installing ||
-          LocalServerStatus.updating =>
+          LocalServerStatus.updating ||
+          LocalServerStatus.uninstalling =>
             Colors.orange,
           _ => null,
         };

@@ -31,8 +31,8 @@ void main() async {
   // Initialize PathManager (no-op on web)
   await PathManager.initialize();
 
-  // Initialize Hive (uses IndexedDB on web, filesystem on native)
-  if (!PlatformInfo.isWeb && PlatformInfo.isLinux) {
+  // Initialize Hive (uses IndexedDB on web, application support on desktop)
+  if (!PlatformInfo.isWeb && PlatformInfo.isDesktop) {
     Hive.init(PathManager.instance.documentsPath);
   } else {
     await Hive.initFlutter();
@@ -92,7 +92,7 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => SupporterProvider(),
         ),
-        if (PlatformInfo.isDesktop)
+        if (PlatformInfo.isManagedLocalServerSupported)
           ChangeNotifierProvider(
             create: (context) => LocalServerProvider(
               service: LocalServerService(),
@@ -117,7 +117,6 @@ class _CoquiAppState extends State<CoquiApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   late final AppLinks _appLinks;
 
-  @override
   @override
   void initState() {
     super.initState();

@@ -6,7 +6,18 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 
 import 'package:coqui_app/Models/local_server_state.dart';
-import 'package:coqui_app/Services/service_manager/service_manager.dart';
+
+class LocalServerConfigSnapshot {
+  final String? apiKey;
+  final int port;
+  final String host;
+
+  const LocalServerConfigSnapshot({
+    required this.apiKey,
+    required this.port,
+    required this.host,
+  });
+}
 
 /// Manages the local Coqui server installation, process lifecycle, and
 /// configuration. Desktop-only — guarded by [PlatformInfo.isDesktop] at the
@@ -14,8 +25,6 @@ import 'package:coqui_app/Services/service_manager/service_manager.dart';
 class LocalServerService {
   static const _installerUrlUnix =
       'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/install.sh';
-  static const _installerUrlWindows =
-      'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/install.ps1';
 
   static const defaultPort = 3300;
   static const defaultHost = '127.0.0.1';
@@ -32,9 +41,6 @@ class LocalServerService {
     r'|[=>NOM78H]' // Simple ESC sequences
     r')',
   );
-
-  final ServiceManager _serviceManager = createServiceManager();
-  ServiceManager get serviceManager => _serviceManager;
 
   Process? _serverProcess;
   String? _resolvedHome;
@@ -95,13 +101,13 @@ class LocalServerService {
   String get _home => _resolvedHome ?? Platform.environment['HOME'] ?? '';
 
   String get installPath => '$_home/.coqui';
+  String get workspacePath => '$installPath/.workspace';
+  String get envPath => '$workspacePath/.env';
 
   String get _binPath => '$installPath/bin/coqui';
   String get _launcherPath => '$installPath/bin/coqui-launcher';
   String get _versionFile => '$installPath/.coqui-version';
-  String get _workspacePath => '$installPath/.workspace';
-  String get _envFile => '$_workspacePath/.env';
-  String get _logsDir => '$_workspacePath/logs';
+  String get _logsDir => '$workspacePath/logs';
 
   /// Resolve the user's default shell and build an environment map that
   /// inherits the full login PATH (Homebrew, nix, etc.).
@@ -110,22 +116,20 @@ class LocalServerService {
     final home = await _resolveHome();
     env['HOME'] = home;
 
-    if (!Platform.isWindows) {
-      try {
-        // Source the login shell to get PATH with Homebrew etc.
-        final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
-        final result = await Process.run(
-          shell,
-          ['-l', '-c', 'echo \$PATH 2>/dev/null'],
-        );
-        if (result.exitCode == 0) {
-          final loginPath = result.stdout.toString().trim();
-          if (loginPath.isNotEmpty) {
-            env['PATH'] = loginPath;
-          }
+    try {
+      // Source the login shell to get PATH with Homebrew etc.
+      final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
+      final result = await Process.run(
+        shell,
+        ['-l', '-c', 'echo \$PATH 2>/dev/null'],
+      );
+      if (result.exitCode == 0) {
+        final loginPath = result.stdout.toString().trim();
+        if (loginPath.isNotEmpty) {
+          env['PATH'] = loginPath;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     return env;
   }
@@ -143,28 +147,34 @@ class LocalServerService {
       return LocalServerInfo(
         status: LocalServerStatus.notInstalled,
         installPath: installPath,
-        serviceSupported: _serviceManager.serviceSupported,
+        workspacePath: workspacePath,
       );
     }
 
     final version = _readVersion();
-    final apiKey = _readApiKey();
-    final port = _readPort();
-    final serviceInstalled = await _serviceManager.isServiceInstalled();
-    final serviceRunning = await _serviceManager.isServiceRunning();
+    final config = await readConfig();
 
     // Check if server process is responding
-    final healthy = await checkHealth(port: port);
+    final healthy = await checkHealth(port: config.port);
 
     return LocalServerInfo(
       status: healthy ? LocalServerStatus.running : LocalServerStatus.stopped,
       version: version,
       installPath: installPath,
-      port: port,
-      apiKey: apiKey,
-      serviceInstalled: serviceInstalled,
-      serviceRunning: serviceRunning,
-      serviceSupported: _serviceManager.serviceSupported,
+      workspacePath: workspacePath,
+      port: config.port,
+      apiKey: config.apiKey,
+      pid: _serverProcess?.pid,
+    );
+  }
+
+  Future<LocalServerConfigSnapshot> readConfig() async {
+    await _resolveHome();
+
+    return LocalServerConfigSnapshot(
+      apiKey: _readApiKey(),
+      port: _readPort(),
+      host: _readHost(),
     );
   }
 
@@ -180,7 +190,7 @@ class LocalServerService {
 
   String? _readApiKey() {
     try {
-      final file = File(_envFile);
+      final file = File(envPath);
       if (file.existsSync()) {
         for (final line in file.readAsLinesSync()) {
           if (line.startsWith('COQUI_API_KEY=')) {
@@ -194,7 +204,7 @@ class LocalServerService {
 
   int _readPort() {
     try {
-      final file = File(_envFile);
+      final file = File(envPath);
       if (file.existsSync()) {
         for (final line in file.readAsLinesSync()) {
           if (line.startsWith('COQUI_API_PORT=')) {
@@ -206,6 +216,21 @@ class LocalServerService {
       }
     } catch (_) {}
     return defaultPort;
+  }
+
+  String _readHost() {
+    try {
+      final file = File(envPath);
+      if (file.existsSync()) {
+        for (final line in file.readAsLinesSync()) {
+          if (line.startsWith('COQUI_API_HOST=')) {
+            final host = line.substring('COQUI_API_HOST='.length).trim();
+            if (host.isNotEmpty) return host;
+          }
+        }
+      }
+    } catch (_) {}
+    return defaultHost;
   }
 
   // ── PHP check ─────────────────────────────────────────────────────────
@@ -227,12 +252,14 @@ class LocalServerService {
     _log('Starting Coqui server installation...');
     await _resolveHome();
 
+    if (Platform.isWindows) {
+      _log(
+          'Managed local server installation is only available on macOS and Linux.');
+      return false;
+    }
+
     try {
-      if (Platform.isWindows) {
-        return await _installWindows();
-      } else {
-        return await _installUnix();
-      }
+      return await _installUnix();
     } catch (e) {
       _log('Installation failed: $e');
       return false;
@@ -288,51 +315,6 @@ class LocalServerService {
     }
   }
 
-  Future<bool> _installWindows() async {
-    _log('Downloading installer...');
-    final response = await http.get(Uri.parse(_installerUrlWindows));
-    if (response.statusCode != 200) {
-      _log('Failed to download installer (HTTP ${response.statusCode})');
-      return false;
-    }
-
-    final tempDir = Directory.systemTemp.createTempSync('coqui_install_');
-    final scriptFile = File('${tempDir.path}\\install.ps1');
-    scriptFile.writeAsStringSync(response.body);
-
-    _log('Running installer...');
-    final env = await _loginEnvironment();
-    env['COQUI_INSTALL_DIR'] = installPath;
-    env['TERM'] = 'dumb';
-    env['SUDO_ASKPASS'] = '/bin/false';
-
-    final process = await Process.start(
-      'powershell',
-      [
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        scriptFile.path,
-        '-Quiet',
-      ],
-      environment: env,
-    );
-    process.stdin.close();
-
-    await _pipeProcessOutput(process);
-    final exitCode = await process.exitCode;
-
-    tempDir.deleteSync(recursive: true);
-
-    if (exitCode == 0) {
-      _log('Installation completed successfully.');
-      return true;
-    } else {
-      _log('Installer exited with code $exitCode');
-      return false;
-    }
-  }
-
   // ── Update ────────────────────────────────────────────────────────────
 
   /// Re-run the installer to update to the latest version.
@@ -345,8 +327,6 @@ class LocalServerService {
 
   static const _uninstallerUrlUnix =
       'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/uninstall.sh';
-  static const _uninstallerUrlWindows =
-      'https://raw.githubusercontent.com/AgentCoqui/coqui-installer/main/uninstall.ps1';
 
   /// Uninstall the Coqui server. Streams output to [logStream].
   ///
@@ -360,18 +340,17 @@ class LocalServerService {
     _log('Starting Coqui server uninstall...');
     await _resolveHome();
 
+    if (Platform.isWindows) {
+      _log(
+          'Managed local server uninstall is only available on macOS and Linux.');
+      return false;
+    }
+
     try {
-      if (Platform.isWindows) {
-        return await _uninstallWindows(
-          removeWorkspace: removeWorkspace,
-          removePhpAndComposer: removePhpAndComposer,
-        );
-      } else {
-        return await _uninstallUnix(
-          removeWorkspace: removeWorkspace,
-          removePhpAndComposer: removePhpAndComposer,
-        );
-      }
+      return await _uninstallUnix(
+        removeWorkspace: removeWorkspace,
+        removePhpAndComposer: removePhpAndComposer,
+      );
     } catch (e) {
       _log('Uninstall failed: $e');
       return false;
@@ -402,7 +381,7 @@ class LocalServerService {
     env['SUDO_ASKPASS'] = '/bin/false';
 
     final args = [scriptFile.path, '--force', '--quiet'];
-    if (!removeWorkspace) args.add('--keep-workspace');
+    if (removeWorkspace) args.add('--remove-workspace');
     if (removePhpAndComposer) args.add('--all');
 
     final process = await Process.start(
@@ -410,58 +389,6 @@ class LocalServerService {
       args,
       environment: env,
       mode: ProcessStartMode.normal,
-    );
-    process.stdin.close();
-
-    await _pipeProcessOutput(process);
-    final exitCode = await process.exitCode;
-
-    tempDir.deleteSync(recursive: true);
-
-    if (exitCode == 0) {
-      _log('Uninstall completed successfully.');
-      return true;
-    } else {
-      _log('Uninstaller exited with code $exitCode');
-      return false;
-    }
-  }
-
-  Future<bool> _uninstallWindows({
-    required bool removeWorkspace,
-    required bool removePhpAndComposer,
-  }) async {
-    _log('Downloading uninstaller...');
-    final response = await http.get(Uri.parse(_uninstallerUrlWindows));
-    if (response.statusCode != 200) {
-      _log('Failed to download uninstaller (HTTP ${response.statusCode})');
-      return false;
-    }
-
-    final tempDir = Directory.systemTemp.createTempSync('coqui_uninstall_');
-    final scriptFile = File('${tempDir.path}\\uninstall.ps1');
-    scriptFile.writeAsStringSync(response.body);
-
-    _log('Running uninstaller...');
-    final env = await _loginEnvironment();
-    env['COQUI_INSTALL_DIR'] = installPath;
-    env['TERM'] = 'dumb';
-
-    final args = [
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      scriptFile.path,
-      '-Force',
-      '-Quiet',
-    ];
-    if (!removeWorkspace) args.add('-KeepWorkspace');
-    if (removePhpAndComposer) args.add('-All');
-
-    final process = await Process.start(
-      'powershell',
-      args,
-      environment: env,
     );
     process.stdin.close();
 
@@ -495,12 +422,12 @@ class LocalServerService {
     int port = defaultPort,
     String host = defaultHost,
   }) async {
-    final wsDir = Directory(_workspacePath);
+    final wsDir = Directory(workspacePath);
     if (!wsDir.existsSync()) {
       wsDir.createSync(recursive: true);
     }
 
-    // Ensure logs directory exists for service output
+    // Ensure the logs directory exists before the launcher writes output.
     final logsDir = Directory(_logsDir);
     if (!logsDir.existsSync()) {
       logsDir.createSync(recursive: true);
@@ -509,7 +436,7 @@ class LocalServerService {
     final envContent = StringBuffer();
 
     // Read existing .env and preserve non-Coqui lines
-    final envFile = File(_envFile);
+    final envFile = File(envPath);
     if (envFile.existsSync()) {
       for (final line in envFile.readAsLinesSync()) {
         if (!line.startsWith('COQUI_API_KEY=') &&
@@ -541,6 +468,12 @@ class LocalServerService {
     bool autoApprove = false,
     bool unsafe = false,
   }) async {
+    if (Platform.isWindows) {
+      _log(
+          'Managed local server startup is only available on macOS and Linux.');
+      return false;
+    }
+
     if (_serverProcess != null) {
       _log('Server process is already running.');
       return true;
@@ -555,8 +488,8 @@ class LocalServerService {
 
     try {
       final env = await _loginEnvironment();
-      final useLauncher =
-          !Platform.isWindows && File(_launcherPath).existsSync();
+      final useLauncher = File(_launcherPath).existsSync();
+      Process serverProcess;
 
       if (useLauncher) {
         final args = [
@@ -569,7 +502,7 @@ class LocalServerService {
           if (autoApprove) '--auto-approve',
           if (unsafe) '--unsafe',
         ];
-        _serverProcess = await Process.start(
+        serverProcess = await Process.start(
           '/bin/bash',
           args,
           workingDirectory: installPath,
@@ -591,7 +524,7 @@ class LocalServerService {
           if (autoApprove) '--auto-approve',
           if (unsafe) '--unsafe',
         ];
-        _serverProcess = await Process.start(
+        serverProcess = await Process.start(
           'php',
           args,
           workingDirectory: installPath,
@@ -599,24 +532,26 @@ class LocalServerService {
         );
       }
 
-      _pipeProcessOutput(_serverProcess!);
+      _serverProcess = serverProcess;
+
+      _pipeProcessOutput(serverProcess);
 
       // Monitor process exit
-      _serverProcess!.exitCode.then((code) {
+      serverProcess.exitCode.then((code) {
+        if (identical(_serverProcess, serverProcess)) {
+          _serverProcess = null;
+        }
         _log('Server process exited with code $code');
-        _serverProcess = null;
       });
 
-      // Give the server a moment to start
-      await Future.delayed(const Duration(seconds: 2));
-
-      final healthy = await checkHealth(port: port);
+      final healthy = await _waitForHealth(port: port);
       if (healthy) {
         _log('Server started (PID: ${_serverProcess?.pid}).');
         return true;
       } else {
-        _log('Server process started but health check failed. '
+        _log('Server process started but never became healthy. '
             'Check the console for errors.');
+        await stopProcess();
         return false;
       }
     } catch (e) {
@@ -628,21 +563,25 @@ class LocalServerService {
 
   /// Stop the running server process.
   Future<void> stopProcess() async {
-    if (_serverProcess == null) {
+    final process = _serverProcess;
+    if (process == null) {
       _log('No server process to stop.');
       return;
     }
 
     _log('Stopping server...');
-    _serverProcess!.kill(ProcessSignal.sigterm);
+    final sentSigterm = process.kill(ProcessSignal.sigterm);
+    if (!sentSigterm) {
+      _log('Server process was already exiting.');
+    }
 
     // Wait briefly, then force kill if needed
     try {
-      await _serverProcess!.exitCode.timeout(
+      await process.exitCode.timeout(
         const Duration(seconds: 5),
         onTimeout: () {
           _log('Forcing server shutdown...');
-          _serverProcess!.kill(ProcessSignal.sigkill);
+          process.kill(ProcessSignal.sigkill);
           return -1;
         },
       );
@@ -671,6 +610,27 @@ class LocalServerService {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> _waitForHealth({
+    required int port,
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      if (await checkHealth(port: port)) {
+        return true;
+      }
+
+      if (_serverProcess == null) {
+        return false;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    return false;
   }
 
   // ── Logging ───────────────────────────────────────────────────────────
