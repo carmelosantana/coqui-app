@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 class ChatTextField extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
+  final bool enabled;
+  final String labelText;
+  final String? hintText;
 
   final void Function(String)? onChanged;
   final void Function()? onEditingComplete;
@@ -17,6 +20,9 @@ class ChatTextField extends StatefulWidget {
     super.key,
     this.controller,
     this.focusNode,
+    this.enabled = true,
+    this.labelText = 'Prompt',
+    this.hintText,
     this.onChanged,
     this.onEditingComplete,
     this.prefixIcon,
@@ -59,6 +65,7 @@ class _ChatTextFieldState extends State<ChatTextField> {
       child: TextField(
         controller: widget.controller,
         focusNode: widget.focusNode,
+        enabled: widget.enabled,
         onChanged: widget.onChanged,
         onEditingComplete: widget.onEditingComplete,
         decoration: InputDecoration(
@@ -78,7 +85,15 @@ class _ChatTextFieldState extends State<ChatTextField> {
               width: 2,
             ),
           ),
-          labelText: 'Prompt',
+          disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(CoquiColors.radiusXl),
+            borderSide: BorderSide(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
+            ),
+          ),
+          labelText: widget.labelText,
+          hintText: widget.hintText,
           prefixIcon: widget.prefixIcon,
           suffixIcon: widget.suffixIcon,
         ),

@@ -165,9 +165,17 @@ class CoquiApiService {
   // ── Sessions ────────────────────────────────────────────────────────
 
   /// List sessions, ordered by most recently updated.
-  Future<List<CoquiSession>> listSessions({int limit = 50}) async {
+  Future<List<CoquiSession>> listSessions({
+    int limit = 50,
+    String? status,
+  }) async {
+    final params = {'limit': limit.toString()};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+
     final response = await http.get(
-      _url('/sessions', {'limit': limit.toString()}),
+      _url('/sessions', params),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -180,10 +188,15 @@ class CoquiApiService {
 
   /// Create a new session with the given role.
   Future<CoquiSession> createSession(
-      {String modelRole = 'orchestrator', String? profile}) async {
+      {String modelRole = 'orchestrator',
+      String? profile,
+      bool confirmCloseActiveProfileSession = false}) async {
     final payload = <String, dynamic>{'model_role': modelRole};
     if (profile != null && profile.isNotEmpty) {
       payload['profile'] = profile;
+    }
+    if (confirmCloseActiveProfileSession) {
+      payload['confirm_close_active_profile_session'] = true;
     }
 
     final response = await http.post(
@@ -263,6 +276,36 @@ class CoquiApiService {
     );
     final data = _parseResponse(response);
     return CoquiSession.fromJson(data);
+  }
+
+  /// Fetch the current session's active project label.
+  ///
+  /// Returns the project title when available, otherwise falls back to
+  /// slug and then the raw active project ID.
+  Future<String?> getSessionProjectLabel(String sessionId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/project'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final project = body['project'] as Map<String, dynamic>?;
+    final activeProjectId = body['active_project_id'] as String?;
+    if (project == null) {
+      return activeProjectId;
+    }
+
+    final title = project['title'] as String?;
+    if (title != null && title.isNotEmpty) {
+      return title;
+    }
+
+    final slug = project['slug'] as String?;
+    if (slug != null && slug.isNotEmpty) {
+      return slug;
+    }
+
+    return activeProjectId ?? project['id'] as String?;
   }
 
   // ── Messages ────────────────────────────────────────────────────────
@@ -618,11 +661,12 @@ class CoquiApiService {
   // ── Channels ────────────────────────────────────────────────────────
 
   /// List configured channels with joined runtime health and dashboard stats.
-  Future<({
-    List<CoquiChannel> channels,
-    CoquiChannelStats stats,
-    CoquiChannelStats manager,
-  })> listChannels({
+  Future<
+      ({
+        List<CoquiChannel> channels,
+        CoquiChannelStats stats,
+        CoquiChannelStats manager,
+      })> listChannels({
     bool? enabled,
     String? driver,
   }) async {
@@ -641,7 +685,8 @@ class CoquiApiService {
     final body = _parseResponse(response);
 
     final channels = (body['channels'] as List? ?? [])
-        .map((channel) => CoquiChannel.fromJson(channel as Map<String, dynamic>))
+        .map(
+            (channel) => CoquiChannel.fromJson(channel as Map<String, dynamic>))
         .toList();
 
     return (

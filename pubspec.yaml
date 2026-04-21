@@ -72,6 +72,7 @@ dependencies:
 
   # Deep link handling for deep links (chat priming, server shortcuts, etc.)
   app_links: ^6.4.0
+  flutter_svg: ^2.2.4
 
 dev_dependencies:
   flutter_test:

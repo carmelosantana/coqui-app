@@ -8,6 +8,7 @@ import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/chat_preset.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/analytics_service.dart';
@@ -18,6 +19,8 @@ import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
 import 'subwidgets/subwidgets.dart';
+
+enum _ProfileSessionChoice { resume, startNew }
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -94,12 +97,21 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
             _buildFileChipsRow(chatProvider),
+            if (chatProvider.isCurrentSessionReadOnly)
+              _buildClosedSessionNotice(chatProvider),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: ChatTextField(
                 key: ValueKey(chatProvider.currentSession?.id),
                 controller: _textFieldController,
                 focusNode: _textFieldFocusNode,
+                enabled: !chatProvider.isCurrentSessionReadOnly,
+                labelText: chatProvider.isCurrentSessionReadOnly
+                    ? 'Conversation closed'
+                    : 'Prompt',
+                hintText: chatProvider.isCurrentSessionReadOnly
+                    ? 'Resume the active session or start a new one to continue.'
+                    : null,
                 onChanged: (text) => _hasText.value = text.trim().isNotEmpty,
                 onEditingComplete: () => _handleOnEditingComplete(chatProvider),
                 prefixIcon: _buildAttachButton(chatProvider),
@@ -198,6 +210,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildTextFieldSuffixIcon(ChatProvider chatProvider) {
+    if (chatProvider.isCurrentSessionReadOnly) {
+      return const SizedBox.shrink();
+    }
+
     // Stop button during streaming doesn't depend on _hasText, but we
     // still wrap the block in ValueListenableBuilder so the send button
     // appears/disappears without calling setState on every keystroke.
@@ -262,14 +278,20 @@ class _ChatPageState extends State<ChatPage> {
   /// Paperclip button injected as the text field prefix icon.
   /// Disabled (grey) when no session is active.
   Widget _buildAttachButton(ChatProvider chatProvider) {
-    final hasSession = chatProvider.currentSession != null;
+    final hasWritableSession = chatProvider.currentSession != null &&
+        !chatProvider.isCurrentSessionReadOnly;
     return IconButton(
       icon: const Icon(Icons.attach_file),
-      tooltip: hasSession ? 'Attach file' : 'Start a session to attach files',
-      color: hasSession
+      tooltip: hasWritableSession
+          ? 'Attach file'
+          : chatProvider.currentSession != null
+              ? 'Closed sessions are read-only'
+              : 'Start a session to attach files',
+      color: hasWritableSession
           ? Theme.of(context).colorScheme.onSurface
           : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
-      onPressed: hasSession ? () => _handleAttachButton(chatProvider) : null,
+      onPressed:
+          hasWritableSession ? () => _handleAttachButton(chatProvider) : null,
     );
   }
 
@@ -288,30 +310,37 @@ class _ChatPageState extends State<ChatPage> {
     if (instanceProvider.activeInstance == null) {
       setState(() => _crossFadeState = CrossFadeState.showSecond);
       setState(() => _scale = _scale == 1.0 ? 1.05 : 1.0);
+    } else if (chatProvider.isCurrentSessionReadOnly) {
+      return;
     } else if (chatProvider.currentSession == null) {
-      // Use selected role, or resolve from default preference
-      CoquiRole? roleToUse = _selectedRole;
-
-      if (roleToUse == null) {
-        final defaultRoleName = Hive.box('settings')
-            .get('default_role', defaultValue: 'orchestrator') as String;
-
-        // Use the default role without showing the picker
-        roleToUse = CoquiRole(
-          name: defaultRoleName,
-          model: '', // Server resolves the model
-        );
-      }
+      final roleToUse = _resolveRoleForNewSession();
 
       final messenger = ScaffoldMessenger.of(context);
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
         if (_selectedProfile != null && _selectedProfile!.isNotEmpty) {
-          await chatProvider.resolveSessionScope(
-            roleToUse,
-            profile: _selectedProfile,
+          await chatProvider.refreshSessions();
+          final choice = await _resolveProfileSessionChoice(
+            chatProvider,
+            _selectedProfile!,
           );
+          if (choice == null) return;
+
+          final existingSession = chatProvider.latestActiveSessionForProfile(
+            _selectedProfile,
+          );
+
+          if (choice == _ProfileSessionChoice.resume &&
+              existingSession != null) {
+            chatProvider.openSession(existingSession.id);
+          } else {
+            await chatProvider.createNewSession(
+              roleToUse,
+              profile: _selectedProfile,
+              confirmCloseActiveProfileSession: existingSession != null,
+            );
+          }
         } else {
           await chatProvider.createNewSession(roleToUse);
         }
@@ -333,18 +362,18 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
 
-      chatProvider.sendPrompt(_textFieldController.text);
-      _textFieldController.clear();
-      _hasText.value = false;
+      await chatProvider.sendPrompt(_textFieldController.text);
+      _clearComposer();
     } else {
-      chatProvider.sendPrompt(_textFieldController.text);
-      _textFieldController.clear();
-      _hasText.value = false;
+      await chatProvider.sendPrompt(_textFieldController.text);
+      _clearComposer();
     }
   }
 
   Future<void> _handleOnEditingComplete(ChatProvider chatProvider) async {
-    if (_hasText.value && !chatProvider.isCurrentSessionStreaming) {
+    if (_hasText.value &&
+        !chatProvider.isCurrentSessionStreaming &&
+        !chatProvider.isCurrentSessionReadOnly) {
       await _handleSendButton(chatProvider);
     }
   }
@@ -384,10 +413,239 @@ class _ChatPageState extends State<ChatPage> {
       initialValue: _selectedProfile,
     );
 
+    if (!context.mounted) return;
+
     if (selectedProfile != null && mounted) {
+      final nextProfile = selectedProfile.isEmpty ? null : selectedProfile;
+
       setState(() {
-        _selectedProfile = selectedProfile.isEmpty ? null : selectedProfile;
+        _selectedProfile = nextProfile;
       });
+
+      if (nextProfile == null || nextProfile.isEmpty) {
+        return;
+      }
+
+      await chatProvider.refreshSessions();
+      if (!context.mounted) return;
+
+      final existingSession =
+          chatProvider.latestActiveSessionForProfile(nextProfile);
+      if (existingSession == null || !mounted) {
+        return;
+      }
+
+      final choice = await _showExistingProfileSessionDialog(
+        context,
+        profileName: nextProfile,
+      );
+      if (!context.mounted) return;
+
+      if (choice == null || !mounted) {
+        return;
+      }
+
+      if (choice == _ProfileSessionChoice.resume) {
+        chatProvider.openSession(existingSession.id);
+        return;
+      }
+
+      await _createSessionForProfileSelection(
+        chatProvider,
+        nextProfile,
+        confirmCloseActiveProfileSession: true,
+      );
+    }
+  }
+
+  Widget _buildClosedSessionNotice(ChatProvider chatProvider) {
+    final session = chatProvider.currentSession;
+    if (session == null) return const SizedBox.shrink();
+
+    final resumeTarget = chatProvider.latestActiveSessionForProfile(
+      session.profile,
+      excludingSessionId: session.id,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest
+              .withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Theme.of(context).dividerColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This conversation is closed. Please resume your previous session${resumeTarget != null ? ' for this profile' : ''} or start a new session.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (resumeTarget != null)
+                  TextButton.icon(
+                    onPressed: () => chatProvider.openSession(resumeTarget.id),
+                    icon: const Icon(Icons.history_toggle_off),
+                    label: Text(
+                      resumeTarget.title?.isNotEmpty == true
+                          ? 'Resume ${resumeTarget.title!}'
+                          : 'Resume previous session',
+                    ),
+                  ),
+                FilledButton.icon(
+                  onPressed: () => _startNewSessionFromClosedNotice(
+                    chatProvider,
+                    session,
+                    confirmCloseActiveProfileSession: resumeTarget != null,
+                  ),
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('Start new session'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  CoquiRole _resolveRoleForNewSession() {
+    final selectedRole = _selectedRole;
+    if (selectedRole != null) {
+      return selectedRole;
+    }
+
+    final defaultRoleName = Hive.box('settings')
+        .get('default_role', defaultValue: 'orchestrator') as String;
+
+    return CoquiRole(
+      name: defaultRoleName,
+      model: '',
+    );
+  }
+
+  void _clearComposer() {
+    _textFieldController.clear();
+    _hasText.value = false;
+  }
+
+  Future<_ProfileSessionChoice?> _resolveProfileSessionChoice(
+    ChatProvider chatProvider,
+    String profileName,
+  ) async {
+    final existingSession =
+        chatProvider.latestActiveSessionForProfile(profileName);
+    if (existingSession == null || !mounted) {
+      return _ProfileSessionChoice.startNew;
+    }
+
+    return _showExistingProfileSessionDialog(
+      context,
+      profileName: profileName,
+    );
+  }
+
+  Future<_ProfileSessionChoice?> _showExistingProfileSessionDialog(
+    BuildContext context, {
+    required String profileName,
+  }) {
+    return showDialog<_ProfileSessionChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Resume or Start New'),
+        content: Text(
+          'A conversation already exists for this profile. Would you like to resume your previous session or start a new session? Resuming will load the previous conversation and all its messages. Starting a new session will archive the previous conversation and start a new one. The data from the previous conversation will still be available in the database but it will be marked as archived and closed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () =>
+                Navigator.pop(context, _ProfileSessionChoice.resume),
+            child: const Text('Resume previous session'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, _ProfileSessionChoice.startNew),
+            child: Text('Start new $profileName session'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _createSessionForProfileSelection(
+    ChatProvider chatProvider,
+    String profileName, {
+    required bool confirmCloseActiveProfileSession,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    try {
+      await chatProvider.createNewSession(
+        _resolveRoleForNewSession(),
+        profile: profileName,
+        confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
+      );
+    } on CoquiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: errorColor,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(CoquiException.friendly(e).message),
+          backgroundColor: errorColor,
+        ),
+      );
+    }
+  }
+
+  Future<void> _startNewSessionFromClosedNotice(
+    ChatProvider chatProvider,
+    CoquiSession session, {
+    required bool confirmCloseActiveProfileSession,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    try {
+      await chatProvider.createNewSession(
+        CoquiRole(name: session.modelRole, model: session.model),
+        profile: session.profile,
+        confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
+      );
+      _clearComposer();
+    } on CoquiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: errorColor,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(CoquiException.friendly(e).message),
+          backgroundColor: errorColor,
+        ),
+      );
     }
   }
 }

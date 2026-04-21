@@ -1,20 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
-import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ChatAppBar({super.key});
@@ -23,46 +23,55 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final chatProvider = Provider.of<ChatProvider>(context);
     final instanceProvider = Provider.of<InstanceProvider>(context);
+    final currentSession = chatProvider.currentSession;
+    final projectLabel = chatProvider.currentSessionProjectLabel ??
+        currentSession?.activeProjectId;
+    final isSessionEditable =
+        currentSession != null && !currentSession.isReadOnly;
 
     return AppBar(
       centerTitle: false,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Server selector dropdown
-          _ServerDropdown(instanceProvider: instanceProvider),
-          if (chatProvider.currentSession != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  ActionChip(
-                    label: Text(
-                      chatProvider.currentSession!.modelRole,
-                      style: CoquiTypography.monoStyle(
-                        Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
-                    onPressed: () => _handleRoleSelectionButton(context),
+      titleSpacing: 12,
+      title: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(right: 8),
+        child: Row(
+          children: [
+            _ServerDropdown(instanceProvider: instanceProvider),
+            if (currentSession != null) ...[
+              const SizedBox(width: 8),
+              _HeaderActionChip(
+                label: Text(
+                  currentSession.modelRole,
+                  style: CoquiTypography.monoStyle(
+                    Theme.of(context).textTheme.labelSmall,
                   ),
-                  ActionChip(
-                    avatar: const Icon(Icons.person_outline, size: 16),
-                    label: Text(
-                      chatProvider.currentSession!.profile?.isNotEmpty == true
-                          ? chatProvider.currentSession!.profile!
-                          : 'No profile',
-                    ),
-                    onPressed: () => _handleProfileSelection(context),
-                  ),
-                ],
+                ),
+                onPressed: isSessionEditable
+                    ? () => _handleRoleSelectionButton(context)
+                    : null,
               ),
-            ),
-        ],
+              const SizedBox(width: 8),
+              _HeaderActionChip(
+                avatar: const Icon(Icons.person_outline, size: 16),
+                label: Text(currentSession.profileLabel ?? 'No profile'),
+                onPressed: isSessionEditable
+                    ? () => _handleProfileSelection(context)
+                    : null,
+              ),
+              if (projectLabel != null && projectLabel.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.folder_outlined, size: 16),
+                  label: Text(projectLabel),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
       actions: [
-        if (chatProvider.currentSession != null)
+        if (currentSession != null)
           IconButton(
             icon: const Icon(Icons.tune),
             onPressed: () {
@@ -593,28 +602,25 @@ class _ServerDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final instances = instanceProvider.instances;
     final active = instanceProvider.activeInstance;
+    final theme = Theme.of(context);
 
     if (instances.isEmpty) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.dns_outlined,
-            size: 16,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return _HeaderInfoChip(
+        avatar: Icon(
+          Icons.dns_outlined,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        label: Text(
+          'No Server',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(width: 4),
-          Text(
-            'No Server',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
+        ),
       );
     }
 
-    Widget statusDot = Container(
+    final statusDot = Container(
       width: 8,
       height: 8,
       decoration: BoxDecoration(
@@ -624,25 +630,10 @@ class _ServerDropdown extends StatelessWidget {
     );
 
     if (instances.length == 1) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          statusDot,
-          const SizedBox(width: 6),
-          Icon(
-            Icons.dns,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              active?.name ?? instances.first.name,
-              style: Theme.of(context).textTheme.labelMedium,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+      return _ServerPill(
+        statusDot: statusDot,
+        label: active?.name ?? instances.first.name,
+        iconColor: theme.colorScheme.primary,
       );
     }
 
@@ -685,25 +676,93 @@ class _ServerDropdown extends StatelessWidget {
           ),
         );
       }).toList(),
-      child: Row(
+      child: _ServerPill(
+        statusDot: statusDot,
+        label: active?.name ?? 'Select Server',
+        iconColor: theme.colorScheme.primary,
+        trailing: const Icon(Icons.arrow_drop_down, size: 18),
+      ),
+    );
+  }
+}
+
+class _HeaderActionChip extends StatelessWidget {
+  final Widget label;
+  final Widget? avatar;
+  final VoidCallback? onPressed;
+
+  const _HeaderActionChip({
+    required this.label,
+    this.avatar,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: avatar,
+      label: label,
+      onPressed: onPressed,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _HeaderInfoChip extends StatelessWidget {
+  final Widget label;
+  final Widget? avatar;
+
+  const _HeaderInfoChip({
+    required this.label,
+    this.avatar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: avatar,
+      label: label,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _ServerPill extends StatelessWidget {
+  final Widget statusDot;
+  final String label;
+  final Color iconColor;
+  final Widget? trailing;
+
+  const _ServerPill({
+    required this.statusDot,
+    required this.label,
+    required this.iconColor,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeaderInfoChip(
+      avatar: statusDot,
+      label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          statusDot,
+          Icon(Icons.dns, size: 16, color: iconColor),
           const SizedBox(width: 6),
-          Icon(
-            Icons.dns,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
             child: Text(
-              active?.name ?? 'Select Server',
-              style: Theme.of(context).textTheme.labelMedium,
+              label,
               overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
-          const Icon(Icons.arrow_drop_down, size: 18),
+          if (trailing != null) ...[
+            const SizedBox(width: 2),
+            trailing!,
+          ],
         ],
       ),
     );

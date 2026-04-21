@@ -35,7 +35,7 @@ class DatabaseService {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onCreate: (Database db, int version) async {
           await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
@@ -43,9 +43,15 @@ instance_id TEXT,
 model_role TEXT NOT NULL,
 model TEXT,
 profile TEXT,
+active_project_id TEXT,
 created_at INTEGER NOT NULL,
 updated_at INTEGER NOT NULL,
 token_count INTEGER DEFAULT 0,
+is_closed INTEGER NOT NULL DEFAULT 0,
+is_archived INTEGER NOT NULL DEFAULT 0,
+closed_at INTEGER,
+archived_at INTEGER,
+closure_reason TEXT,
 title TEXT
 ) WITHOUT ROWID;''');
 
@@ -63,6 +69,26 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
           if (oldVersion < 2) {
             await db.execute('ALTER TABLE sessions ADD COLUMN profile TEXT');
+          }
+          if (oldVersion < 3) {
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN active_project_id TEXT',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN closed_at INTEGER',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN archived_at INTEGER',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN closure_reason TEXT',
+            );
           }
         },
       ),

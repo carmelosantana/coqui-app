@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
@@ -8,6 +7,7 @@ import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -30,18 +30,30 @@ class ChatDrawer extends StatelessWidget {
         ),
       );
     } else {
-      return ClipRRect(
-        borderRadius: const BorderRadius.only(
-          bottomRight: Radius.circular(CoquiColors.radiusXl),
-        ),
-        child: SizedBox(
-          width: 300,
-          child: Column(
-            children: [
-              Expanded(child: const ChatNavigationDrawer()),
-              _buildSettingsButton(context),
-            ],
+      final theme = Theme.of(context);
+      final backgroundColor = theme.navigationDrawerTheme.backgroundColor ??
+          theme.drawerTheme.backgroundColor ??
+          theme.colorScheme.surface;
+      final borderColor = theme.dividerColor;
+
+      return Container(
+        width: 300,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: const BorderRadius.only(
+            bottomRight: Radius.circular(CoquiColors.radiusXl),
           ),
+          border: Border(
+            right: BorderSide(color: borderColor),
+            bottom: BorderSide(color: borderColor),
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(child: const ChatNavigationDrawer()),
+            _buildSettingsButton(context),
+          ],
         ),
       );
     }
@@ -268,68 +280,124 @@ class ChatNavigationDrawer extends StatelessWidget {
           },
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 16, 16, 10),
-              child: Text(
-                AppConstants.appName,
-                style: Theme.of(context).textTheme.titleSmall,
+              padding: const EdgeInsets.fromLTRB(28, 18, 16, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  height: 26,
+                  child: SvgPicture.asset(
+                    'assets/images/logo/coqui-logo.svg',
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
             ),
             NavigationDrawerDestination(
               icon: const Icon(Icons.add_circle_outline),
               selectedIcon: const Icon(Icons.add_circle),
-              label: Text('New Chat'),
+              label: const Text('New Chat'),
             ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
-              child: TitleDivider(title: "Sessions"),
-            ),
-            ...chatProvider.sessions.map((session) {
-              // Status indicators
-              final isStreaming = chatProvider.isSessionStreaming(session.id);
-              final isThinking = chatProvider.isSessionThinking(session.id);
-              final hasUnread = chatProvider.hasUnreadMessages(session.id);
-              final hasError = chatProvider.hasSessionError(session.id);
-
-              Widget? badge;
-              if (hasError) {
-                badge =
-                    _StatusBadge(color: Theme.of(context).colorScheme.error);
-              } else if (isThinking) {
-                badge = const _StatusBadge(color: CoquiColors.chart1);
-              } else if (hasUnread) {
-                badge = const _StatusBadge(color: CoquiColors.chart2);
-              } else if (isStreaming) {
-                badge = const _StatusBadge(color: CoquiColors.chart2);
-              }
-
-              return NavigationDrawerDestination(
-                icon: Stack(
-                  children: [
-                    const Icon(Icons.chat_bubble_outline),
-                    if (badge != null)
-                      Positioned(top: 0, left: 0, child: badge),
-                  ],
+            if (chatProvider.sessions.isNotEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
+                child: TitleDivider(title: 'Sessions'),
+              ),
+              ...chatProvider.sessions.map(
+                (session) => _buildSessionDestination(
+                  context,
+                  chatProvider,
+                  session,
                 ),
-                selectedIcon: Stack(
-                  children: [
-                    const Icon(Icons.chat_bubble),
-                    if (badge != null)
-                      Positioned(top: 0, left: 0, child: badge),
-                  ],
+              ),
+            ],
+            if (chatProvider.archivedSessions.isNotEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
+                child: TitleDivider(title: 'Archived'),
+              ),
+              ...chatProvider.archivedSessions.map(
+                (session) => _buildSessionDestination(
+                  context,
+                  chatProvider,
+                  session,
                 ),
-                label: Expanded(
-                  child: Text(
-                    session.title?.isNotEmpty == true
-                        ? session.title!
-                        : _sessionFallbackTitle(session.createdAt),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              );
-            }),
+              ),
+            ],
           ],
         );
       },
+    );
+  }
+
+  NavigationDrawerDestination _buildSessionDestination(
+    BuildContext context,
+    ChatProvider chatProvider,
+    dynamic session,
+  ) {
+    final theme = Theme.of(context);
+    final isLiveSession = !session.isReadOnly;
+    final isStreaming =
+        isLiveSession && chatProvider.isSessionStreaming(session.id);
+    final isThinking =
+        isLiveSession && chatProvider.isSessionThinking(session.id);
+    final hasUnread =
+        isLiveSession && chatProvider.hasUnreadMessages(session.id);
+    final hasError = isLiveSession && chatProvider.hasSessionError(session.id);
+
+    Widget? badge;
+    if (hasError) {
+      badge = _StatusBadge(color: theme.colorScheme.error);
+    } else if (isThinking) {
+      badge = const _StatusBadge(color: CoquiColors.chart1);
+    } else if (hasUnread || isStreaming) {
+      badge = const _StatusBadge(color: CoquiColors.chart2);
+    }
+
+    final statusIcon = session.isArchived
+        ? Icon(
+            Icons.archive_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          )
+        : session.isClosed
+            ? Icon(
+                Icons.lock_outline,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              )
+            : null;
+
+    final title = session.title?.isNotEmpty == true
+        ? session.title!
+        : _sessionFallbackTitle(session.createdAt);
+
+    return NavigationDrawerDestination(
+      icon: Stack(
+        children: [
+          const Icon(Icons.chat_bubble_outline),
+          if (badge != null) Positioned(top: 0, left: 0, child: badge),
+        ],
+      ),
+      selectedIcon: Stack(
+        children: [
+          const Icon(Icons.chat_bubble),
+          if (badge != null) Positioned(top: 0, left: 0, child: badge),
+        ],
+      ),
+      label: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (statusIcon != null) ...[
+            const SizedBox(width: 8),
+            statusIcon,
+          ],
+        ],
+      ),
     );
   }
 
