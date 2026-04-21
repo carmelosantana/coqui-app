@@ -26,6 +26,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     final currentSession = chatProvider.currentSession;
     final projectLabel = chatProvider.currentSessionProjectLabel ??
         currentSession?.activeProjectId;
+    final modelLabel = currentSession?.model.trim();
     final isSessionEditable =
         currentSession != null && !currentSession.isReadOnly;
 
@@ -39,7 +40,31 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           children: [
             _ServerDropdown(instanceProvider: instanceProvider),
             if (currentSession != null) ...[
-              const SizedBox(width: 8),
+              if (modelLabel != null && modelLabel.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.memory_outlined, size: 16),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      modelLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: CoquiTypography.monoStyle(
+                        Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 6),
+              _HeaderActionChip(
+                avatar: const Icon(Icons.person_outline, size: 16),
+                label: Text(currentSession.profileLabel ?? 'No profile'),
+                onPressed: isSessionEditable
+                    ? () => _handleProfileSelection(context)
+                    : null,
+              ),
+              const SizedBox(width: 6),
               _HeaderActionChip(
                 label: Text(
                   currentSession.modelRole,
@@ -51,16 +76,8 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ? () => _handleRoleSelectionButton(context)
                     : null,
               ),
-              const SizedBox(width: 8),
-              _HeaderActionChip(
-                avatar: const Icon(Icons.person_outline, size: 16),
-                label: Text(currentSession.profileLabel ?? 'No profile'),
-                onPressed: isSessionEditable
-                    ? () => _handleProfileSelection(context)
-                    : null,
-              ),
               if (projectLabel != null && projectLabel.isNotEmpty) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 _HeaderInfoChip(
                   avatar: const Icon(Icons.folder_outlined, size: 16),
                   label: Text(projectLabel),
@@ -703,6 +720,8 @@ class _HeaderActionChip extends StatelessWidget {
       avatar: avatar,
       label: label,
       onPressed: onPressed,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );
@@ -723,6 +742,8 @@ class _HeaderInfoChip extends StatelessWidget {
     return Chip(
       avatar: avatar,
       label: label,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );

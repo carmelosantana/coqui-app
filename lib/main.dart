@@ -27,6 +27,14 @@ import 'package:coqui_app/Utils/material_color_adapter.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  try {
+    await _initializeApp();
+  } catch (error) {
+    runApp(_StartupFailureApp(message: _startupErrorMessage(error)));
+  }
+}
+
+Future<void> _initializeApp() async {
   // Initialize platform-appropriate database factory (FFI on desktop, WASM on web)
   await db_factory.initDatabaseFactory();
 
@@ -43,21 +51,15 @@ void main() async {
   // Register adapters before opening any boxes.
   Hive.registerAdapter(MaterialColorAdapter());
 
-  // Open settings box with recovery for stale/incompatible data.
-  // Previous builds stored legacy objects whose adapters have
-  // since been removed — reading those entries triggers HiveError with an
-  // unknown typeId. Deleting the box and re-opening resets to defaults.
-  try {
-    await Hive.openBox('settings');
-  } catch (e) {
-    await Hive.deleteBoxFromDisk('settings');
-    await Hive.openBox('settings');
-  }
+  await _openSettingsBoxWithRecovery();
 
   // Create services
   final apiService = CoquiApiService();
   final databaseService = DatabaseService();
   final instanceService = InstanceService();
+
+  await instanceService.initialize();
+  await instanceService.ensureDefaultInstance();
 
   runApp(
     MultiProvider(
@@ -111,6 +113,89 @@ void main() async {
       child: const CoquiApp(),
     ),
   );
+}
+
+Future<void> _openSettingsBoxWithRecovery() async {
+  try {
+    await Hive.openBox('settings');
+    return;
+  } catch (error) {
+    if (_isSettingsLockError(error)) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Hive.openBox('settings');
+      return;
+    }
+
+    if (_isRecoverableSettingsSchemaError(error)) {
+      await Hive.deleteBoxFromDisk('settings');
+      await Hive.openBox('settings');
+      return;
+    }
+
+    rethrow;
+  }
+}
+
+bool _isSettingsLockError(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('settings.lock') ||
+      message.contains('lock failed') ||
+      message.contains('resource temporarily unavailable');
+}
+
+bool _isRecoverableSettingsSchemaError(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('unknown typeid') ||
+      message.contains('cannot read, unknown typeid') ||
+      message.contains('hiveerror');
+}
+
+String _startupErrorMessage(Object error) {
+  if (_isSettingsLockError(error)) {
+    return 'Coqui could not open its local settings because another Coqui instance is already using the same data directory. Close the other instance and relaunch.';
+  }
+
+  return 'Coqui failed to start.\n\n$error';
+}
+
+class _StartupFailureApp extends StatelessWidget {
+  final String message;
+
+  const _StartupFailureApp({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: AppConstants.appName,
+      home: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Startup Failed',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(message),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class CoquiApp extends StatefulWidget {

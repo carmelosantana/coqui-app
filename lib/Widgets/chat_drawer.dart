@@ -6,6 +6,7 @@ import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
+import 'package:coqui_app/Theme/coqui_color_scheme.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -266,6 +267,10 @@ class ChatNavigationDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final logoColor = theme.extension<CoquiBrandColors>()?.sidebarPrimary ??
+        theme.colorScheme.primary;
+
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
         return NavigationDrawer(
@@ -288,6 +293,10 @@ class ChatNavigationDrawer extends StatelessWidget {
                   child: SvgPicture.asset(
                     'assets/images/logo/coqui-logo.svg',
                     fit: BoxFit.contain,
+                    colorFilter: ColorFilter.mode(
+                      logoColor,
+                      BlendMode.srcIn,
+                    ),
                   ),
                 ),
               ),
@@ -384,19 +393,24 @@ class ChatNavigationDrawer extends StatelessWidget {
           if (badge != null) Positioned(top: 0, left: 0, child: badge),
         ],
       ),
-      label: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              overflow: TextOverflow.ellipsis,
+      label: SizedBox(
+        width: 180,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              fit: FlexFit.loose,
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          if (statusIcon != null) ...[
-            const SizedBox(width: 8),
-            statusIcon,
+            if (statusIcon != null) ...[
+              const SizedBox(width: 8),
+              statusIcon,
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

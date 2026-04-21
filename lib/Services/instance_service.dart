@@ -18,10 +18,16 @@ class InstanceService {
     if (_initialized) return;
     try {
       _box = await Hive.openBox(_boxName);
-    } catch (e) {
-      // Stale or incompatible data — reset the box.
-      await Hive.deleteBoxFromDisk(_boxName);
-      _box = await Hive.openBox(_boxName);
+    } catch (error) {
+      if (_isBoxLockError(error)) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        _box = await Hive.openBox(_boxName);
+      } else if (_isRecoverableBoxSchemaError(error)) {
+        await Hive.deleteBoxFromDisk(_boxName);
+        _box = await Hive.openBox(_boxName);
+      } else {
+        rethrow;
+      }
     }
     _initialized = true;
   }
@@ -86,5 +92,19 @@ class InstanceService {
       final updated = instance.copyWith(isActive: instance.id == id);
       await _box.put(updated.id, updated.toMap());
     }
+  }
+
+  bool _isBoxLockError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('$_boxName.lock') ||
+        message.contains('lock failed') ||
+        message.contains('resource temporarily unavailable');
+  }
+
+  bool _isRecoverableBoxSchemaError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('unknown typeid') ||
+        message.contains('cannot read, unknown typeid') ||
+        message.contains('hiveerror');
   }
 }
