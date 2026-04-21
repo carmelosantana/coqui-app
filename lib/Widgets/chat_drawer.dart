@@ -3,6 +3,7 @@ import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
@@ -63,6 +64,7 @@ class ChatDrawer extends StatelessWidget {
             },
           ),
           _buildTasksButton(context),
+          _buildChannelsButton(context),
           _buildConfigButton(context),
           if (PlatformInfo.isDesktop) _buildServerButton(context),
         ],
@@ -104,6 +106,56 @@ class ChatDrawer extends StatelessWidget {
             }
             Navigator.pushNamed(context, '/tasks');
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildChannelsButton(BuildContext context) {
+    return Consumer2<InstanceProvider, ChannelProvider>(
+      builder: (context, instanceProvider, channelProvider, _) {
+        final hasInstance = instanceProvider.hasActiveInstance;
+        final dotColor = channelProvider.hasIssues
+            ? Theme.of(context).colorScheme.error
+            : channelProvider.hasHealthyChannels
+                ? CoquiColors.chart2
+                : null;
+
+        return IconButton(
+          icon: Stack(
+            children: [
+              const Icon(Icons.satellite_alt_outlined),
+              if (dotColor != null)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          tooltip: hasInstance ? 'Channels' : 'Connect to a server first',
+          color: hasInstance
+              ? null
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+          onPressed: hasInstance
+              ? () {
+                  if (ResponsiveBreakpoints.of(context).isMobile) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/channels');
+                }
+              : null,
         );
       },
     );

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Pages/channels_page/channels_page.dart';
 import 'package:coqui_app/Pages/config_page/config_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
 import 'package:coqui_app/Pages/tasks_page/tasks_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
@@ -81,6 +83,11 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => RoleProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ChannelProvider(
             apiService: apiService,
           ),
         ),
@@ -179,6 +186,12 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/config') {
               return MaterialPageRoute(
                 builder: (context) => const ConfigPage(),
+              );
+            }
+
+            if (settings.name == '/channels') {
+              return MaterialPageRoute(
+                builder: (context) => const ChannelsPage(),
               );
             }
 

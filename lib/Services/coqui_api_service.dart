@@ -5,6 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:coqui_app/Models/coqui_channel.dart';
+import 'package:coqui_app/Models/coqui_channel_delivery.dart';
+import 'package:coqui_app/Models/coqui_channel_driver.dart';
+import 'package:coqui_app/Models/coqui_channel_event.dart';
+import 'package:coqui_app/Models/coqui_channel_link.dart';
+import 'package:coqui_app/Models/coqui_channel_stats.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
@@ -607,6 +613,287 @@ class CoquiApiService {
       headers: _headers,
     );
     _parseResponse(response);
+  }
+
+  // ── Channels ────────────────────────────────────────────────────────
+
+  /// List configured channels with joined runtime health and dashboard stats.
+  Future<({
+    List<CoquiChannel> channels,
+    CoquiChannelStats stats,
+    CoquiChannelStats manager,
+  })> listChannels({
+    bool? enabled,
+    String? driver,
+  }) async {
+    final params = <String, String>{};
+    if (enabled != null) {
+      params['enabled'] = enabled.toString();
+    }
+    if (driver != null && driver.isNotEmpty) {
+      params['driver'] = driver;
+    }
+
+    final response = await http.get(
+      _url('/channels', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final channels = (body['channels'] as List? ?? [])
+        .map((channel) => CoquiChannel.fromJson(channel as Map<String, dynamic>))
+        .toList();
+
+    return (
+      channels: channels,
+      stats: body['stats'] is Map<String, dynamic>
+          ? CoquiChannelStats.fromJson(body['stats'] as Map<String, dynamic>)
+          : CoquiChannelStats.empty,
+      manager: body['manager'] is Map<String, dynamic>
+          ? CoquiChannelStats.fromJson(body['manager'] as Map<String, dynamic>)
+          : CoquiChannelStats.empty,
+    );
+  }
+
+  Future<List<CoquiChannelDriver>> listChannelDrivers() async {
+    final response = await http.get(
+      _url('/channels/drivers'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final drivers = body['drivers'] as List? ?? [];
+    return drivers
+        .map((driver) =>
+            CoquiChannelDriver.fromJson(driver as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CoquiChannel> getChannel(String id) async {
+    final response = await http.get(
+      _url('/channels/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiChannel> createChannel({
+    required String name,
+    required String driver,
+    bool enabled = true,
+    String? displayName,
+    String? defaultProfile,
+    Map<String, dynamic>? settings,
+    List<String>? allowedScopes,
+    Map<String, dynamic>? security,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'driver': driver,
+      'enabled': enabled,
+    };
+    if (displayName != null && displayName.isNotEmpty) {
+      payload['displayName'] = displayName;
+    }
+    if (defaultProfile != null) {
+      payload['defaultProfile'] = defaultProfile;
+    }
+    if (settings != null) {
+      payload['settings'] = settings;
+    }
+    if (allowedScopes != null) {
+      payload['allowedScopes'] = allowedScopes;
+    }
+    if (security != null) {
+      payload['security'] = security;
+    }
+
+    final response = await http.post(
+      _url('/channels'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiChannel> updateChannel(
+    String id, {
+    String? driver,
+    bool? enabled,
+    String? displayName,
+    String? defaultProfile,
+    Map<String, dynamic>? settings,
+    List<String>? allowedScopes,
+    Map<String, dynamic>? security,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (driver != null && driver.isNotEmpty) {
+      payload['driver'] = driver;
+    }
+    if (enabled != null) {
+      payload['enabled'] = enabled;
+    }
+    if (displayName != null) {
+      payload['displayName'] = displayName;
+    }
+    if (defaultProfile != null) {
+      payload['defaultProfile'] = defaultProfile;
+    }
+    if (settings != null) {
+      payload['settings'] = settings;
+    }
+    if (allowedScopes != null) {
+      payload['allowedScopes'] = allowedScopes;
+    }
+    if (security != null) {
+      payload['security'] = security;
+    }
+
+    final response = await http.patch(
+      _url('/channels/$id'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteChannel(String id) async {
+    final response = await http.delete(
+      _url('/channels/$id'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<CoquiChannel> enableChannel(String id) async {
+    final response = await http.post(
+      _url('/channels/$id/enable'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiChannel> disableChannel(String id) async {
+    final response = await http.post(
+      _url('/channels/$id/disable'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiChannel> testChannel(String id) async {
+    final response = await http.post(
+      _url('/channels/$id/test'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>);
+  }
+
+  Future<({CoquiChannel channel, bool healthy, String workerStatus})>
+      getChannelHealth(String id) async {
+    final response = await http.get(
+      _url('/channels/$id/health'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return (
+      channel: CoquiChannel.fromJson(body['channel'] as Map<String, dynamic>),
+      healthy: body['healthy'] as bool? ?? false,
+      workerStatus: body['worker_status'] as String? ?? 'missing',
+    );
+  }
+
+  Future<List<CoquiChannelLink>> listChannelLinks(
+    String id, {
+    int limit = 100,
+  }) async {
+    final response = await http.get(
+      _url('/channels/$id/links', {'limit': limit.toString()}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final links = body['links'] as List? ?? [];
+    return links
+        .map((link) => CoquiChannelLink.fromJson(link as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CoquiChannelLink> createChannelLink(
+    String id, {
+    required String remoteUserKey,
+    required String profile,
+    String? remoteScopeKey,
+    String trustLevel = 'linked',
+    Map<String, dynamic>? metadata,
+  }) async {
+    final payload = <String, dynamic>{
+      'remote_user_key': remoteUserKey,
+      'profile': profile,
+      'trust_level': trustLevel,
+    };
+    if (remoteScopeKey != null && remoteScopeKey.isNotEmpty) {
+      payload['remote_scope_key'] = remoteScopeKey;
+    }
+    if (metadata != null) {
+      payload['metadata'] = metadata;
+    }
+
+    final response = await http.post(
+      _url('/channels/$id/links'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiChannelLink.fromJson(body['link'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteChannelLink(String id, String linkId) async {
+    final response = await http.delete(
+      _url('/channels/$id/links/$linkId'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<List<CoquiChannelEvent>> listChannelEvents(
+    String id, {
+    int limit = 50,
+  }) async {
+    final response = await http.get(
+      _url('/channels/$id/events', {'limit': limit.toString()}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final events = body['events'] as List? ?? [];
+    return events
+        .map((event) =>
+            CoquiChannelEvent.fromJson(event as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<CoquiChannelDelivery>> listChannelDeliveries(
+    String id, {
+    int limit = 50,
+  }) async {
+    final response = await http.get(
+      _url('/channels/$id/deliveries', {'limit': limit.toString()}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final deliveries = body['deliveries'] as List? ?? [];
+    return deliveries
+        .map((delivery) =>
+            CoquiChannelDelivery.fromJson(delivery as Map<String, dynamic>))
+        .toList();
   }
 
   // ── Background Tasks ────────────────────────────────────────────────
