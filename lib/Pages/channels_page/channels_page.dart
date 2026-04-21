@@ -21,12 +21,14 @@ class ChannelsPage extends StatefulWidget {
 class _ChannelsPageState extends State<ChannelsPage> {
   _ChannelStatusFilter _statusFilter = _ChannelStatusFilter.all;
   String? _driverFilter;
+  ChannelProvider? _channelProvider;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<ChannelProvider>();
+      _channelProvider = provider;
       await provider.refreshDashboard();
       if (mounted) {
         provider.startPolling();
@@ -36,7 +38,7 @@ class _ChannelsPageState extends State<ChannelsPage> {
 
   @override
   void dispose() {
-    context.read<ChannelProvider>().stopPolling();
+    _channelProvider?.stopPolling();
     super.dispose();
   }
 

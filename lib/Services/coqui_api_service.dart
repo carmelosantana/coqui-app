@@ -12,9 +12,13 @@ import 'package:coqui_app/Models/coqui_channel_event.dart';
 import 'package:coqui_app/Models/coqui_channel_link.dart';
 import 'package:coqui_app/Models/coqui_channel_stats.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
+import 'package:coqui_app/Models/coqui_command_catalog.dart';
+import 'package:coqui_app/Models/coqui_configured_model.dart';
+import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_prompt_inspection.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
@@ -612,7 +616,7 @@ class CoquiApiService {
   }
 
   /// List all available models from all providers.
-  Future<List<Map<String, dynamic>>> listModels() async {
+  Future<List<CoquiConfiguredModel>> listModels() async {
     final response = await http.get(
       _url('/config/models'),
       headers: _headers,
@@ -620,7 +624,76 @@ class CoquiApiService {
     final body = _parseResponse(response);
 
     final models = body['models'] as List? ?? [];
-    return models.cast<Map<String, dynamic>>();
+    return models
+        .map((model) =>
+            CoquiConfiguredModel.fromJson(model as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get the fully rendered system prompt inspection payload.
+  Future<CoquiPromptInspection> inspectPrompt({
+    String? role,
+    String? profile,
+  }) async {
+    final params = <String, String>{};
+    if (role != null && role.isNotEmpty) {
+      params['role'] = role;
+    }
+    if (profile != null && profile.isNotEmpty) {
+      params['profile'] = profile;
+    }
+
+    final response = await http.get(
+      _url('/server/prompt', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiPromptInspection.fromJson(body);
+  }
+
+  /// Get backstory inspection metadata for a profile.
+  Future<CoquiBackstoryInspection> inspectBackstory({String? profile}) async {
+    final params = <String, String>{};
+    if (profile != null && profile.isNotEmpty) {
+      params['profile'] = profile;
+    }
+
+    final response = await http.get(
+      _url('/server/backstory', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiBackstoryInspection.fromJson(body);
+  }
+
+  /// Get prompt budget details for a role/profile scope.
+  Future<Map<String, dynamic>> inspectBudget({
+    String? role,
+    String? profile,
+  }) async {
+    final params = <String, String>{};
+    if (role != null && role.isNotEmpty) {
+      params['role'] = role;
+    }
+    if (profile != null && profile.isNotEmpty) {
+      params['profile'] = profile;
+    }
+
+    final response = await http.get(
+      _url('/server/budget', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    return _parseResponse(response);
+  }
+
+  /// Get runtime slash-command metadata equivalent to `/help`.
+  Future<CoquiCommandCatalog> getCommandCatalog() async {
+    final response = await http.get(
+      _url('/server/commands'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiCommandCatalog.fromJson(body);
   }
 
   // ── Credentials ────────────────────────────────────────────────────

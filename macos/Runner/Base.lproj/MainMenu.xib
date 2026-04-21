@@ -325,7 +325,15 @@
                 </menuItem>
                 <menuItem title="Help" id="EPT-qC-fAb">
                     <modifierMask key="keyEquivalentModifierMask"/>
-                    <menu key="submenu" title="Help" systemMenu="help" id="rJ0-wn-3NY"/>
+                    <menu key="submenu" title="Help" systemMenu="help" id="rJ0-wn-3NY">
+                        <items>
+                            <menuItem title="Commands Help" id="coq-cmd-help-item">
+                                <connections>
+                                    <action selector="openCommandsHelpFromMenu:" target="-1" id="coq-cmd-help-action"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
                 </menuItem>
             </items>
             <point key="canvasLocation" x="142" y="-258"/>

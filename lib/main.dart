@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Pages/channels_page/channels_page.dart';
+import 'package:coqui_app/Pages/commands_help_page/commands_help_page.dart';
 import 'package:coqui_app/Pages/config_page/config_page.dart';
+import 'package:coqui_app/Pages/info_page/info_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
@@ -206,13 +209,31 @@ class CoquiApp extends StatefulWidget {
 }
 
 class _CoquiAppState extends State<CoquiApp> {
+  static const MethodChannel _navigationChannel =
+      MethodChannel('coqui/navigation');
+
   final _navigatorKey = GlobalKey<NavigatorState>();
   late final AppLinks _appLinks;
 
   @override
   void initState() {
     super.initState();
+    _installNativeNavigationHandler();
     _initDeepLinks();
+  }
+
+  void _installNativeNavigationHandler() {
+    _navigationChannel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'openCommandsHelp':
+          _navigatorKey.currentState?.pushNamed('/commands');
+          return;
+        default:
+          throw MissingPluginException(
+            'Unhandled navigation method: ${call.method}',
+          );
+      }
+    });
   }
 
   void _initDeepLinks() {
@@ -271,6 +292,18 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/config') {
               return MaterialPageRoute(
                 builder: (context) => const ConfigPage(),
+              );
+            }
+
+            if (settings.name == '/info') {
+              return MaterialPageRoute(
+                builder: (context) => const InfoPage(),
+              );
+            }
+
+            if (settings.name == '/commands') {
+              return MaterialPageRoute(
+                builder: (context) => const CommandsHelpPage(),
               );
             }
 

@@ -76,12 +76,26 @@ class ChatDrawer extends StatelessWidget {
               Navigator.pushNamed(context, '/settings');
             },
           ),
+          _buildInfoButton(context),
           _buildTasksButton(context),
           _buildChannelsButton(context),
           _buildConfigButton(context),
           if (PlatformInfo.isDesktop) _buildServerButton(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildInfoButton(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.article_outlined),
+      tooltip: 'System Prompts',
+      onPressed: () {
+        if (ResponsiveBreakpoints.of(context).isMobile) {
+          Navigator.pop(context);
+        }
+        Navigator.pushNamed(context, '/info');
+      },
     );
   }
 
@@ -223,7 +237,7 @@ class ChatDrawer extends StatelessWidget {
           LocalServerStatus.installing ||
           LocalServerStatus.updating ||
           LocalServerStatus.uninstalling =>
-            Colors.orange,
+            CoquiColors.warning,
           _ => null,
         };
 
