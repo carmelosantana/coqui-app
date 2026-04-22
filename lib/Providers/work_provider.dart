@@ -318,6 +318,79 @@ class WorkProvider extends ChangeNotifier {
     );
   }
 
+  Future<int> bulkUpdateTodos(
+    String sessionId, {
+    required List<String> todoIds,
+    String? priority,
+    String? status,
+    String? notes,
+  }) async {
+    if (todoIds.isEmpty) {
+      return 0;
+    }
+
+    _mutatingTodoIds.addAll(todoIds);
+    _error = null;
+    notifyListeners();
+
+    try {
+      final updatedCount = await _apiService.bulkUpdateTodos(
+        sessionId,
+        updates: [
+          for (final todoId in todoIds)
+            {
+              'id': todoId,
+              if (priority != null) 'priority': priority,
+              if (status != null) 'status': status,
+              if (notes != null) 'notes': notes,
+            },
+        ],
+      );
+      await fetchTodos(sessionId, force: true);
+      return updatedCount;
+    } catch (e) {
+      _error = CoquiException.friendly(e).message;
+      return 0;
+    } finally {
+      _mutatingTodoIds.removeAll(todoIds);
+      notifyListeners();
+    }
+  }
+
+  Future<bool> reorderTodos(
+    String sessionId, {
+    required List<String> orderedTodoIds,
+  }) async {
+    if (orderedTodoIds.isEmpty) {
+      return false;
+    }
+
+    _mutatingTodoIds.addAll(orderedTodoIds);
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _apiService.reorderTodos(
+        sessionId,
+        ordering: [
+          for (var index = 0; index < orderedTodoIds.length; index++)
+            {
+              'id': orderedTodoIds[index],
+              'sort_order': index,
+            },
+        ],
+      );
+      await fetchTodos(sessionId, force: true);
+      return true;
+    } catch (e) {
+      _error = CoquiException.friendly(e).message;
+      return false;
+    } finally {
+      _mutatingTodoIds.removeAll(orderedTodoIds);
+      notifyListeners();
+    }
+  }
+
   Future<CoquiArtifact?> createArtifact(
     String sessionId, {
     required String title,

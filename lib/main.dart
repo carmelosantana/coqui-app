@@ -22,6 +22,7 @@ import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Providers/work_provider.dart';
 import 'package:coqui_app/Providers/webhook_provider.dart';
 import 'package:coqui_app/Pages/work_page/work_page.dart';
+import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
@@ -351,8 +352,11 @@ class _CoquiAppState extends State<CoquiApp> {
             }
 
             if (settings.name == '/work') {
+              final args = settings.arguments is WorkPageArguments
+                  ? settings.arguments as WorkPageArguments
+                  : null;
               return MaterialPageRoute(
-                builder: (context) => const WorkPage(),
+                builder: (context) => WorkPage(arguments: args),
               );
             }
 

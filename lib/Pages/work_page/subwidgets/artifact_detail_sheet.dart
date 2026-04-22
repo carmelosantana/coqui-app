@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -145,6 +146,50 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
     );
   }
 
+  Future<void> _copyPath(String path) async {
+    await Clipboard.setData(ClipboardData(text: path));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Path copied to clipboard.')),
+    );
+  }
+
+  Future<void> _previewVersion(
+    CoquiArtifact artifact,
+    CoquiArtifactVersion version,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _ArtifactVersionPreviewSheet(
+        artifact: artifact,
+        version: version,
+      ),
+    );
+  }
+
+  Future<void> _compareVersion(
+    CoquiArtifact artifact,
+    CoquiArtifactVersion version,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _ArtifactVersionCompareSheet(
+        artifact: artifact,
+        version: version,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -224,6 +269,7 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                             ArtifactStageBadge(artifact: artifact),
                             _InfoChip(label: artifact.type),
                             _InfoChip(label: 'Version ${artifact.version}'),
+                            _InfoChip(label: artifact.storageLabel),
                             if (artifact.persistent)
                               const _InfoChip(label: 'Persistent'),
                             if (project != null)
@@ -246,6 +292,44 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                                 .toList(),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        _SectionCard(
+                          title: 'Storage',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _MetaRow(
+                                label: 'Source',
+                                value: artifact.storageLabel,
+                              ),
+                              if (artifact.hasFilePath)
+                                _MetaRow(
+                                  label: 'Requested path',
+                                  value: artifact.filepath!,
+                                  onCopy: () => _copyPath(artifact.filepath!),
+                                ),
+                              if (artifact.hasCanonicalPath)
+                                _MetaRow(
+                                  label: 'Canonical path',
+                                  value: artifact.canonicalPath!,
+                                  onCopy: () =>
+                                      _copyPath(artifact.canonicalPath!),
+                                ),
+                              if (artifact.contentHash?.isNotEmpty == true)
+                                _MetaRow(
+                                  label: 'Content hash',
+                                  value: artifact.contentHash!,
+                                ),
+                              if (artifact.isFilesystemBacked) ...[
+                                const SizedBox(height: 12),
+                                const _WorkspaceBackedBanner(
+                                  message:
+                                      'This artifact is backed by a workspace file. The project or session links still live in Coqui, but the content also has a canonical path on disk.',
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         _SectionCard(
                           title: 'Artifact Actions',
@@ -290,22 +374,77 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                                 )
                               : Column(
                                   children: versions.map((version) {
-                                    return ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: Text('Version ${version.version}'),
-                                      subtitle: Text(
-                                        version.changeSummary?.isNotEmpty ==
-                                                true
-                                            ? version.changeSummary!
-                                            : 'No change summary',
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme
+                                            .surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
-                                      trailing: widget.readOnly
-                                          ? null
-                                          : TextButton(
-                                              onPressed: () =>
-                                                  _restoreVersion(version),
-                                              child: const Text('Restore'),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Version ${version.version}',
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                              fontWeight: FontWeight.w600,
                                             ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            version.changeSummary?.isNotEmpty ==
+                                                    true
+                                                ? version.changeSummary!
+                                                : 'No change summary',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                          if (version.createdAt != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Saved ${_formatDateTime(version.createdAt!)}',
+                                              style: theme.textTheme.bodySmall,
+                                            ),
+                                          ],
+                                          const SizedBox(height: 12),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                onPressed: () =>
+                                                    _previewVersion(
+                                                  artifact,
+                                                  version,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.preview_outlined,
+                                                ),
+                                                label: const Text('Preview'),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed: () =>
+                                                    _compareVersion(
+                                                  artifact,
+                                                  version,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.compare_arrows_outlined,
+                                                ),
+                                                label: const Text('Compare'),
+                                              ),
+                                              if (!widget.readOnly)
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      _restoreVersion(version),
+                                                  child: const Text('Restore'),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     );
                                   }).toList(),
                                 ),
@@ -372,4 +511,243 @@ class _InfoChip extends StatelessWidget {
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
   }
+}
+
+class _MetaRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback? onCopy;
+
+  const _MetaRow({
+    required this.label,
+    required this.value,
+    this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+          ),
+          if (onCopy != null)
+            IconButton(
+              onPressed: onCopy,
+              icon: const Icon(Icons.copy_all_outlined),
+              tooltip: 'Copy',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceBackedBanner extends StatelessWidget {
+  final String message;
+
+  const _WorkspaceBackedBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Text(message, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+class _ArtifactVersionPreviewSheet extends StatelessWidget {
+  final CoquiArtifact artifact;
+  final CoquiArtifactVersion version;
+
+  const _ArtifactVersionPreviewSheet({
+    required this.artifact,
+    required this.version,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.8,
+      minChildSize: 0.48,
+      maxChildSize: 0.94,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${artifact.label} · Version ${version.version}',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (version.changeSummary?.isNotEmpty == true) ...[
+                    _SectionCard(
+                      title: 'Change Summary',
+                      child: Text(version.changeSummary!),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  _SectionCard(
+                    title: 'Snapshot Content',
+                    child: SelectableText(
+                      version.content,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ArtifactVersionCompareSheet extends StatelessWidget {
+  final CoquiArtifact artifact;
+  final CoquiArtifactVersion version;
+
+  const _ArtifactVersionCompareSheet({
+    required this.artifact,
+    required this.version,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.88,
+      minChildSize: 0.56,
+      maxChildSize: 0.96,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Compare Current vs Version ${version.version}',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (artifact.isFilesystemBacked)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: _WorkspaceBackedBanner(
+                        message:
+                            'The current pane reflects the artifact currently linked to the workspace-backed source.',
+                      ),
+                    ),
+                  _SectionCard(
+                    title: 'Current Content',
+                    child: SelectableText(
+                      artifact.content,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'Version ${version.version} Snapshot',
+                    child: SelectableText(
+                      version.content,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+String _formatDateTime(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  return '${local.year}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')} '
+      '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
 }

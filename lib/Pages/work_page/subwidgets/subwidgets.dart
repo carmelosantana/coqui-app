@@ -7,5 +7,6 @@ export 'sprint_detail_sheet.dart';
 export 'todo_status_badge.dart';
 export 'artifact_stage_badge.dart';
 export 'todo_editor_sheet.dart';
+export 'todo_bulk_edit_sheet.dart';
 export 'artifact_editor_sheet.dart';
 export 'artifact_detail_sheet.dart';

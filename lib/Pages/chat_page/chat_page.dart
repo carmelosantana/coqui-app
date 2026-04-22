@@ -9,6 +9,7 @@ import 'package:coqui_app/Models/chat_preset.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/analytics_service.dart';
@@ -522,6 +523,17 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   icon: const Icon(Icons.add_circle_outline),
                   label: const Text('Start new session'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => openWorkPage(
+                    context,
+                    arguments: workArgumentsForCurrentSession(
+                      context,
+                      initialTab: WorkPageTab.todos,
+                    ),
+                  ),
+                  icon: const Icon(Icons.workspaces_outline),
+                  label: const Text('Open Work'),
                 ),
               ],
             ),

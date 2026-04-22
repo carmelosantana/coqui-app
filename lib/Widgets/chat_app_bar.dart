@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
+import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
@@ -93,9 +94,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
               if (projectLabel != null && projectLabel.isNotEmpty) ...[
                 const SizedBox(width: 6),
-                _HeaderInfoChip(
+                _HeaderActionChip(
                   avatar: const Icon(Icons.folder_outlined, size: 16),
                   label: Text(projectLabel),
+                  onPressed: () => _openWorkTab(
+                    context,
+                    WorkPageTab.projects,
+                  ),
                 ),
               ],
             ],
@@ -212,6 +217,32 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 onTap: () => Navigator.pop(context, 'files'),
               ),
               ListTile(
+                leading: const Icon(Icons.workspaces_outline),
+                title: const Text('Open Project In Work'),
+                subtitle: Text(
+                  chatProvider.currentSessionProjectLabel ??
+                      chatProvider.currentSession?.activeProjectId ??
+                      'Use the current chat project and sprint context',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.pop(context, 'work_project'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.checklist_outlined),
+                title: const Text('Open Session Todos'),
+                subtitle: const Text('Jump into the current session work list'),
+                onTap: () => Navigator.pop(context, 'work_todos'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Open Session Artifacts'),
+                subtitle: const Text(
+                  'Open versioned artifacts for this session in Work',
+                ),
+                onTap: () => Navigator.pop(context, 'work_artifacts'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.account_tree_outlined),
                 title: const Text('Child Runs'),
                 onTap: () => Navigator.pop(context, 'child_runs'),
@@ -236,6 +267,18 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (action == 'delete') {
       await chatProvider.deleteCurrentSession();
+    } else if (action == 'work_project') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.projects);
+      }
+    } else if (action == 'work_todos') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.todos);
+      }
+    } else if (action == 'work_artifacts') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.artifacts);
+      }
     } else if (action == 'profile') {
       if (context.mounted) {
         await _handleProfileSelection(context);
@@ -278,6 +321,16 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         await _showRenameDialog(context, chatProvider);
       }
     }
+  }
+
+  Future<void> _openWorkTab(BuildContext context, WorkPageTab tab) {
+    return openWorkPage(
+      context,
+      arguments: workArgumentsForCurrentSession(
+        context,
+        initialTab: tab,
+      ),
+    );
   }
 
   Future<void> _showRenameDialog(

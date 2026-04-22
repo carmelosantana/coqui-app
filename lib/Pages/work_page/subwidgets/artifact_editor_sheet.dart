@@ -318,9 +318,13 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _filepathController,
-                      decoration: const InputDecoration(
+                      readOnly: _isEditing,
+                      decoration: InputDecoration(
                         labelText: 'File Path',
                         hintText: 'lib/Pages/work_page/work_page.dart',
+                        helperText: _isEditing
+                            ? 'Artifact paths are fixed at creation time. Review the current canonical path in the detail sheet.'
+                            : 'Set this when you want a code or config artifact to track a workspace file.',
                       ),
                     ),
                     const SizedBox(height: 12),

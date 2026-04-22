@@ -12,6 +12,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
+import 'package:coqui_app/Pages/work_page/work_navigation.dart';
+
 import 'title_divider.dart';
 
 class ChatDrawer extends StatelessWidget {
@@ -98,7 +100,13 @@ class ChatDrawer extends StatelessWidget {
                   if (ResponsiveBreakpoints.of(context).isMobile) {
                     Navigator.pop(context);
                   }
-                  Navigator.pushNamed(context, '/work');
+                  openWorkPage(
+                    context,
+                    arguments: workArgumentsForCurrentSession(
+                      context,
+                      initialTab: WorkPageTab.projects,
+                    ),
+                  );
                 }
               : null,
         );

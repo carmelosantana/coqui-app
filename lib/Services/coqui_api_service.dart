@@ -1056,6 +1056,32 @@ class CoquiApiService {
     return CoquiTodo.fromJson(body);
   }
 
+  Future<int> bulkUpdateTodos(
+    String sessionId, {
+    required List<Map<String, dynamic>> updates,
+  }) async {
+    final response = await http.patch(
+      _url('/sessions/$sessionId/todos/bulk'),
+      headers: _headers,
+      body: jsonEncode({'updates': updates}),
+    );
+    final body = _parseResponse(response);
+    return _coerceInt(body['updated_count']);
+  }
+
+  Future<int> reorderTodos(
+    String sessionId, {
+    required List<Map<String, dynamic>> ordering,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/todos/reorder'),
+      headers: _headers,
+      body: jsonEncode({'ordering': ordering}),
+    );
+    final body = _parseResponse(response);
+    return _coerceInt(body['reordered_count']);
+  }
+
   Future<List<CoquiArtifact>> listArtifacts(
     String sessionId, {
     String? type,

@@ -15,11 +15,12 @@ import 'package:coqui_app/Providers/work_provider.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
 import 'subwidgets/subwidgets.dart';
-
-enum _WorkTab { projects, sprints, todos, artifacts }
+import 'work_navigation.dart';
 
 class WorkPage extends StatefulWidget {
-  const WorkPage({super.key});
+  final WorkPageArguments? arguments;
+
+  const WorkPage({super.key, this.arguments});
 
   @override
   State<WorkPage> createState() => _WorkPageState();
@@ -35,6 +36,9 @@ class _WorkPageState extends State<WorkPage>
   String? _selectedProjectId;
   String? _selectedSprintId;
   String? _lastSessionId;
+  bool _todoSelectionMode = false;
+  bool _todoReorderMode = false;
+  final Set<String> _selectedTodoIds = <String>{};
 
   static const _projectFilters = [
     (label: 'All', value: null),
@@ -70,15 +74,24 @@ class _WorkPageState extends State<WorkPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this)
-      ..addListener(() {
-        if (!_tabController.indexIsChanging) {
-          setState(() {});
-        }
-      });
+    _tabController =
+        TabController(length: WorkPageTab.values.length, vsync: this)
+          ..addListener(() {
+            if (!_tabController.indexIsChanging) {
+              setState(() {});
+            }
+          });
+
+    final initialTab = widget.arguments?.initialTab;
+    if (initialTab != null) {
+      _tabController.index = initialTab.index;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final chatProvider = context.read<ChatProvider>();
       final provider = context.read<ProjectProvider>();
+      await _applyInitialNavigation(provider, chatProvider);
+      if (!mounted) return;
       await provider.fetchProjects();
       if (!mounted) return;
       _syncSelectedProject(provider);
@@ -86,7 +99,8 @@ class _WorkPageState extends State<WorkPage>
       if (selectedProjectId != null) {
         await provider.fetchProjectSprints(selectedProjectId);
         if (mounted) {
-          _syncSelectedSprint(provider);
+          _syncSelectedSprint(provider,
+              preferredSprintId: widget.arguments?.sprintId);
         }
       }
     });
@@ -98,7 +112,54 @@ class _WorkPageState extends State<WorkPage>
     super.dispose();
   }
 
-  _WorkTab get _activeTab => _WorkTab.values[_tabController.index];
+  WorkPageTab get _activeTab => WorkPageTab.values[_tabController.index];
+
+  Future<void> _applyInitialNavigation(
+    ProjectProvider provider,
+    ChatProvider chatProvider,
+  ) async {
+    final args = widget.arguments;
+    if (args == null) {
+      return;
+    }
+
+    final targetSessionId = args.sessionId;
+    if (targetSessionId != null &&
+        targetSessionId.isNotEmpty &&
+        chatProvider.currentSession?.id != targetSessionId) {
+      chatProvider.openSession(targetSessionId);
+    }
+
+    String? targetProjectId = args.projectId;
+    final targetSprintId = args.sprintId;
+
+    if ((targetProjectId == null || targetProjectId.isEmpty) &&
+        targetSprintId != null &&
+        targetSprintId.isNotEmpty) {
+      final sprint = await provider.loadSprintDetail(targetSprintId);
+      if (!mounted) {
+        return;
+      }
+      targetProjectId = sprint?.projectId;
+      if (sprint != null) {
+        setState(() {
+          _selectedProjectId = sprint.projectId;
+          _selectedSprintId = sprint.id;
+        });
+      }
+    }
+
+    if (targetProjectId != null && targetProjectId.isNotEmpty) {
+      await provider.fetchProjects(silent: true);
+      if (!mounted) {
+        return;
+      }
+      final resolvedProject = provider.projectById(targetProjectId);
+      if (resolvedProject != null) {
+        setState(() => _selectedProjectId = resolvedProject.id);
+      }
+    }
+  }
 
   void _ensureSessionScopedData(
     ChatProvider chatProvider,
@@ -137,7 +198,10 @@ class _WorkPageState extends State<WorkPage>
     }
   }
 
-  void _syncSelectedSprint(ProjectProvider provider) {
+  void _syncSelectedSprint(
+    ProjectProvider provider, {
+    String? preferredSprintId,
+  }) {
     final projectId = _selectedProjectId;
     if (projectId == null) {
       if (_selectedSprintId != null) {
@@ -149,6 +213,12 @@ class _WorkPageState extends State<WorkPage>
     final sprints = provider.sprintsForProject(projectId);
     if (_selectedSprintId != null &&
         sprints.any((item) => item.id == _selectedSprintId)) {
+      return;
+    }
+
+    if (preferredSprintId != null &&
+        sprints.any((item) => item.id == preferredSprintId)) {
+      setState(() => _selectedSprintId = preferredSprintId);
       return;
     }
 
@@ -220,10 +290,10 @@ class _WorkPageState extends State<WorkPage>
     final sessionId = context.read<ChatProvider>().currentSession?.id;
 
     switch (_activeTab) {
-      case _WorkTab.projects:
+      case WorkPageTab.projects:
         await projectProvider.fetchProjects();
         _syncSelectedProject(projectProvider);
-      case _WorkTab.sprints:
+      case WorkPageTab.sprints:
         final projectId = _selectedProjectId;
         if (projectId != null) {
           await projectProvider.fetchProjectSprints(projectId, force: true);
@@ -232,11 +302,11 @@ class _WorkPageState extends State<WorkPage>
             _syncSelectedSprint(projectProvider);
           }
         }
-      case _WorkTab.todos:
+      case WorkPageTab.todos:
         if (sessionId != null) {
           await workProvider.fetchTodos(sessionId, force: true);
         }
-      case _WorkTab.artifacts:
+      case WorkPageTab.artifacts:
         if (sessionId != null) {
           await workProvider.fetchArtifacts(sessionId, force: true);
         }
@@ -247,16 +317,16 @@ class _WorkPageState extends State<WorkPage>
     final chatProvider = context.read<ChatProvider>();
 
     switch (_activeTab) {
-      case _WorkTab.projects:
+      case WorkPageTab.projects:
         await _openProjectEditor();
-      case _WorkTab.sprints:
+      case WorkPageTab.sprints:
         final projectId = _selectedProjectId;
         if (projectId == null) {
           _showSnack('Choose a project first');
           return;
         }
         await _openSprintEditor(projectId: projectId);
-      case _WorkTab.todos:
+      case WorkPageTab.todos:
         final sessionId = chatProvider.currentSession?.id;
         if (sessionId == null) {
           _showSnack('Open a chat session first');
@@ -267,7 +337,7 @@ class _WorkPageState extends State<WorkPage>
           return;
         }
         await _openTodoEditor(sessionId: sessionId);
-      case _WorkTab.artifacts:
+      case WorkPageTab.artifacts:
         final sessionId = chatProvider.currentSession?.id;
         if (sessionId == null) {
           _showSnack('Open a chat session first');
@@ -514,9 +584,11 @@ class _WorkPageState extends State<WorkPage>
           sessionId: sessionId,
           artifact: artifact,
           availableProjects: projectProvider.projects,
-          availableSprints: _selectedProjectId == null
+          availableSprints: (artifact.projectId ?? _selectedProjectId) == null
               ? const []
-              : projectProvider.sprintsForProject(_selectedProjectId!),
+              : projectProvider.sprintsForProject(
+                  artifact.projectId ?? _selectedProjectId!,
+                ),
           readOnly: readOnly,
         ),
       ),
@@ -590,19 +662,19 @@ class _WorkPageState extends State<WorkPage>
 
   Widget? _buildFloatingActionButton(ChatProvider chatProvider) {
     switch (_activeTab) {
-      case _WorkTab.projects:
+      case WorkPageTab.projects:
         return FloatingActionButton.extended(
           onPressed: _openCreate,
           icon: const Icon(Icons.create_new_folder_outlined),
           label: const Text('New Project'),
         );
-      case _WorkTab.sprints:
+      case WorkPageTab.sprints:
         return FloatingActionButton.extended(
           onPressed: _openCreate,
           icon: const Icon(Icons.add_task_outlined),
           label: const Text('New Sprint'),
         );
-      case _WorkTab.todos:
+      case WorkPageTab.todos:
         return chatProvider.currentSession == null ||
                 chatProvider.isCurrentSessionReadOnly
             ? null
@@ -611,7 +683,7 @@ class _WorkPageState extends State<WorkPage>
                 icon: const Icon(Icons.add_task_outlined),
                 label: const Text('New Todo'),
               );
-      case _WorkTab.artifacts:
+      case WorkPageTab.artifacts:
         return chatProvider.currentSession == null ||
                 chatProvider.isCurrentSessionReadOnly
             ? null
@@ -812,6 +884,104 @@ class _WorkPageState extends State<WorkPage>
     );
   }
 
+  void _setTodoSelectionMode(bool enabled) {
+    setState(() {
+      _todoSelectionMode = enabled;
+      if (enabled) {
+        _todoReorderMode = false;
+      } else {
+        _selectedTodoIds.clear();
+      }
+    });
+  }
+
+  void _setTodoReorderMode(bool enabled) {
+    setState(() {
+      _todoReorderMode = enabled;
+      if (enabled) {
+        _todoSelectionMode = false;
+        _selectedTodoIds.clear();
+      }
+    });
+  }
+
+  void _toggleTodoSelection(String todoId) {
+    setState(() {
+      if (_selectedTodoIds.contains(todoId)) {
+        _selectedTodoIds.remove(todoId);
+      } else {
+        _selectedTodoIds.add(todoId);
+      }
+    });
+  }
+
+  Future<void> _openTodoBulkEdit(String sessionId) async {
+    if (_selectedTodoIds.isEmpty) {
+      return;
+    }
+
+    final result = await showModalBottomSheet<TodoBulkEditResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => TodoBulkEditSheet(itemCount: _selectedTodoIds.length),
+    );
+
+    if (!mounted || result == null || !result.hasChanges) {
+      return;
+    }
+
+    final provider = context.read<WorkProvider>();
+    final updatedCount = await provider.bulkUpdateTodos(
+      sessionId,
+      todoIds: _selectedTodoIds.toList(growable: false),
+      priority: result.priority,
+      status: result.status,
+      notes: result.notes,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (updatedCount > 0) {
+      _showSnack('Updated $updatedCount todos');
+      setState(() {
+        _selectedTodoIds.clear();
+        _todoSelectionMode = false;
+      });
+      return;
+    }
+
+    _showSnack(provider.error ?? 'Unable to update todos');
+    provider.clearError();
+  }
+
+  List<CoquiTodo> _mergeVisibleTodoOrder({
+    required List<CoquiTodo> fullOrder,
+    required List<CoquiTodo> reorderedVisible,
+    required Set<String> visibleIds,
+  }) {
+    final reorderedIterator = reorderedVisible.iterator;
+    final merged = <CoquiTodo>[];
+
+    for (final todo in fullOrder) {
+      if (!visibleIds.contains(todo.id)) {
+        merged.add(todo);
+        continue;
+      }
+
+      if (reorderedIterator.moveNext()) {
+        merged.add(reorderedIterator.current);
+      }
+    }
+
+    return merged;
+  }
+
   Widget _buildTodosTab() {
     return Consumer3<InstanceProvider, ChatProvider, WorkProvider>(
       builder: (context, instanceProvider, chatProvider, provider, _) {
@@ -836,6 +1006,7 @@ class _WorkPageState extends State<WorkPage>
         }
 
         final todos = _visibleTodos(provider, sessionId);
+        final allSessionTodos = provider.todosForSession(sessionId);
         final stats = provider.todoStatsForSession(sessionId);
 
         if (provider.isTodoSessionLoading(sessionId) &&
@@ -854,6 +1025,10 @@ class _WorkPageState extends State<WorkPage>
 
         final projectProvider = context.read<ProjectProvider>();
         final workArtifacts = provider.artifactsForSession(sessionId);
+        final visibleTodoIds = todos.map((item) => item.id).toSet();
+        final selectedVisibleTodoIds = _selectedTodoIds
+            .where((item) => visibleTodoIds.contains(item))
+            .toSet();
 
         return Column(
           children: [
@@ -883,6 +1058,34 @@ class _WorkPageState extends State<WorkPage>
                 setState(() => _todoStatusFilter = value as String?);
               },
             ),
+            _TodoActionBar(
+              readOnly: chatProvider.isCurrentSessionReadOnly,
+              selectionMode: _todoSelectionMode,
+              reorderMode: _todoReorderMode,
+              selectedCount: selectedVisibleTodoIds.length,
+              visibleCount: todos.length,
+              onStartSelection: () => _setTodoSelectionMode(true),
+              onStopSelection: () => _setTodoSelectionMode(false),
+              onStartReorder:
+                  todos.length < 2 ? null : () => _setTodoReorderMode(true),
+              onStopReorder: () => _setTodoReorderMode(false),
+              onSelectAll: todos.isEmpty
+                  ? null
+                  : () => setState(() {
+                        _selectedTodoIds
+                          ..clear()
+                          ..addAll(visibleTodoIds);
+                      }),
+              onClearSelection: selectedVisibleTodoIds.isEmpty
+                  ? null
+                  : () => setState(
+                        () =>
+                            _selectedTodoIds.removeAll(selectedVisibleTodoIds),
+                      ),
+              onBulkEdit: selectedVisibleTodoIds.isEmpty
+                  ? null
+                  : () => _openTodoBulkEdit(sessionId),
+            ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () => provider.fetchTodos(sessionId, force: true),
@@ -898,55 +1101,154 @@ class _WorkPageState extends State<WorkPage>
                           ),
                         ],
                       )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                        children: [
-                          _TodoStatsRow(stats: stats),
-                          const SizedBox(height: 16),
-                          ...todos.map(
-                            (todo) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _TodoCard(
-                                todo: todo,
-                                sprintLabel: todo.sprintId == null
-                                    ? null
-                                    : projectProvider
-                                        .sprintById(todo.sprintId!)
-                                        ?.label,
-                                artifactLabel: todo.artifactId == null
-                                    ? null
-                                    : _artifactLabelForId(
-                                        workArtifacts, todo.artifactId!),
-                                readOnly: chatProvider.isCurrentSessionReadOnly,
-                                busy: provider.isTodoMutating(todo.id),
-                                onTap: () => _openTodoEditor(
-                                    sessionId: sessionId, todo: todo),
-                                onStart: todo.isPending
-                                    ? () => provider.updateTodo(
-                                          sessionId,
-                                          todo.id,
-                                          status: 'in_progress',
-                                        )
-                                    : null,
-                                onComplete: todo.canComplete
-                                    ? () => provider.completeTodo(
-                                        sessionId, todo.id)
-                                    : null,
-                                onReopen: todo.canReopen
-                                    ? () =>
-                                        provider.reopenTodo(sessionId, todo.id)
-                                    : null,
-                                onCancel: todo.canCancel
-                                    ? () =>
-                                        provider.cancelTodo(sessionId, todo.id)
-                                    : null,
-                                onDelete: () =>
-                                    provider.deleteTodo(sessionId, todo.id),
-                              ),
+                    : _todoReorderMode
+                        ? ReorderableListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                            header: Column(
+                              children: [
+                                _TodoStatsRow(stats: stats),
+                                const SizedBox(height: 12),
+                                _InfoBanner(
+                                  message:
+                                      'Drag todos to change their order in the current filtered view. Hidden items keep their relative positions.',
+                                ),
+                                const SizedBox(height: 16),
+                              ],
                             ),
+                            itemCount: todos.length,
+                            onReorder: (oldIndex, newIndex) async {
+                              if (newIndex > oldIndex) {
+                                newIndex -= 1;
+                              }
+
+                              final reorderedVisible =
+                                  List<CoquiTodo>.from(todos);
+                              final moved = reorderedVisible.removeAt(oldIndex);
+                              reorderedVisible.insert(newIndex, moved);
+
+                              final merged = _mergeVisibleTodoOrder(
+                                fullOrder: allSessionTodos,
+                                reorderedVisible: reorderedVisible,
+                                visibleIds: visibleTodoIds,
+                              );
+
+                              final success = await provider.reorderTodos(
+                                sessionId,
+                                orderedTodoIds: [
+                                  for (final todo in merged) todo.id,
+                                ],
+                              );
+
+                              if (!mounted) {
+                                return;
+                              }
+
+                              if (!success) {
+                                _showSnack(
+                                  provider.error ?? 'Unable to reorder todos',
+                                );
+                                provider.clearError();
+                              }
+                            },
+                            itemBuilder: (context, index) {
+                              final todo = todos[index];
+                              return Padding(
+                                key: ValueKey(todo.id),
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _TodoCard(
+                                  todo: todo,
+                                  sprintLabel: todo.sprintId == null
+                                      ? null
+                                      : projectProvider
+                                          .sprintById(todo.sprintId!)
+                                          ?.label,
+                                  artifactLabel: todo.artifactId == null
+                                      ? null
+                                      : _artifactLabelForId(
+                                          workArtifacts, todo.artifactId!),
+                                  readOnly: true,
+                                  busy: provider.isTodoMutating(todo.id),
+                                  onTap: () {},
+                                  dragHandle:
+                                      ReorderableDelayedDragStartListener(
+                                    index: index,
+                                    child: const Icon(Icons.drag_indicator),
+                                  ),
+                                  onStart: null,
+                                  onComplete: null,
+                                  onReopen: null,
+                                  onCancel: null,
+                                  onDelete: () async => false,
+                                ),
+                              );
+                            },
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                            children: [
+                              _TodoStatsRow(stats: stats),
+                              const SizedBox(height: 16),
+                              ...todos.map(
+                                (todo) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _TodoCard(
+                                    todo: todo,
+                                    sprintLabel: todo.sprintId == null
+                                        ? null
+                                        : projectProvider
+                                            .sprintById(todo.sprintId!)
+                                            ?.label,
+                                    artifactLabel: todo.artifactId == null
+                                        ? null
+                                        : _artifactLabelForId(
+                                            workArtifacts, todo.artifactId!),
+                                    readOnly:
+                                        chatProvider.isCurrentSessionReadOnly,
+                                    busy: provider.isTodoMutating(todo.id),
+                                    selectionMode: _todoSelectionMode,
+                                    selected: selectedVisibleTodoIds
+                                        .contains(todo.id),
+                                    onSelectionChanged: _todoSelectionMode
+                                        ? (_) => _toggleTodoSelection(todo.id)
+                                        : null,
+                                    onTap: _todoSelectionMode
+                                        ? () => _toggleTodoSelection(todo.id)
+                                        : () => _openTodoEditor(
+                                              sessionId: sessionId,
+                                              todo: todo,
+                                            ),
+                                    onStart: todo.isPending
+                                        ? () => provider.updateTodo(
+                                              sessionId,
+                                              todo.id,
+                                              status: 'in_progress',
+                                            )
+                                        : null,
+                                    onComplete: todo.canComplete
+                                        ? () => provider.completeTodo(
+                                              sessionId,
+                                              todo.id,
+                                            )
+                                        : null,
+                                    onReopen: todo.canReopen
+                                        ? () => provider.reopenTodo(
+                                              sessionId,
+                                              todo.id,
+                                            )
+                                        : null,
+                                    onCancel: todo.canCancel
+                                        ? () => provider.cancelTodo(
+                                              sessionId,
+                                              todo.id,
+                                            )
+                                        : null,
+                                    onDelete: () =>
+                                        provider.deleteTodo(sessionId, todo.id),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
               ),
             ),
           ],
@@ -1551,6 +1853,110 @@ class _TodoStatsRow extends StatelessWidget {
   }
 }
 
+class _TodoActionBar extends StatelessWidget {
+  final bool readOnly;
+  final bool selectionMode;
+  final bool reorderMode;
+  final int selectedCount;
+  final int visibleCount;
+  final VoidCallback? onStartSelection;
+  final VoidCallback? onStopSelection;
+  final VoidCallback? onStartReorder;
+  final VoidCallback? onStopReorder;
+  final VoidCallback? onSelectAll;
+  final VoidCallback? onClearSelection;
+  final VoidCallback? onBulkEdit;
+
+  const _TodoActionBar({
+    required this.readOnly,
+    required this.selectionMode,
+    required this.reorderMode,
+    required this.selectedCount,
+    required this.visibleCount,
+    required this.onStartSelection,
+    required this.onStopSelection,
+    required this.onStartReorder,
+    required this.onStopReorder,
+    required this.onSelectAll,
+    required this.onClearSelection,
+    required this.onBulkEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (!selectionMode && !reorderMode)
+            OutlinedButton.icon(
+              onPressed: readOnly ? null : onStartSelection,
+              icon: const Icon(Icons.done_all_outlined),
+              label: const Text('Select'),
+            ),
+          if (!selectionMode && !reorderMode)
+            OutlinedButton.icon(
+              onPressed: readOnly ? null : onStartReorder,
+              icon: const Icon(Icons.reorder_outlined),
+              label: const Text('Reorder'),
+            ),
+          if (selectionMode) ...[
+            _InfoChip(label: '$selectedCount selected'),
+            TextButton.icon(
+              onPressed: onSelectAll,
+              icon: const Icon(Icons.select_all_outlined),
+              label: Text(visibleCount == 0 ? 'Select All' : 'Select Visible'),
+            ),
+            TextButton.icon(
+              onPressed: onClearSelection,
+              icon: const Icon(Icons.deselect_outlined),
+              label: const Text('Clear'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: readOnly ? null : onBulkEdit,
+              icon: const Icon(Icons.edit_note_outlined),
+              label: const Text('Bulk Edit'),
+            ),
+            TextButton(
+              onPressed: onStopSelection,
+              child: const Text('Done'),
+            ),
+          ],
+          if (reorderMode) ...[
+            const _InfoChip(label: 'Reorder mode'),
+            TextButton(
+              onPressed: onStopReorder,
+              child: const Text('Done'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoBanner extends StatelessWidget {
+  final String message;
+
+  const _InfoBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Text(message, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
 class _TodoCard extends StatelessWidget {
   final CoquiTodo todo;
   final String? sprintLabel;
@@ -1558,6 +1964,10 @@ class _TodoCard extends StatelessWidget {
   final bool readOnly;
   final bool busy;
   final VoidCallback onTap;
+  final bool selectionMode;
+  final bool selected;
+  final ValueChanged<bool?>? onSelectionChanged;
+  final Widget? dragHandle;
   final VoidCallback? onStart;
   final VoidCallback? onComplete;
   final VoidCallback? onReopen;
@@ -1571,6 +1981,10 @@ class _TodoCard extends StatelessWidget {
     required this.readOnly,
     required this.busy,
     required this.onTap,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectionChanged,
+    this.dragHandle,
     required this.onStart,
     required this.onComplete,
     required this.onReopen,
@@ -1596,6 +2010,13 @@ class _TodoCard extends StatelessWidget {
           children: [
             Row(
               children: [
+                if (selectionMode) ...[
+                  Checkbox.adaptive(
+                    value: selected,
+                    onChanged: readOnly || busy ? null : onSelectionChanged,
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 Expanded(
                   child: Text(
                     todo.label,
@@ -1603,6 +2024,10 @@ class _TodoCard extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
+                if (dragHandle != null) ...[
+                  const SizedBox(width: 8),
+                  dragHandle!,
+                ],
                 const SizedBox(width: 12),
                 TodoStatusBadge(todo: todo),
               ],
@@ -1743,6 +2168,7 @@ class _ArtifactCard extends StatelessWidget {
               children: [
                 _InfoChip(label: artifact.type),
                 _InfoChip(label: 'v${artifact.version}'),
+                _InfoChip(label: artifact.storageLabel),
                 if (projectLabel != null) _InfoChip(label: projectLabel!),
                 if (sprintLabel != null) _InfoChip(label: sprintLabel!),
                 if (artifact.hasLanguage) _InfoChip(label: artifact.language!),

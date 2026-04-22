@@ -72,9 +72,23 @@ class CoquiArtifact {
 
   bool get hasFilePath => filepath != null && filepath!.isNotEmpty;
 
+  bool get hasCanonicalPath =>
+      canonicalPath != null && canonicalPath!.isNotEmpty;
+
   bool get hasProjectLink => projectId != null && projectId!.isNotEmpty;
 
   bool get hasSprintLink => sprintId != null && sprintId!.isNotEmpty;
+
+  bool get isFilesystemBacked => storageMode == 'filesystem';
+
+  String get storageLabel =>
+      isFilesystemBacked ? 'Workspace file' : 'App managed';
+
+  String? get primaryPath {
+    if (hasCanonicalPath) return canonicalPath;
+    if (hasFilePath) return filepath;
+    return null;
+  }
 
   bool get isDraft => stage == 'draft';
 
