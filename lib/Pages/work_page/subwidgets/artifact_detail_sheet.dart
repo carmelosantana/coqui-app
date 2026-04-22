@@ -205,6 +205,7 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
         final sprint = widget.availableSprints
             .where((item) => item.id == artifact.sprintId)
             .firstOrNull;
+        final isReadOnly = widget.readOnly || artifact.isReadOnlyInApp;
 
         return SafeArea(
           child: DraggableScrollableSheet(
@@ -292,6 +293,16 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                                 .toList(),
                           ),
                         ],
+                        if (artifact.isReadOnlyInApp) ...[
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Read Only',
+                            child: Text(
+                              'Final artifacts are view-only in the app so the shipped version stays distinct from active drafts.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _SectionCard(
                           title: 'Storage',
@@ -338,16 +349,14 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                             runSpacing: 8,
                             children: [
                               FilledButton.tonalIcon(
-                                onPressed: widget.readOnly
-                                    ? null
-                                    : () => _edit(artifact),
+                                onPressed:
+                                    isReadOnly ? null : () => _edit(artifact),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),
                               OutlinedButton.icon(
-                                onPressed: widget.readOnly
-                                    ? null
-                                    : () => _delete(artifact),
+                                onPressed:
+                                    isReadOnly ? null : () => _delete(artifact),
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Delete'),
                               ),
@@ -435,7 +444,7 @@ class _ArtifactDetailSheetState extends State<ArtifactDetailSheet> {
                                                 ),
                                                 label: const Text('Compare'),
                                               ),
-                                              if (!widget.readOnly)
+                                              if (!isReadOnly)
                                                 TextButton(
                                                   onPressed: () =>
                                                       _restoreVersion(version),

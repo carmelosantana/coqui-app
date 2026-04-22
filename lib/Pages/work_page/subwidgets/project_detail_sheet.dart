@@ -180,6 +180,7 @@ class _ProjectDetailSheetState extends State<ProjectDetailSheet> {
             currentSession?.activeProjectId == project.id;
         final canAssign =
             currentSession != null && !chatProvider.isCurrentSessionReadOnly;
+        final isReadOnly = project.isReadOnlyInApp;
 
         return SafeArea(
           child: DraggableScrollableSheet(
@@ -253,6 +254,16 @@ class _ProjectDetailSheetState extends State<ProjectDetailSheet> {
                           Text(project.description!,
                               style: theme.textTheme.bodyMedium),
                         ],
+                        if (isReadOnly) ...[
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Read Only',
+                            child: Text(
+                              'Completed projects are view-only in the app to keep finished work distinct from active planning.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         _SectionCard(
                           title: 'Current Chat Context',
@@ -300,12 +311,15 @@ class _ProjectDetailSheetState extends State<ProjectDetailSheet> {
                             runSpacing: 8,
                             children: [
                               FilledButton.tonalIcon(
-                                onPressed: () => _edit(project),
+                                onPressed:
+                                    isReadOnly ? null : () => _edit(project),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),
                               FilledButton.tonalIcon(
-                                onPressed: () => _toggleStatus(project),
+                                onPressed: isReadOnly
+                                    ? null
+                                    : () => _toggleStatus(project),
                                 icon: Icon(project.isArchived
                                     ? Icons.unarchive_outlined
                                     : Icons.archive_outlined),

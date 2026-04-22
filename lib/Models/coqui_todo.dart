@@ -83,6 +83,8 @@ class CoquiTodo {
 
   bool get isCancelled => status == 'cancelled';
 
+  bool get isReadOnlyInApp => isCompleted;
+
   bool get canComplete => isPending || isInProgress;
 
   bool get canReopen => isCompleted || isCancelled;

@@ -9,6 +9,7 @@ import 'package:coqui_app/Providers/work_provider.dart';
 class TodoEditorSheet extends StatefulWidget {
   final String sessionId;
   final CoquiTodo? todo;
+  final bool readOnly;
   final List<CoquiSprint> availableSprints;
   final List<CoquiArtifact> availableArtifacts;
   final List<CoquiTodo> availableTodos;
@@ -19,6 +20,7 @@ class TodoEditorSheet extends StatefulWidget {
   const TodoEditorSheet({
     super.key,
     required this.sessionId,
+    required this.readOnly,
     required this.availableSprints,
     required this.availableArtifacts,
     required this.availableTodos,
@@ -42,6 +44,8 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
 
   bool get _isEditing => widget.todo != null;
 
+  bool get _isReadOnly => widget.readOnly;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +66,11 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
   }
 
   Future<void> _save() async {
+    if (_isReadOnly) {
+      _showSnack('Completed todos are read-only');
+      return;
+    }
+
     final provider = context.read<WorkProvider>();
     final title = _titleController.text.trim();
     final notes = _notesController.text.trim();
@@ -150,7 +159,7 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                             ? provider.isTodoMutating(widget.todo!.id)
                             : false;
                         return FilledButton(
-                          onPressed: busy ? null : _save,
+                          onPressed: busy || _isReadOnly ? null : _save,
                           child: busy
                               ? SizedBox(
                                   width: 16,
@@ -173,8 +182,16 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.all(20),
                   children: [
+                    if (_isReadOnly) ...[
+                      Text(
+                        'Completed todos are view-only in the app.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
                       controller: _titleController,
+                      enabled: !_isReadOnly,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Title',
@@ -193,11 +210,13 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                             value: 'medium', child: Text('Medium')),
                         DropdownMenuItem(value: 'low', child: Text('Low')),
                       ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _priority = value);
-                        }
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                setState(() => _priority = value);
+                              }
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
@@ -217,9 +236,11 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() => _selectedParentId = value);
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() => _selectedParentId = value);
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
@@ -239,9 +260,11 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() => _selectedSprintId = value);
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() => _selectedSprintId = value);
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
@@ -261,13 +284,16 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() => _selectedArtifactId = value);
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() => _selectedArtifactId = value);
+                            },
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _notesController,
+                      enabled: !_isReadOnly,
                       minLines: 3,
                       maxLines: 6,
                       textCapitalization: TextCapitalization.sentences,

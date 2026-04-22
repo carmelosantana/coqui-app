@@ -96,6 +96,8 @@ class CoquiArtifact {
 
   bool get isFinal => stage == 'final';
 
+  bool get isReadOnlyInApp => isFinal;
+
   String? get summary {
     final value = metadata?['summary'];
     return value is String && value.isNotEmpty ? value : null;

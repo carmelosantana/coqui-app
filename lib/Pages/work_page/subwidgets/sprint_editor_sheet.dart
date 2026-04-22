@@ -27,6 +27,8 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
 
   bool get _isEditing => widget.sprint != null;
 
+  bool get _isReadOnly => widget.sprint?.isReadOnlyInApp ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +49,11 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
   }
 
   Future<void> _save() async {
+    if (_isReadOnly) {
+      _showSnack('Completed sprints are read-only');
+      return;
+    }
+
     final provider = context.read<ProjectProvider>();
     final title = _titleController.text.trim();
     final acceptanceCriteria = _acceptanceCriteriaController.text.trim();
@@ -132,7 +139,7 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
                             ? provider.isSprintMutating(widget.sprint!.id)
                             : provider.isProjectMutating(widget.projectId);
                         return FilledButton(
-                          onPressed: busy ? null : _save,
+                          onPressed: busy || _isReadOnly ? null : _save,
                           child: busy
                               ? SizedBox(
                                   width: 16,
@@ -155,8 +162,16 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.all(20),
                   children: [
+                    if (_isReadOnly) ...[
+                      Text(
+                        'Completed sprints are view-only in the app.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
                       controller: _titleController,
+                      enabled: !_isReadOnly,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Title',
@@ -166,6 +181,7 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _acceptanceCriteriaController,
+                      enabled: !_isReadOnly,
                       minLines: 4,
                       maxLines: 8,
                       decoration: const InputDecoration(
@@ -177,6 +193,7 @@ class _SprintEditorSheetState extends State<SprintEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _maxReviewRoundsController,
+                      enabled: !_isReadOnly,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Max Review Rounds',

@@ -45,6 +45,8 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
 
   bool get _isEditing => widget.artifact != null;
 
+  bool get _isReadOnly => widget.artifact?.isReadOnlyInApp ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +77,11 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
   }
 
   Future<void> _save() async {
+    if (_isReadOnly) {
+      _showSnack('Final artifacts are read-only');
+      return;
+    }
+
     final provider = context.read<WorkProvider>();
     final title = _titleController.text.trim();
     final content = _contentController.text;
@@ -187,7 +194,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                             ? provider.isArtifactMutating(widget.artifact!.id)
                             : false;
                         return FilledButton(
-                          onPressed: busy ? null : _save,
+                          onPressed: busy || _isReadOnly ? null : _save,
                           child: busy
                               ? SizedBox(
                                   width: 16,
@@ -210,8 +217,16 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.all(20),
                   children: [
+                    if (_isReadOnly) ...[
+                      Text(
+                        'Final artifacts are view-only in the app.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
                       controller: _titleController,
+                      enabled: !_isReadOnly,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Title',
@@ -231,7 +246,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                             value: 'config', child: Text('Config')),
                         DropdownMenuItem(value: 'plan', child: Text('Plan')),
                       ],
-                      onChanged: _isEditing
+                      onChanged: _isEditing || _isReadOnly
                           ? null
                           : (value) {
                               if (value != null) {
@@ -249,11 +264,13 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                             value: 'review', child: Text('Review')),
                         DropdownMenuItem(value: 'final', child: Text('Final')),
                       ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _stage = value);
-                        }
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                setState(() => _stage = value);
+                              }
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
@@ -273,17 +290,19 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedProjectId = value;
-                          if (value == null) {
-                            _selectedSprintId = null;
-                            _persistent = false;
-                          } else {
-                            _persistent = true;
-                          }
-                        });
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedProjectId = value;
+                                if (value == null) {
+                                  _selectedSprintId = null;
+                                  _persistent = false;
+                                } else {
+                                  _persistent = true;
+                                }
+                              });
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
@@ -303,13 +322,16 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() => _selectedSprintId = value);
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() => _selectedSprintId = value);
+                            },
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _languageController,
+                      enabled: !_isReadOnly,
                       decoration: const InputDecoration(
                         labelText: 'Language',
                         hintText: 'dart',
@@ -318,7 +340,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _filepathController,
-                      readOnly: _isEditing,
+                      readOnly: _isEditing || _isReadOnly,
                       decoration: InputDecoration(
                         labelText: 'File Path',
                         hintText: 'lib/Pages/work_page/work_page.dart',
@@ -330,6 +352,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _summaryController,
+                      enabled: !_isReadOnly,
                       minLines: 2,
                       maxLines: 4,
                       textCapitalization: TextCapitalization.sentences,
@@ -342,6 +365,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _tagsController,
+                      enabled: !_isReadOnly,
                       decoration: const InputDecoration(
                         labelText: 'Tags',
                         hintText: 'work, planning, ui',
@@ -351,6 +375,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _changeSummaryController,
+                        enabled: !_isReadOnly,
                         decoration: const InputDecoration(
                           labelText: 'Change Summary',
                           hintText: 'Added todo and artifact tabs',
@@ -360,9 +385,11 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     SwitchListTile.adaptive(
                       value: _persistent,
-                      onChanged: (value) {
-                        setState(() => _persistent = value);
-                      },
+                      onChanged: _isReadOnly
+                          ? null
+                          : (value) {
+                              setState(() => _persistent = value);
+                            },
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Persistent'),
                       subtitle: const Text(
@@ -372,6 +399,7 @@ class _ArtifactEditorSheetState extends State<ArtifactEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _contentController,
+                      enabled: !_isReadOnly,
                       minLines: 10,
                       maxLines: 18,
                       decoration: const InputDecoration(

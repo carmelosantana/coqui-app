@@ -406,6 +406,7 @@ class _WorkPageState extends State<WorkPage>
 
   Future<void> _openCreate() async {
     final chatProvider = context.read<ChatProvider>();
+    final projectProvider = context.read<ProjectProvider>();
 
     switch (_activeTab) {
       case WorkPageTab.projects:
@@ -414,6 +415,10 @@ class _WorkPageState extends State<WorkPage>
         final projectId = _selectedProjectId;
         if (projectId == null) {
           _showSnack('Choose a project first');
+          return;
+        }
+        if (projectProvider.projectById(projectId)?.isReadOnlyInApp == true) {
+          _showSnack('Completed projects are read-only');
           return;
         }
         await _openSprintEditor(projectId: projectId);
@@ -443,6 +448,11 @@ class _WorkPageState extends State<WorkPage>
   }
 
   Future<void> _openProjectEditor({CoquiProject? project}) async {
+    if (project?.isReadOnlyInApp == true) {
+      _showSnack('Completed projects are read-only');
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -466,6 +476,21 @@ class _WorkPageState extends State<WorkPage>
     required String projectId,
     CoquiSprint? sprint,
   }) async {
+    if (sprint?.isReadOnlyInApp == true) {
+      _showSnack('Completed sprints are read-only');
+      return;
+    }
+
+    if (sprint == null &&
+        context
+                .read<ProjectProvider>()
+                .projectById(projectId)
+                ?.isReadOnlyInApp ==
+            true) {
+      _showSnack('Completed projects are read-only');
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -513,6 +538,8 @@ class _WorkPageState extends State<WorkPage>
         child: TodoEditorSheet(
           sessionId: sessionId,
           todo: todo,
+          readOnly: context.read<ChatProvider>().isCurrentSessionReadOnly ||
+              (todo?.isReadOnlyInApp ?? false),
           availableTodos: _availableParentTodos(
             provider: workProvider,
             sessionId: sessionId,
@@ -566,6 +593,11 @@ class _WorkPageState extends State<WorkPage>
     required String sessionId,
     CoquiArtifact? artifact,
   }) async {
+    if (artifact?.isReadOnlyInApp == true) {
+      _showSnack('Final artifacts are read-only');
+      return;
+    }
+
     final projectProvider = context.read<ProjectProvider>();
     final workProvider = context.read<WorkProvider>();
     final initialProjectId = artifact?.projectId ??
@@ -875,6 +907,8 @@ class _WorkPageState extends State<WorkPage>
   }
 
   Widget? _buildFloatingActionButton(ChatProvider chatProvider) {
+    final projectProvider = context.watch<ProjectProvider>();
+
     switch (_activeTab) {
       case WorkPageTab.projects:
         return FloatingActionButton.extended(
@@ -883,8 +917,12 @@ class _WorkPageState extends State<WorkPage>
           label: const Text('New Project'),
         );
       case WorkPageTab.sprints:
+        final selectedProject = _selectedProjectId == null
+            ? null
+            : projectProvider.projectById(_selectedProjectId!);
         return FloatingActionButton.extended(
-          onPressed: _openCreate,
+          onPressed:
+              selectedProject?.isReadOnlyInApp == true ? null : _openCreate,
           icon: const Icon(Icons.add_task_outlined),
           label: const Text('New Sprint'),
         );
@@ -1071,6 +1109,7 @@ class _WorkPageState extends State<WorkPage>
                                       sprint: sprint,
                                       isSelected:
                                           _selectedSprintId == sprint.id,
+                                      readOnly: sprint.isReadOnlyInApp,
                                       isCurrentSessionSprint:
                                           currentSessionId != null &&
                                               sprint.lastSessionId ==
@@ -1241,8 +1280,12 @@ class _WorkPageState extends State<WorkPage>
         final projectProvider = context.read<ProjectProvider>();
         final workArtifacts = provider.artifactsForSession(sessionId);
         final visibleTodoIds = todos.map((item) => item.id).toSet();
+        final editableVisibleTodoIds = todos
+            .where((item) => !item.isReadOnlyInApp)
+            .map((item) => item.id)
+            .toSet();
         final selectedVisibleTodoIds = _selectedTodoIds
-            .where((item) => visibleTodoIds.contains(item))
+            .where((item) => editableVisibleTodoIds.contains(item))
             .toSet();
 
         return Column(
@@ -1279,17 +1322,21 @@ class _WorkPageState extends State<WorkPage>
               reorderMode: _todoReorderMode,
               selectedCount: selectedVisibleTodoIds.length,
               visibleCount: todos.length,
-              onStartSelection: () => _setTodoSelectionMode(true),
+              onStartSelection: editableVisibleTodoIds.isEmpty
+                  ? null
+                  : () => _setTodoSelectionMode(true),
               onStopSelection: () => _setTodoSelectionMode(false),
               onStartReorder:
-                  todos.length < 2 ? null : () => _setTodoReorderMode(true),
+                  todos.length < 2 || todos.any((item) => item.isReadOnlyInApp)
+                      ? null
+                      : () => _setTodoReorderMode(true),
               onStopReorder: () => _setTodoReorderMode(false),
-              onSelectAll: todos.isEmpty
+              onSelectAll: editableVisibleTodoIds.isEmpty
                   ? null
                   : () => setState(() {
                         _selectedTodoIds
                           ..clear()
-                          ..addAll(visibleTodoIds);
+                          ..addAll(editableVisibleTodoIds);
                       }),
               onClearSelection: selectedVisibleTodoIds.isEmpty
                   ? null
@@ -1436,22 +1483,28 @@ class _WorkPageState extends State<WorkPage>
                                             todo.parentId!,
                                           ),
                                     readOnly:
-                                        chatProvider.isCurrentSessionReadOnly,
+                                        chatProvider.isCurrentSessionReadOnly ||
+                                            todo.isReadOnlyInApp,
                                     busy: provider.isTodoMutating(todo.id),
                                     selectionMode: _todoSelectionMode,
                                     selected: selectedVisibleTodoIds
                                         .contains(todo.id),
-                                    onSelectionChanged: _todoSelectionMode
+                                    onSelectionChanged: _todoSelectionMode &&
+                                            !todo.isReadOnlyInApp
                                         ? (_) => _toggleTodoSelection(todo.id)
                                         : null,
                                     onTap: _todoSelectionMode
-                                        ? () => _toggleTodoSelection(todo.id)
+                                        ? (todo.isReadOnlyInApp
+                                            ? () {}
+                                            : () =>
+                                                _toggleTodoSelection(todo.id))
                                         : () => _openTodoEditor(
                                               sessionId: sessionId,
                                               todo: todo,
                                             ),
                                     onAddSubtask: chatProvider
-                                            .isCurrentSessionReadOnly
+                                                .isCurrentSessionReadOnly ||
+                                            todo.isReadOnlyInApp
                                         ? null
                                         : () => _openTodoEditor(
                                               sessionId: sessionId,
@@ -1473,12 +1526,13 @@ class _WorkPageState extends State<WorkPage>
                                               todo.id,
                                             )
                                         : null,
-                                    onReopen: todo.canReopen
-                                        ? () => provider.reopenTodo(
-                                              sessionId,
-                                              todo.id,
-                                            )
-                                        : null,
+                                    onReopen:
+                                        todo.canReopen && !todo.isReadOnlyInApp
+                                            ? () => provider.reopenTodo(
+                                                  sessionId,
+                                                  todo.id,
+                                                )
+                                            : null,
                                     onCancel: todo.canCancel
                                         ? () => provider.cancelTodo(
                                               sessionId,
@@ -1604,13 +1658,15 @@ class _WorkPageState extends State<WorkPage>
                                           .sprintById(artifact.sprintId!)
                                           ?.label,
                                   readOnly:
-                                      chatProvider.isCurrentSessionReadOnly,
+                                      chatProvider.isCurrentSessionReadOnly ||
+                                          artifact.isReadOnlyInApp,
                                   busy:
                                       provider.isArtifactMutating(artifact.id),
                                   onTap: () => _openArtifactDetail(
                                     sessionId,
                                     artifact,
-                                    chatProvider.isCurrentSessionReadOnly,
+                                    chatProvider.isCurrentSessionReadOnly ||
+                                        artifact.isReadOnlyInApp,
                                   ),
                                   onEdit: () => _openArtifactEditor(
                                     sessionId: sessionId,
@@ -1989,6 +2045,7 @@ class _ProjectCard extends StatelessWidget {
 class _SprintCard extends StatelessWidget {
   final CoquiSprint sprint;
   final bool isSelected;
+  final bool readOnly;
   final bool isCurrentSessionSprint;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -1997,6 +2054,7 @@ class _SprintCard extends StatelessWidget {
   const _SprintCard({
     required this.sprint,
     required this.isSelected,
+    required this.readOnly,
     required this.isCurrentSessionSprint,
     required this.onTap,
     required this.onEdit,
@@ -2071,7 +2129,7 @@ class _SprintCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 TextButton.icon(
-                  onPressed: onEdit,
+                  onPressed: readOnly ? null : onEdit,
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Quick Edit'),
                 ),

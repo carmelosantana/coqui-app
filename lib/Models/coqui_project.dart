@@ -54,6 +54,8 @@ class CoquiProject {
 
   bool get isCompleted => status == 'completed';
 
+  bool get isReadOnlyInApp => isCompleted;
+
   bool get canDelete => isArchived;
 }
 

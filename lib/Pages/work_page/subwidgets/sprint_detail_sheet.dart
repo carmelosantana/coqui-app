@@ -164,6 +164,7 @@ class _SprintDetailSheetState extends State<SprintDetailSheet> {
       builder: (context, provider, _) {
         final sprint = provider.sprintById(widget.sprint.id) ?? widget.sprint;
         final project = provider.projectById(sprint.projectId);
+        final isReadOnly = sprint.isReadOnlyInApp;
 
         return SafeArea(
           child: DraggableScrollableSheet(
@@ -252,6 +253,16 @@ class _SprintDetailSheetState extends State<SprintDetailSheet> {
                             ),
                           ),
                         ],
+                        if (isReadOnly) ...[
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Read Only',
+                            child: Text(
+                              'Completed sprints are view-only in the app to avoid accidental changes after delivery.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _SectionCard(
                           title: 'Sprint Actions',
@@ -260,7 +271,8 @@ class _SprintDetailSheetState extends State<SprintDetailSheet> {
                             runSpacing: 8,
                             children: [
                               FilledButton.tonalIcon(
-                                onPressed: () => _edit(sprint),
+                                onPressed:
+                                    isReadOnly ? null : () => _edit(sprint),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),

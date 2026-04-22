@@ -23,6 +23,8 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
 
   bool get _isEditing => widget.project != null;
 
+  bool get _isReadOnly => widget.project?.isReadOnlyInApp ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +45,11 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
   }
 
   Future<void> _save() async {
+    if (_isReadOnly) {
+      _showSnack('Completed projects are read-only');
+      return;
+    }
+
     final provider = context.read<ProjectProvider>();
     final title = _titleController.text.trim();
     final slug = _slugController.text.trim().isEmpty
@@ -124,7 +131,7 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                             ? provider.isProjectMutating(widget.project!.id)
                             : provider.isLoading;
                         return FilledButton(
-                          onPressed: busy ? null : _save,
+                          onPressed: busy || _isReadOnly ? null : _save,
                           child: busy
                               ? SizedBox(
                                   width: 16,
@@ -147,8 +154,16 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.all(20),
                   children: [
+                    if (_isReadOnly) ...[
+                      Text(
+                        'Completed projects are view-only in the app.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
                       controller: _titleController,
+                      enabled: !_isReadOnly,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Title',
@@ -158,7 +173,7 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _slugController,
-                      enabled: !_isEditing,
+                      enabled: !_isEditing && !_isReadOnly,
                       decoration: InputDecoration(
                         labelText: 'Slug',
                         hintText: 'career-ops',
@@ -170,6 +185,7 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _descriptionController,
+                      enabled: !_isReadOnly,
                       minLines: 3,
                       maxLines: 6,
                       textCapitalization: TextCapitalization.sentences,

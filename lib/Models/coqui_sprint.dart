@@ -62,6 +62,8 @@ class CoquiSprint {
 
   bool get isRejected => status == 'rejected';
 
+  bool get isReadOnlyInApp => isComplete;
+
   bool get canDelete => isPlanned;
 
   bool get canStart => isPlanned;
