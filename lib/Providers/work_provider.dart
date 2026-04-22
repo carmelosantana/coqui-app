@@ -357,6 +357,46 @@ class WorkProvider extends ChangeNotifier {
     }
   }
 
+  Future<int> bulkDeleteTodos(
+    String sessionId, {
+    required List<String> todoIds,
+  }) async {
+    if (todoIds.isEmpty) {
+      return 0;
+    }
+
+    final effectiveTodoIds = _pruneCascadeDeleteIds(sessionId, todoIds);
+    _mutatingTodoIds.addAll(todoIds);
+    _error = null;
+    notifyListeners();
+
+    var deletedCount = 0;
+    final failures = <String>[];
+
+    try {
+      for (final todoId in effectiveTodoIds) {
+        try {
+          await _apiService.deleteTodo(sessionId, todoId);
+          deletedCount += 1;
+        } catch (_) {
+          failures.add(todoId);
+        }
+      }
+
+      await fetchTodos(sessionId, force: true);
+      if (failures.isNotEmpty) {
+        _error = 'Deleted $deletedCount todos, but ${failures.length} failed.';
+      }
+      return deletedCount;
+    } catch (e) {
+      _error = CoquiException.friendly(e).message;
+      return deletedCount;
+    } finally {
+      _mutatingTodoIds.removeAll(todoIds);
+      notifyListeners();
+    }
+  }
+
   Future<bool> reorderTodos(
     String sessionId, {
     required List<String> orderedTodoIds,
@@ -613,5 +653,33 @@ class WorkProvider extends ChangeNotifier {
       items.insert(0, artifact);
     }
     _artifactsBySessionId[sessionId] = items;
+  }
+
+  List<String> _pruneCascadeDeleteIds(String sessionId, List<String> todoIds) {
+    final selectedIds = todoIds.toSet();
+    final todoById = {
+      for (final todo in _todosBySessionId[sessionId] ?? const <CoquiTodo>[])
+        todo.id: todo,
+    };
+
+    return [
+      for (final todoId in todoIds)
+        if (!_hasSelectedAncestor(todoById, todoId, selectedIds)) todoId,
+    ];
+  }
+
+  bool _hasSelectedAncestor(
+    Map<String, CoquiTodo> todoById,
+    String todoId,
+    Set<String> selectedIds,
+  ) {
+    var parentId = todoById[todoId]?.parentId;
+    while (parentId != null && parentId.isNotEmpty) {
+      if (selectedIds.contains(parentId)) {
+        return true;
+      }
+      parentId = todoById[parentId]?.parentId;
+    }
+    return false;
   }
 }

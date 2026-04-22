@@ -289,6 +289,7 @@ class _CoquiAppState extends State<CoquiApp> {
         final themeName = _supporterThemeName;
         return MaterialApp(
           navigatorKey: _navigatorKey,
+          restorationScopeId: 'coqui_app',
           title: AppConstants.appName,
           theme: CoquiTheme.light(themeName: themeName),
           darkTheme: CoquiTheme.dark(themeName: themeName),
@@ -352,9 +353,9 @@ class _CoquiAppState extends State<CoquiApp> {
             }
 
             if (settings.name == '/work') {
-              final args = settings.arguments is WorkPageArguments
-                  ? settings.arguments as WorkPageArguments
-                  : null;
+              final args = WorkPageArguments.fromRouteArguments(
+                settings.arguments,
+              );
               return MaterialPageRoute(
                 builder: (context) => WorkPage(arguments: args),
               );

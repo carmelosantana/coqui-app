@@ -69,6 +69,8 @@ class CoquiTodo {
 
   bool get hasArtifactLink => artifactId != null && artifactId!.isNotEmpty;
 
+  bool get hasParentLink => parentId != null && parentId!.isNotEmpty;
+
   bool get hasSprintLink => sprintId != null && sprintId!.isNotEmpty;
 
   bool get hasSubtasks => subtasks.isNotEmpty;

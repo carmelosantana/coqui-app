@@ -27,8 +27,16 @@ class WorkPage extends StatefulWidget {
 }
 
 class _WorkPageState extends State<WorkPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RestorationMixin {
   late final TabController _tabController;
+  late final RestorableInt _restoredTabIndex;
+  late final RestorableStringN _restoredSessionId;
+  late final RestorableStringN _restoredProjectId;
+  late final RestorableStringN _restoredSprintId;
+  late final RestorableStringN _restoredProjectStatusFilter;
+  late final RestorableStringN _restoredSprintStatusFilter;
+  late final RestorableStringN _restoredTodoStatusFilter;
+  late final RestorableStringN _restoredArtifactStageFilter;
   String? _projectStatusFilter;
   String? _sprintStatusFilter;
   String? _todoStatusFilter;
@@ -74,18 +82,31 @@ class _WorkPageState extends State<WorkPage>
   @override
   void initState() {
     super.initState();
+    _restoredTabIndex = RestorableInt(widget.arguments?.initialTab.index ?? 0);
+    _restoredSessionId = RestorableStringN(widget.arguments?.sessionId);
+    _restoredProjectId = RestorableStringN(widget.arguments?.projectId);
+    _restoredSprintId = RestorableStringN(widget.arguments?.sprintId);
+    _restoredProjectStatusFilter = RestorableStringN(null);
+    _restoredSprintStatusFilter = RestorableStringN(null);
+    _restoredTodoStatusFilter = RestorableStringN(null);
+    _restoredArtifactStageFilter = RestorableStringN(null);
+    _selectedProjectId = _restoredProjectId.value;
+    _selectedSprintId = _restoredSprintId.value;
+    _projectStatusFilter = _restoredProjectStatusFilter.value;
+    _sprintStatusFilter = _restoredSprintStatusFilter.value;
+    _todoStatusFilter = _restoredTodoStatusFilter.value;
+    _artifactStageFilter = _restoredArtifactStageFilter.value;
+
     _tabController =
         TabController(length: WorkPageTab.values.length, vsync: this)
           ..addListener(() {
             if (!_tabController.indexIsChanging) {
+              _restoredTabIndex.value = _tabController.index;
               setState(() {});
             }
           });
 
-    final initialTab = widget.arguments?.initialTab;
-    if (initialTab != null) {
-      _tabController.index = initialTab.index;
-    }
+    _tabController.index = _restoredTabIndex.value;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final chatProvider = context.read<ChatProvider>();
@@ -107,8 +128,52 @@ class _WorkPageState extends State<WorkPage>
   }
 
   @override
+  String? get restorationId => 'work_page';
+
+  @override
+  void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
+    registerForRestoration(_restoredTabIndex, 'work_tab_index');
+    registerForRestoration(_restoredSessionId, 'work_session_id');
+    registerForRestoration(_restoredProjectId, 'work_project_id');
+    registerForRestoration(_restoredSprintId, 'work_sprint_id');
+    registerForRestoration(
+      _restoredProjectStatusFilter,
+      'work_project_status_filter',
+    );
+    registerForRestoration(
+      _restoredSprintStatusFilter,
+      'work_sprint_status_filter',
+    );
+    registerForRestoration(
+        _restoredTodoStatusFilter, 'work_todo_status_filter');
+    registerForRestoration(
+      _restoredArtifactStageFilter,
+      'work_artifact_stage_filter',
+    );
+
+    _tabController.index = _restoredTabIndex.value.clamp(
+      0,
+      WorkPageTab.values.length - 1,
+    );
+    _selectedProjectId = _restoredProjectId.value;
+    _selectedSprintId = _restoredSprintId.value;
+    _projectStatusFilter = _restoredProjectStatusFilter.value;
+    _sprintStatusFilter = _restoredSprintStatusFilter.value;
+    _todoStatusFilter = _restoredTodoStatusFilter.value;
+    _artifactStageFilter = _restoredArtifactStageFilter.value;
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
+    _restoredTabIndex.dispose();
+    _restoredSessionId.dispose();
+    _restoredProjectId.dispose();
+    _restoredSprintId.dispose();
+    _restoredProjectStatusFilter.dispose();
+    _restoredSprintStatusFilter.dispose();
+    _restoredTodoStatusFilter.dispose();
+    _restoredArtifactStageFilter.dispose();
     super.dispose();
   }
 
@@ -118,20 +183,15 @@ class _WorkPageState extends State<WorkPage>
     ProjectProvider provider,
     ChatProvider chatProvider,
   ) async {
-    final args = widget.arguments;
-    if (args == null) {
-      return;
-    }
-
-    final targetSessionId = args.sessionId;
+    final targetSessionId = _restoredSessionId.value;
     if (targetSessionId != null &&
         targetSessionId.isNotEmpty &&
         chatProvider.currentSession?.id != targetSessionId) {
       chatProvider.openSession(targetSessionId);
     }
 
-    String? targetProjectId = args.projectId;
-    final targetSprintId = args.sprintId;
+    String? targetProjectId = _restoredProjectId.value;
+    final targetSprintId = _restoredSprintId.value;
 
     if ((targetProjectId == null || targetProjectId.isEmpty) &&
         targetSprintId != null &&
@@ -143,8 +203,8 @@ class _WorkPageState extends State<WorkPage>
       targetProjectId = sprint?.projectId;
       if (sprint != null) {
         setState(() {
-          _selectedProjectId = sprint.projectId;
-          _selectedSprintId = sprint.id;
+          _setSelectedProjectId(sprint.projectId);
+          _setSelectedSprintId(sprint.id);
         });
       }
     }
@@ -156,9 +216,39 @@ class _WorkPageState extends State<WorkPage>
       }
       final resolvedProject = provider.projectById(targetProjectId);
       if (resolvedProject != null) {
-        setState(() => _selectedProjectId = resolvedProject.id);
+        setState(() => _setSelectedProjectId(resolvedProject.id));
       }
     }
+  }
+
+  void _setSelectedProjectId(String? value) {
+    _selectedProjectId = value;
+    _restoredProjectId.value = value;
+  }
+
+  void _setSelectedSprintId(String? value) {
+    _selectedSprintId = value;
+    _restoredSprintId.value = value;
+  }
+
+  void _setProjectStatusFilter(String? value) {
+    _projectStatusFilter = value;
+    _restoredProjectStatusFilter.value = value;
+  }
+
+  void _setSprintStatusFilter(String? value) {
+    _sprintStatusFilter = value;
+    _restoredSprintStatusFilter.value = value;
+  }
+
+  void _setTodoStatusFilter(String? value) {
+    _todoStatusFilter = value;
+    _restoredTodoStatusFilter.value = value;
+  }
+
+  void _setArtifactStageFilter(String? value) {
+    _artifactStageFilter = value;
+    _restoredArtifactStageFilter.value = value;
   }
 
   void _ensureSessionScopedData(
@@ -171,6 +261,7 @@ class _WorkPageState extends State<WorkPage>
     }
 
     _lastSessionId = sessionId;
+    _restoredSessionId.value = sessionId;
     if (sessionId == null) {
       return;
     }
@@ -190,11 +281,11 @@ class _WorkPageState extends State<WorkPage>
     }
     if (currentSessionProjectId != null &&
         provider.projectById(currentSessionProjectId) != null) {
-      setState(() => _selectedProjectId = currentSessionProjectId);
+      setState(() => _setSelectedProjectId(currentSessionProjectId));
       return;
     }
     if (provider.projects.isNotEmpty) {
-      setState(() => _selectedProjectId = provider.projects.first.id);
+      setState(() => _setSelectedProjectId(provider.projects.first.id));
     }
   }
 
@@ -205,7 +296,7 @@ class _WorkPageState extends State<WorkPage>
     final projectId = _selectedProjectId;
     if (projectId == null) {
       if (_selectedSprintId != null) {
-        setState(() => _selectedSprintId = null);
+        setState(() => _setSelectedSprintId(null));
       }
       return;
     }
@@ -218,7 +309,7 @@ class _WorkPageState extends State<WorkPage>
 
     if (preferredSprintId != null &&
         sprints.any((item) => item.id == preferredSprintId)) {
-      setState(() => _selectedSprintId = preferredSprintId);
+      setState(() => _setSelectedSprintId(preferredSprintId));
       return;
     }
 
@@ -229,7 +320,7 @@ class _WorkPageState extends State<WorkPage>
         : null;
 
     if (_selectedSprintId != nextSprintId) {
-      setState(() => _selectedSprintId = nextSprintId);
+      setState(() => _setSelectedSprintId(nextSprintId));
     }
   }
 
@@ -404,6 +495,9 @@ class _WorkPageState extends State<WorkPage>
   Future<void> _openTodoEditor({
     required String sessionId,
     CoquiTodo? todo,
+    String? initialParentId,
+    String? initialArtifactId,
+    String? initialSprintId,
   }) async {
     final projectProvider = context.read<ProjectProvider>();
     final workProvider = context.read<WorkProvider>();
@@ -419,14 +513,53 @@ class _WorkPageState extends State<WorkPage>
         child: TodoEditorSheet(
           sessionId: sessionId,
           todo: todo,
+          availableTodos: _availableParentTodos(
+            provider: workProvider,
+            sessionId: sessionId,
+            currentTodo: todo,
+          ),
           availableSprints: _selectedProjectId == null
               ? const []
               : projectProvider.sprintsForProject(_selectedProjectId!),
           availableArtifacts: workProvider.artifactsForSession(sessionId),
-          initialSprintId: _selectedSprintId,
+          initialSprintId:
+              todo?.sprintId ?? initialSprintId ?? _selectedSprintId,
+          initialParentId: initialParentId,
+          initialArtifactId: initialArtifactId,
         ),
       ),
     );
+  }
+
+  List<CoquiTodo> _availableParentTodos({
+    required WorkProvider provider,
+    required String sessionId,
+    CoquiTodo? currentTodo,
+  }) {
+    final excludedIds = <String>{};
+    if (currentTodo != null) {
+      excludedIds
+        ..add(currentTodo.id)
+        ..addAll(_descendantTodoIds(currentTodo));
+    }
+
+    return provider.todosForSession(sessionId).where((todo) {
+      return !excludedIds.contains(todo.id);
+    }).toList();
+  }
+
+  Set<String> _descendantTodoIds(CoquiTodo todo) {
+    final descendants = <String>{};
+
+    void visit(CoquiTodo item) {
+      for (final child in item.subtasks) {
+        descendants.add(child.id);
+        visit(child);
+      }
+    }
+
+    visit(todo);
+    return descendants;
   }
 
   Future<void> _openArtifactEditor({
@@ -491,8 +624,8 @@ class _WorkPageState extends State<WorkPage>
 
     if (!mounted || selected == null) return;
     setState(() {
-      _selectedProjectId = selected.id;
-      _selectedSprintId = null;
+      _setSelectedProjectId(selected.id);
+      _setSelectedSprintId(null);
     });
     await provider.fetchProjectSprints(selected.id, force: true);
     if (mounted) {
@@ -532,7 +665,88 @@ class _WorkPageState extends State<WorkPage>
     );
 
     if (!mounted) return;
-    setState(() => _selectedSprintId = selected?.id);
+    setState(() => _setSelectedSprintId(selected?.id));
+  }
+
+  Future<void> _completeSelectedTodos(String sessionId) async {
+    if (_selectedTodoIds.isEmpty) {
+      return;
+    }
+
+    final provider = context.read<WorkProvider>();
+    final updatedCount = await provider.bulkUpdateTodos(
+      sessionId,
+      todoIds: _selectedTodoIds.toList(growable: false),
+      status: 'completed',
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (updatedCount > 0) {
+      _showSnack('Completed $updatedCount todos');
+      setState(() {
+        _selectedTodoIds.clear();
+        _todoSelectionMode = false;
+      });
+      return;
+    }
+
+    _showSnack(provider.error ?? 'Unable to complete todos');
+    provider.clearError();
+  }
+
+  Future<void> _deleteSelectedTodos(String sessionId) async {
+    if (_selectedTodoIds.isEmpty) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete selected todos?'),
+        content: Text(
+          'This removes ${_selectedTodoIds.length} selected todos. Parent deletions also remove their subtasks.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final provider = context.read<WorkProvider>();
+    final deletedCount = await provider.bulkDeleteTodos(
+      sessionId,
+      todoIds: _selectedTodoIds.toList(growable: false),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (deletedCount > 0) {
+      _showSnack('Deleted $deletedCount todos');
+      setState(() {
+        _selectedTodoIds.clear();
+        _todoSelectionMode = false;
+      });
+      return;
+    }
+
+    _showSnack(provider.error ?? 'Unable to delete selected todos');
+    provider.clearError();
   }
 
   void _openProjectDetail(CoquiProject project) {
@@ -633,8 +847,8 @@ class _WorkPageState extends State<WorkPage>
                 if (projectId == null || projectId.isEmpty) return;
                 final projectProvider = context.read<ProjectProvider>();
                 setState(() {
-                  _selectedProjectId = projectId;
-                  _selectedSprintId = null;
+                  _setSelectedProjectId(projectId);
+                  _setSelectedSprintId(null);
                 });
                 await projectProvider.fetchProjectSprints(projectId,
                     force: true);
@@ -734,7 +948,7 @@ class _WorkPageState extends State<WorkPage>
               selected: _projectStatusFilter,
               filters: _projectFilters,
               onSelected: (value) {
-                setState(() => _projectStatusFilter = value as String?);
+                setState(() => _setProjectStatusFilter(value as String?));
               },
             ),
             Expanded(
@@ -761,8 +975,8 @@ class _WorkPageState extends State<WorkPage>
                                 onTap: () => _openProjectDetail(project),
                                 onSelect: () async {
                                   setState(() {
-                                    _selectedProjectId = project.id;
-                                    _selectedSprintId = null;
+                                    _setSelectedProjectId(project.id);
+                                    _setSelectedSprintId(null);
                                   });
                                   await provider.fetchProjectSprints(project.id,
                                       force: true);
@@ -818,13 +1032,13 @@ class _WorkPageState extends State<WorkPage>
                   : () => _openSprintPicker(provider),
               onClearSprint: _selectedSprintId == null
                   ? null
-                  : () => setState(() => _selectedSprintId = null),
+                  : () => setState(() => _setSelectedSprintId(null)),
             ),
             _FilterChips(
               selected: _sprintStatusFilter,
               filters: _sprintFilters,
               onSelected: (value) {
-                setState(() => _sprintStatusFilter = value as String?);
+                setState(() => _setSprintStatusFilter(value as String?));
               },
             ),
             Expanded(
@@ -866,11 +1080,12 @@ class _WorkPageState extends State<WorkPage>
                                         projectId: sprint.projectId,
                                         sprint: sprint,
                                       ),
-                                      onSelect: () => setState(() =>
-                                          _selectedSprintId =
-                                              _selectedSprintId == sprint.id
-                                                  ? null
-                                                  : sprint.id),
+                                      onSelect: () =>
+                                          setState(() => _setSelectedSprintId(
+                                                _selectedSprintId == sprint.id
+                                                    ? null
+                                                    : sprint.id,
+                                              )),
                                     ),
                                   ),
                                 )
@@ -1049,13 +1264,13 @@ class _WorkPageState extends State<WorkPage>
                   : () => _openSprintPicker(projectProvider),
               onClearSprint: _selectedSprintId == null
                   ? null
-                  : () => setState(() => _selectedSprintId = null),
+                  : () => setState(() => _setSelectedSprintId(null)),
             ),
             _FilterChips(
               selected: _todoStatusFilter,
               filters: _todoFilters,
               onSelected: (value) {
-                setState(() => _todoStatusFilter = value as String?);
+                setState(() => _setTodoStatusFilter(value as String?));
               },
             ),
             _TodoActionBar(
@@ -1085,6 +1300,12 @@ class _WorkPageState extends State<WorkPage>
               onBulkEdit: selectedVisibleTodoIds.isEmpty
                   ? null
                   : () => _openTodoBulkEdit(sessionId),
+              onBulkComplete: selectedVisibleTodoIds.isEmpty
+                  ? null
+                  : () => _completeSelectedTodos(sessionId),
+              onBulkDelete: selectedVisibleTodoIds.isEmpty
+                  ? null
+                  : () => _deleteSelectedTodos(sessionId),
             ),
             Expanded(
               child: RefreshIndicator(
@@ -1166,6 +1387,12 @@ class _WorkPageState extends State<WorkPage>
                                       ? null
                                       : _artifactLabelForId(
                                           workArtifacts, todo.artifactId!),
+                                  parentLabel: todo.parentId == null
+                                      ? null
+                                      : _todoLabelForId(
+                                          allSessionTodos,
+                                          todo.parentId!,
+                                        ),
                                   readOnly: true,
                                   busy: provider.isTodoMutating(todo.id),
                                   onTap: () {},
@@ -1202,6 +1429,12 @@ class _WorkPageState extends State<WorkPage>
                                         ? null
                                         : _artifactLabelForId(
                                             workArtifacts, todo.artifactId!),
+                                    parentLabel: todo.parentId == null
+                                        ? null
+                                        : _todoLabelForId(
+                                            allSessionTodos,
+                                            todo.parentId!,
+                                          ),
                                     readOnly:
                                         chatProvider.isCurrentSessionReadOnly,
                                     busy: provider.isTodoMutating(todo.id),
@@ -1216,6 +1449,16 @@ class _WorkPageState extends State<WorkPage>
                                         : () => _openTodoEditor(
                                               sessionId: sessionId,
                                               todo: todo,
+                                            ),
+                                    onAddSubtask: chatProvider
+                                            .isCurrentSessionReadOnly
+                                        ? null
+                                        : () => _openTodoEditor(
+                                              sessionId: sessionId,
+                                              initialParentId: todo.id,
+                                              initialArtifactId:
+                                                  todo.artifactId,
+                                              initialSprintId: todo.sprintId,
                                             ),
                                     onStart: todo.isPending
                                         ? () => provider.updateTodo(
@@ -1317,13 +1560,13 @@ class _WorkPageState extends State<WorkPage>
                   : () => _openSprintPicker(projectProvider),
               onClearSprint: _selectedSprintId == null
                   ? null
-                  : () => setState(() => _selectedSprintId = null),
+                  : () => setState(() => _setSelectedSprintId(null)),
             ),
             _FilterChips(
               selected: _artifactStageFilter,
               filters: _artifactFilters,
               onSelected: (value) {
-                setState(() => _artifactStageFilter = value as String?);
+                setState(() => _setArtifactStageFilter(value as String?));
               },
             ),
             Expanded(
@@ -1391,6 +1634,15 @@ class _WorkPageState extends State<WorkPage>
     for (final artifact in artifacts) {
       if (artifact.id == artifactId) {
         return artifact.label;
+      }
+    }
+    return null;
+  }
+
+  String? _todoLabelForId(List<CoquiTodo> todos, String todoId) {
+    for (final todo in todos) {
+      if (todo.id == todoId) {
+        return todo.label;
       }
     }
     return null;
@@ -1866,6 +2118,8 @@ class _TodoActionBar extends StatelessWidget {
   final VoidCallback? onSelectAll;
   final VoidCallback? onClearSelection;
   final VoidCallback? onBulkEdit;
+  final VoidCallback? onBulkComplete;
+  final VoidCallback? onBulkDelete;
 
   const _TodoActionBar({
     required this.readOnly,
@@ -1880,6 +2134,8 @@ class _TodoActionBar extends StatelessWidget {
     required this.onSelectAll,
     required this.onClearSelection,
     required this.onBulkEdit,
+    required this.onBulkComplete,
+    required this.onBulkDelete,
   });
 
   @override
@@ -1918,6 +2174,16 @@ class _TodoActionBar extends StatelessWidget {
               onPressed: readOnly ? null : onBulkEdit,
               icon: const Icon(Icons.edit_note_outlined),
               label: const Text('Bulk Edit'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: readOnly ? null : onBulkComplete,
+              icon: const Icon(Icons.task_alt_outlined),
+              label: const Text('Complete'),
+            ),
+            OutlinedButton.icon(
+              onPressed: readOnly ? null : onBulkDelete,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete'),
             ),
             TextButton(
               onPressed: onStopSelection,
@@ -1961,6 +2227,7 @@ class _TodoCard extends StatelessWidget {
   final CoquiTodo todo;
   final String? sprintLabel;
   final String? artifactLabel;
+  final String? parentLabel;
   final bool readOnly;
   final bool busy;
   final VoidCallback onTap;
@@ -1968,6 +2235,7 @@ class _TodoCard extends StatelessWidget {
   final bool selected;
   final ValueChanged<bool?>? onSelectionChanged;
   final Widget? dragHandle;
+  final VoidCallback? onAddSubtask;
   final VoidCallback? onStart;
   final VoidCallback? onComplete;
   final VoidCallback? onReopen;
@@ -1978,6 +2246,7 @@ class _TodoCard extends StatelessWidget {
     required this.todo,
     required this.sprintLabel,
     required this.artifactLabel,
+    required this.parentLabel,
     required this.readOnly,
     required this.busy,
     required this.onTap,
@@ -1985,6 +2254,7 @@ class _TodoCard extends StatelessWidget {
     this.selected = false,
     this.onSelectionChanged,
     this.dragHandle,
+    this.onAddSubtask,
     required this.onStart,
     required this.onComplete,
     required this.onReopen,
@@ -2049,6 +2319,8 @@ class _TodoCard extends StatelessWidget {
                 _InfoChip(label: todo.priority.toUpperCase()),
                 if (sprintLabel != null) _InfoChip(label: sprintLabel!),
                 if (artifactLabel != null) _InfoChip(label: artifactLabel!),
+                if (parentLabel != null)
+                  _InfoChip(label: 'Parent: $parentLabel'),
                 if (todo.hasSubtasks)
                   _InfoChip(label: '${todo.subtasks.length} subtasks'),
               ],
@@ -2077,6 +2349,11 @@ class _TodoCard extends StatelessWidget {
                   OutlinedButton(
                     onPressed: readOnly || busy ? null : onCancel,
                     child: const Text('Cancel'),
+                  ),
+                if (onAddSubtask != null)
+                  OutlinedButton(
+                    onPressed: readOnly || busy ? null : onAddSubtask,
+                    child: const Text('Add Subtask'),
                   ),
                 OutlinedButton(
                   onPressed: readOnly || busy

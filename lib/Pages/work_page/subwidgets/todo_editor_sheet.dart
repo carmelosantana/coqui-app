@@ -11,15 +11,21 @@ class TodoEditorSheet extends StatefulWidget {
   final CoquiTodo? todo;
   final List<CoquiSprint> availableSprints;
   final List<CoquiArtifact> availableArtifacts;
+  final List<CoquiTodo> availableTodos;
   final String? initialSprintId;
+  final String? initialParentId;
+  final String? initialArtifactId;
 
   const TodoEditorSheet({
     super.key,
     required this.sessionId,
     required this.availableSprints,
     required this.availableArtifacts,
+    required this.availableTodos,
     this.todo,
     this.initialSprintId,
+    this.initialParentId,
+    this.initialArtifactId,
   });
 
   @override
@@ -32,6 +38,7 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
   String _priority = 'medium';
   String? _selectedSprintId;
   String? _selectedArtifactId;
+  String? _selectedParentId;
 
   bool get _isEditing => widget.todo != null;
 
@@ -43,7 +50,8 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
     _notesController.text = todo?.notes ?? '';
     _priority = todo?.priority ?? 'medium';
     _selectedSprintId = todo?.sprintId ?? widget.initialSprintId;
-    _selectedArtifactId = todo?.artifactId;
+    _selectedArtifactId = todo?.artifactId ?? widget.initialArtifactId;
+    _selectedParentId = todo?.parentId ?? widget.initialParentId;
   }
 
   @override
@@ -71,9 +79,12 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
             priority: _priority,
             notes: notes,
             artifactId: _selectedArtifactId,
+            parentId: _selectedParentId,
             sprintId: _selectedSprintId,
             clearArtifact:
                 widget.todo!.artifactId != null && _selectedArtifactId == null,
+            clearParent:
+                widget.todo!.parentId != null && _selectedParentId == null,
             clearSprint:
                 widget.todo!.sprintId != null && _selectedSprintId == null,
           )
@@ -83,6 +94,7 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
             priority: _priority,
             notes: notes.isEmpty ? null : notes,
             artifactId: _selectedArtifactId,
+            parentId: _selectedParentId,
             sprintId: _selectedSprintId,
           );
 
@@ -185,6 +197,28 @@ class _TodoEditorSheetState extends State<TodoEditorSheet> {
                         if (value != null) {
                           setState(() => _priority = value);
                         }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      initialValue: _selectedParentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Parent Todo',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Top-level item'),
+                        ),
+                        ...widget.availableTodos.map(
+                          (candidate) => DropdownMenuItem<String?>(
+                            value: candidate.id,
+                            child: Text(candidate.label),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedParentId = value);
                       },
                     ),
                     const SizedBox(height: 12),

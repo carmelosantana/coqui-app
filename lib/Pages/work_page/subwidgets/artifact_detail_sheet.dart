@@ -667,6 +667,7 @@ class _ArtifactVersionCompareSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final diff = _buildArtifactDiff(version.content, artifact.content);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
@@ -714,23 +715,60 @@ class _ArtifactVersionCompareSheet extends StatelessWidget {
                             'The current pane reflects the artifact currently linked to the workspace-backed source.',
                       ),
                     ),
-                  _SectionCard(
-                    title: 'Current Content',
-                    child: SelectableText(
-                      artifact.content,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _InfoChip(label: '${diff.addedCount} additions'),
+                      _InfoChip(label: '${diff.removedCount} removals'),
+                      _InfoChip(label: '${diff.contextCount} unchanged'),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   _SectionCard(
-                    title: 'Version ${version.version} Snapshot',
-                    child: SelectableText(
-                      version.content,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
+                    title: 'Line Diff',
+                    child: diff.lines.isEmpty
+                        ? Text(
+                            'No content differences between the current artifact and this version.',
+                            style: theme.textTheme.bodySmall,
+                          )
+                        : Column(
+                            children: diff.lines
+                                .map((line) => _ArtifactDiffLineRow(line: line))
+                                .toList(),
+                          ),
+                  ),
+                  if (version.changeSummary?.isNotEmpty == true) ...[
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Saved Change Summary',
+                      child: Text(
+                        version.changeSummary!,
+                        style: theme.textTheme.bodySmall,
                       ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'Comparison Legend',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '+ present in current artifact only',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '- present in version ${version.version} only',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'unchanged lines appear without a prefix',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -741,6 +779,231 @@ class _ArtifactVersionCompareSheet extends StatelessWidget {
       },
     );
   }
+}
+
+enum _ArtifactDiffLineKind { context, added, removed }
+
+class _ArtifactDiffLine {
+  final _ArtifactDiffLineKind kind;
+  final String text;
+  final int? previousLineNumber;
+  final int? currentLineNumber;
+
+  const _ArtifactDiffLine({
+    required this.kind,
+    required this.text,
+    required this.previousLineNumber,
+    required this.currentLineNumber,
+  });
+}
+
+class _ArtifactDiff {
+  final List<_ArtifactDiffLine> lines;
+  final int addedCount;
+  final int removedCount;
+  final int contextCount;
+
+  const _ArtifactDiff({
+    required this.lines,
+    required this.addedCount,
+    required this.removedCount,
+    required this.contextCount,
+  });
+}
+
+class _ArtifactDiffLineRow extends StatelessWidget {
+  final _ArtifactDiffLine line;
+
+  const _ArtifactDiffLineRow({required this.line});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = switch (line.kind) {
+      _ArtifactDiffLineKind.added =>
+        theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+      _ArtifactDiffLineKind.removed =>
+        theme.colorScheme.errorContainer.withValues(alpha: 0.45),
+      _ArtifactDiffLineKind.context => Colors.transparent,
+    };
+    final prefix = switch (line.kind) {
+      _ArtifactDiffLineKind.added => '+',
+      _ArtifactDiffLineKind.removed => '-',
+      _ArtifactDiffLineKind.context => ' ',
+    };
+
+    return Container(
+      width: double.infinity,
+      color: background,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 48,
+            child: Text(
+              line.previousLineNumber?.toString() ?? '',
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 48,
+            child: Text(
+              line.currentLineNumber?.toString() ?? '',
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            prefix,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText(
+              line.text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+_ArtifactDiff _buildArtifactDiff(
+    String previousContent, String currentContent) {
+  final previousLines = previousContent.split('\n');
+  final currentLines = currentContent.split('\n');
+  final matrix = List.generate(
+    previousLines.length + 1,
+    (_) => List<int>.filled(currentLines.length + 1, 0),
+  );
+
+  for (var previousIndex = previousLines.length - 1;
+      previousIndex >= 0;
+      previousIndex -= 1) {
+    for (var currentIndex = currentLines.length - 1;
+        currentIndex >= 0;
+        currentIndex -= 1) {
+      if (previousLines[previousIndex] == currentLines[currentIndex]) {
+        matrix[previousIndex][currentIndex] =
+            matrix[previousIndex + 1][currentIndex + 1] + 1;
+      } else {
+        matrix[previousIndex][currentIndex] = matrix[previousIndex + 1]
+                    [currentIndex] >=
+                matrix[previousIndex][currentIndex + 1]
+            ? matrix[previousIndex + 1][currentIndex]
+            : matrix[previousIndex][currentIndex + 1];
+      }
+    }
+  }
+
+  final lines = <_ArtifactDiffLine>[];
+  var previousIndex = 0;
+  var currentIndex = 0;
+  var previousLineNumber = 1;
+  var currentLineNumber = 1;
+  var addedCount = 0;
+  var removedCount = 0;
+  var contextCount = 0;
+
+  while (previousIndex < previousLines.length &&
+      currentIndex < currentLines.length) {
+    if (previousLines[previousIndex] == currentLines[currentIndex]) {
+      lines.add(
+        _ArtifactDiffLine(
+          kind: _ArtifactDiffLineKind.context,
+          text: previousLines[previousIndex],
+          previousLineNumber: previousLineNumber,
+          currentLineNumber: currentLineNumber,
+        ),
+      );
+      previousIndex += 1;
+      currentIndex += 1;
+      previousLineNumber += 1;
+      currentLineNumber += 1;
+      contextCount += 1;
+      continue;
+    }
+
+    if (matrix[previousIndex + 1][currentIndex] >=
+        matrix[previousIndex][currentIndex + 1]) {
+      lines.add(
+        _ArtifactDiffLine(
+          kind: _ArtifactDiffLineKind.removed,
+          text: previousLines[previousIndex],
+          previousLineNumber: previousLineNumber,
+          currentLineNumber: null,
+        ),
+      );
+      previousIndex += 1;
+      previousLineNumber += 1;
+      removedCount += 1;
+      continue;
+    }
+
+    lines.add(
+      _ArtifactDiffLine(
+        kind: _ArtifactDiffLineKind.added,
+        text: currentLines[currentIndex],
+        previousLineNumber: null,
+        currentLineNumber: currentLineNumber,
+      ),
+    );
+    currentIndex += 1;
+    currentLineNumber += 1;
+    addedCount += 1;
+  }
+
+  while (previousIndex < previousLines.length) {
+    lines.add(
+      _ArtifactDiffLine(
+        kind: _ArtifactDiffLineKind.removed,
+        text: previousLines[previousIndex],
+        previousLineNumber: previousLineNumber,
+        currentLineNumber: null,
+      ),
+    );
+    previousIndex += 1;
+    previousLineNumber += 1;
+    removedCount += 1;
+  }
+
+  while (currentIndex < currentLines.length) {
+    lines.add(
+      _ArtifactDiffLine(
+        kind: _ArtifactDiffLineKind.added,
+        text: currentLines[currentIndex],
+        previousLineNumber: null,
+        currentLineNumber: currentLineNumber,
+      ),
+    );
+    currentIndex += 1;
+    currentLineNumber += 1;
+    addedCount += 1;
+  }
+
+  return _ArtifactDiff(
+    lines: lines,
+    addedCount: addedCount,
+    removedCount: removedCount,
+    contextCount: contextCount,
+  );
 }
 
 String _formatDateTime(DateTime dateTime) {
