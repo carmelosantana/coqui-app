@@ -443,9 +443,7 @@ class ChatPresets {
 
     // If somehow fewer than 5 (shouldn't happen with 8 categories), fill.
     if (picks.length < 5) {
-      final remaining = chatPresets
-          .where((p) => !picks.contains(p))
-          .toList()
+      final remaining = chatPresets.where((p) => !picks.contains(p)).toList()
         ..shuffle(rng);
       picks.addAll(remaining.take(5 - picks.length));
     }

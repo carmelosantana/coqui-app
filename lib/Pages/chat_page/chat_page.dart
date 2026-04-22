@@ -181,24 +181,27 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildChatFooter(ChatProvider chatProvider) {
     if (chatProvider.displayMessages.isEmpty &&
         chatProvider.currentSession == null) {
-      return ChatAttachmentRow(
-        itemCount: _presets.length,
-        itemBuilder: (context, index) {
-          final preset = _presets[index];
-          return ChatAttachmentPreset(
-            preset: preset,
-            onPressed: () {
-              _textFieldController.text = preset.prompt;
-              _hasText.value = preset.prompt.trim().isNotEmpty;
-              if (preset.role != null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: ChatAttachmentRow(
+          itemCount: _presets.length,
+          itemBuilder: (context, index) {
+            final preset = _presets[index];
+            return ChatAttachmentPreset(
+              preset: preset,
+              onPressed: () {
+                _textFieldController.text = preset.prompt;
+                _hasText.value = preset.prompt.trim().isNotEmpty;
                 setState(() {
-                  _selectedRole = CoquiRole(name: preset.role!, model: '');
+                  _selectedRole = preset.role != null
+                      ? CoquiRole(name: preset.role!, model: '')
+                      : null;
                 });
-              }
-              _textFieldFocusNode.requestFocus();
-            },
-          );
-        },
+                _textFieldFocusNode.requestFocus();
+              },
+            );
+          },
+        ),
       );
     } else {
       return const SizedBox();
