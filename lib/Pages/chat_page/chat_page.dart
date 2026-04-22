@@ -468,6 +468,10 @@ class _ChatPageState extends State<ChatPage> {
       excludingSessionId: session.id,
     );
 
+    final projectLabel =
+        chatProvider.currentSessionProjectLabel ?? session.activeProjectId;
+    final statusLabel = session.isArchived ? 'archived' : 'closed';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
       child: Container(
@@ -485,9 +489,16 @@ class _ChatPageState extends State<ChatPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This conversation is closed. Please resume your previous session${resumeTarget != null ? ' for this profile' : ''} or start a new session.',
+              'This conversation is $statusLabel. ${session.profileLabel != null ? 'It belongs to the ${session.profileLabel} profile. ' : ''}${projectLabel != null ? 'Project context: $projectLabel. ' : ''}Resume an active session${resumeTarget != null ? ' for this profile' : ''} or start a new one to continue writing.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (session.closureReason?.isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Reason: ${session.closureReason}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,

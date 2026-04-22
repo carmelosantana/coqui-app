@@ -63,33 +63,43 @@ class ChatDrawer extends StatelessWidget {
   Widget _buildSettingsButton(BuildContext context) {
     return Container(
       alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () {
-              if (ResponsiveBreakpoints.of(context).isMobile) {
-                Navigator.pop(context);
-              }
-              Navigator.pushNamed(context, '/settings');
-            },
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: SizedBox(
+        height: 54,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildTasksButton(context),
+              _buildChannelsButton(context),
+              _buildConfigButton(context),
+              _buildInfoButton(context),
+              _buildSettingsRailButton(context),
+              if (PlatformInfo.isDesktop) _buildServerButton(context),
+            ],
           ),
-          _buildInfoButton(context),
-          _buildTasksButton(context),
-          _buildChannelsButton(context),
-          _buildConfigButton(context),
-          if (PlatformInfo.isDesktop) _buildServerButton(context),
-        ],
+        ),
       ),
     );
   }
 
+  Widget _buildSettingsRailButton(BuildContext context) {
+    return _DrawerActionChip(
+      icon: Icons.settings_outlined,
+      label: 'Settings',
+      onPressed: () {
+        if (ResponsiveBreakpoints.of(context).isMobile) {
+          Navigator.pop(context);
+        }
+        Navigator.pushNamed(context, '/settings');
+      },
+    );
+  }
+
   Widget _buildInfoButton(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.text_snippet_outlined),
-      tooltip: 'System Prompts',
+    return _DrawerActionChip(
+      icon: Icons.text_snippet_outlined,
+      label: 'Prompts',
       onPressed: () {
         if (ResponsiveBreakpoints.of(context).isMobile) {
           Navigator.pop(context);
@@ -103,30 +113,10 @@ class ChatDrawer extends StatelessWidget {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, _) {
         final hasActive = taskProvider.hasActiveTasks;
-        return IconButton(
-          icon: Stack(
-            children: [
-              const Icon(Icons.task_outlined),
-              if (hasActive)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: CoquiColors.chart2,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          tooltip: 'Background Tasks',
+        return _DrawerActionChip(
+          icon: Icons.task_outlined,
+          label: 'Automation',
+          badgeColor: hasActive ? CoquiColors.chart2 : null,
           onPressed: () {
             if (ResponsiveBreakpoints.of(context).isMobile) {
               Navigator.pop(context);
@@ -148,33 +138,11 @@ class ChatDrawer extends StatelessWidget {
                 ? CoquiColors.chart2
                 : null;
 
-        return IconButton(
-          icon: Stack(
-            children: [
-              const Icon(Icons.satellite_alt_outlined),
-              if (dotColor != null)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          tooltip: hasInstance ? 'Channels' : 'Connect to a server first',
-          color: hasInstance
-              ? null
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+        return _DrawerActionChip(
+          icon: Icons.satellite_alt_outlined,
+          label: 'Channels',
+          badgeColor: dotColor,
+          enabled: hasInstance,
           onPressed: hasInstance
               ? () {
                   if (ResponsiveBreakpoints.of(context).isMobile) {
@@ -193,12 +161,10 @@ class ChatDrawer extends StatelessWidget {
       builder: (context, instanceProvider, _) {
         final hasInstance = instanceProvider.hasActiveInstance;
 
-        return IconButton(
-          icon: const Icon(Icons.key_outlined),
-          tooltip: hasInstance ? 'Credentials' : 'Connect to a server first',
-          color: hasInstance
-              ? null
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+        return _DrawerActionChip(
+          icon: Icons.key_outlined,
+          label: 'Credentials',
+          enabled: hasInstance,
           onPressed: hasInstance
               ? () {
                   if (ResponsiveBreakpoints.of(context).isMobile) {
@@ -214,9 +180,9 @@ class ChatDrawer extends StatelessWidget {
 
   Widget _buildServerButton(BuildContext context) {
     if (!PlatformInfo.isManagedLocalServerSupported) {
-      return IconButton(
-        icon: const Icon(Icons.dns_outlined),
-        tooltip: 'Local Server',
+      return _DrawerActionChip(
+        icon: Icons.dns_outlined,
+        label: 'Server',
         onPressed: () {
           if (ResponsiveBreakpoints.of(context).isMobile) {
             Navigator.pop(context);
@@ -241,29 +207,10 @@ class ChatDrawer extends StatelessWidget {
           _ => null,
         };
 
-        return IconButton(
-          icon: Stack(
-            children: [
-              const Icon(Icons.dns_outlined),
-              if (dotColor != null)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        return _DrawerActionChip(
+          icon: Icons.dns_outlined,
+          label: 'Server',
+          badgeColor: dotColor,
           onPressed: () {
             if (ResponsiveBreakpoints.of(context).isMobile) {
               Navigator.pop(context);
@@ -393,6 +340,16 @@ class ChatNavigationDrawer extends StatelessWidget {
     final title = session.title?.isNotEmpty == true
         ? session.title!
         : _sessionFallbackTitle(session.createdAt);
+    final subtitleParts = <String>[
+      if (session.profileLabel != null) session.profileLabel!,
+      if ((chatProvider.projectLabelForSession(session.id) ??
+                  session.activeProjectId)
+              ?.isNotEmpty ==
+          true)
+        chatProvider.projectLabelForSession(session.id) ??
+            session.activeProjectId!,
+      if (session.isArchived) 'Archived' else if (session.isClosed) 'Closed',
+    ];
 
     return NavigationDrawerDestination(
       icon: Stack(
@@ -408,20 +365,37 @@ class ChatNavigationDrawer extends StatelessWidget {
         ],
       ),
       label: SizedBox(
-        width: 180,
-        child: Row(
+        width: 184,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              fit: FlexFit.loose,
-              child: Text(
-                title,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (statusIcon != null) ...[
+                  const SizedBox(width: 8),
+                  statusIcon,
+                ],
+              ],
             ),
-            if (statusIcon != null) ...[
-              const SizedBox(width: 8),
-              statusIcon,
+            if (subtitleParts.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitleParts.join(' • '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ],
         ),
@@ -464,6 +438,81 @@ class _StatusBadge extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(
             color: Theme.of(context).colorScheme.surface, width: 1.5),
+      ),
+    );
+  }
+}
+
+class _DrawerActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final Color? badgeColor;
+  final bool enabled;
+
+  const _DrawerActionChip({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.badgeColor,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final foregroundColor = enabled
+        ? colorScheme.onSurface
+        : colorScheme.onSurface.withValues(alpha: 0.38);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(icon, size: 18, color: foregroundColor),
+                    if (badgeColor != null)
+                      Positioned(
+                        top: -1,
+                        right: -3,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: badgeColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: colorScheme.surfaceContainerHighest,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -41,6 +41,20 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           children: [
             _ServerDropdown(instanceProvider: instanceProvider),
             if (currentSession != null) ...[
+              if (currentSession.isReadOnly) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: Icon(
+                    currentSession.isArchived
+                        ? Icons.archive_outlined
+                        : Icons.lock_outline,
+                    size: 16,
+                  ),
+                  label: Text(
+                    currentSession.isArchived ? 'Archived' : 'Closed',
+                  ),
+                ),
+              ],
               if (modelLabel != null && modelLabel.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 _HeaderInfoChip(
@@ -175,7 +189,8 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 leading: const Icon(Icons.history_outlined),
                 title: const Text('Turn History'),
                 subtitle: Text(
-                  chatProvider.lastTurnSummary ?? 'Inspect recent session turns',
+                  chatProvider.lastTurnSummary ??
+                      'Inspect recent session turns',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),

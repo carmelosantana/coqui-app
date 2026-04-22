@@ -61,6 +61,9 @@ class ChatProvider extends ChangeNotifier {
   String? get currentSessionProjectLabel =>
       currentSession == null ? null : _sessionProjectLabels[currentSession!.id];
 
+  String? projectLabelForSession(String sessionId) =>
+      _sessionProjectLabels[sessionId];
+
   // ── Message state ───────────────────────────────────────────────────
 
   List<CoquiMessage> _messages = [];
@@ -225,9 +228,10 @@ class ChatProvider extends ChangeNotifier {
         await _databaseService.upsertSession(session);
       }
 
-      final current = currentSession;
-      if (current != null) {
-        unawaited(_refreshProjectLabelForSession(current));
+      for (final session in serverSessions) {
+        if (session.activeProjectId?.isNotEmpty == true) {
+          unawaited(_refreshProjectLabelForSession(session));
+        }
       }
 
       notifyListeners();
@@ -719,8 +723,7 @@ class ChatProvider extends ChangeNotifier {
               'content': completeContent,
               'model': session.model,
               'prompt_tokens': event.data['prompt_tokens'] as int? ?? 0,
-              'completion_tokens':
-                  event.data['completion_tokens'] as int? ?? 0,
+              'completion_tokens': event.data['completion_tokens'] as int? ?? 0,
               'total_tokens': tokens,
               'iterations': iterations,
               'duration_ms': duration,
@@ -1014,9 +1017,7 @@ class ChatProvider extends ChangeNotifier {
     }
 
     _sessionProjectLabels[session.id] = resolvedLabel;
-    if (currentSession?.id == session.id) {
-      notifyListeners();
-    }
+    notifyListeners();
   }
 
   void _retainProjectLabelsForCurrentSessions() {

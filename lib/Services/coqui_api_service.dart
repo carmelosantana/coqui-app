@@ -18,13 +18,21 @@ import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_project.dart';
 import 'package:coqui_app/Models/coqui_prompt_inspection.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Models/coqui_schedule.dart';
+import 'package:coqui_app/Models/coqui_schedule_stats.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
+import 'package:coqui_app/Models/coqui_sprint.dart';
 import 'package:coqui_app/Models/coqui_task.dart';
 import 'package:coqui_app/Models/coqui_task_event.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
+import 'package:coqui_app/Models/coqui_loop.dart';
+import 'package:coqui_app/Models/coqui_webhook.dart';
+import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
+import 'package:coqui_app/Models/coqui_webhook_stats.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
 /// HTTP client for the Coqui API server.
@@ -631,6 +639,46 @@ class CoquiApiService {
         .toList();
   }
 
+  Future<List<CoquiProject>> listProjects({
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': limit.toString()};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+
+    final response = await http.get(
+      _url('/projects', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final projects = body['projects'] as List? ?? [];
+    return projects
+        .map((item) => CoquiProject.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<CoquiSprint>> listProjectSprints(
+    String idOrSlug, {
+    String? status,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+
+    final response = await http.get(
+      _url('/projects/$idOrSlug/sprints', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final sprints = body['sprints'] as List? ?? [];
+    return sprints
+        .map((item) => CoquiSprint.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Get a single role with full details including instructions.
   Future<CoquiRole> getRole(String name) async {
     final response = await http.get(
@@ -1040,6 +1088,462 @@ class CoquiApiService {
         .toList();
   }
 
+  // ── Schedules ──────────────────────────────────────────────────────
+
+  Future<({List<CoquiSchedule> schedules, CoquiScheduleStats stats})>
+      listSchedules({
+    bool? enabled,
+  }) async {
+    final params = <String, String>{};
+    if (enabled != null) {
+      params['enabled'] = enabled ? '1' : '0';
+    }
+
+    final response = await http.get(
+      _url('/schedules', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final schedules = (body['schedules'] as List? ?? [])
+        .map((item) => CoquiSchedule.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return (
+      schedules: schedules,
+      stats: body['stats'] is Map<String, dynamic>
+          ? CoquiScheduleStats.fromJson(body['stats'] as Map<String, dynamic>)
+          : CoquiScheduleStats.empty,
+    );
+  }
+
+  Future<CoquiSchedule> getSchedule(String id) async {
+    final response = await http.get(
+      _url('/schedules/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body);
+  }
+
+  Future<CoquiSchedule> createSchedule({
+    required String name,
+    required String scheduleExpression,
+    required String prompt,
+    String role = 'orchestrator',
+    String timezone = 'UTC',
+    int maxIterations = 48,
+    int maxFailures = 3,
+    String? description,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'schedule_expression': scheduleExpression,
+      'prompt': prompt,
+      'role': role,
+      'timezone': timezone,
+      'max_iterations': maxIterations,
+      'max_failures': maxFailures,
+    };
+    if (description != null && description.isNotEmpty) {
+      payload['description'] = description;
+    }
+
+    final response = await http.post(
+      _url('/schedules'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSchedule> updateSchedule(
+    String id, {
+    String? name,
+    String? description,
+    String? scheduleExpression,
+    String? prompt,
+    String? role,
+    String? timezone,
+    int? maxIterations,
+    int? maxFailures,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (description != null) payload['description'] = description;
+    if (scheduleExpression != null) {
+      payload['schedule_expression'] = scheduleExpression;
+    }
+    if (prompt != null) payload['prompt'] = prompt;
+    if (role != null) payload['role'] = role;
+    if (timezone != null) payload['timezone'] = timezone;
+    if (maxIterations != null) payload['max_iterations'] = maxIterations;
+    if (maxFailures != null) payload['max_failures'] = maxFailures;
+
+    final response = await http.patch(
+      _url('/schedules/$id'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteSchedule(String id) async {
+    final response = await http.delete(
+      _url('/schedules/$id'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<CoquiSchedule> enableSchedule(String id) async {
+    final response = await http.post(
+      _url('/schedules/$id/enable'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSchedule> disableSchedule(String id) async {
+    final response = await http.post(
+      _url('/schedules/$id/disable'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSchedule> triggerSchedule(String id) async {
+    final response = await http.post(
+      _url('/schedules/$id/trigger'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+  }
+
+  // ── Loops ──────────────────────────────────────────────────────────
+
+  Future<({List<CoquiLoop> loops, int activeCount})> listLoops({
+    String? status,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+
+    final response = await http.get(
+      _url('/loops', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final loops = (body['loops'] as List? ?? [])
+        .map((item) => CoquiLoop.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return (
+      loops: loops,
+      activeCount: _coerceInt(body['active']),
+    );
+  }
+
+  Future<List<CoquiLoopDefinition>> listLoopDefinitions() async {
+    final response = await http.get(
+      _url('/loops/definitions'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final definitions = body['definitions'] as List? ?? [];
+    return definitions
+        .map(
+          (item) => CoquiLoopDefinition.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<CoquiLoopDetail> createLoop({
+    required String definition,
+    required String goal,
+    String? sessionId,
+    String? projectId,
+    String? projectSlug,
+    String? sprintId,
+    Map<String, String>? parameters,
+    int? maxIterations,
+  }) async {
+    final payload = <String, dynamic>{
+      'definition': definition,
+      'goal': goal,
+    };
+    if (sessionId != null && sessionId.isNotEmpty) {
+      payload['session_id'] = sessionId;
+    }
+    if (projectId != null && projectId.isNotEmpty) {
+      payload['project_id'] = projectId;
+    }
+    if (projectSlug != null && projectSlug.isNotEmpty) {
+      payload['project_slug'] = projectSlug;
+    }
+    if (sprintId != null && sprintId.isNotEmpty) {
+      payload['sprint_id'] = sprintId;
+    }
+    if (parameters != null && parameters.isNotEmpty) {
+      payload['parameters'] = parameters;
+    }
+    if (maxIterations != null) {
+      payload['max_iterations'] = maxIterations;
+    }
+
+    final response = await http.post(
+      _url('/loops'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiLoopDetail(
+      loop: CoquiLoop.fromJson(body['loop'] as Map<String, dynamic>),
+      iteration: body['iteration'] is Map<String, dynamic>
+          ? CoquiLoopIteration.fromJson(
+              body['iteration'] as Map<String, dynamic>)
+          : null,
+      stages: (body['stages'] as List? ?? [])
+          .map((item) => CoquiLoopStage.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<CoquiLoopDetail> getLoopDetail(String id) async {
+    final response = await http.get(
+      _url('/loops/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiLoopDetail(
+      loop: CoquiLoop.fromJson(body['loop'] as Map<String, dynamic>),
+      iteration: body['iteration'] is Map<String, dynamic>
+          ? CoquiLoopIteration.fromJson(
+              body['iteration'] as Map<String, dynamic>)
+          : null,
+      stages: (body['stages'] as List? ?? [])
+          .map((item) => CoquiLoopStage.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<String> pauseLoop(String id) async {
+    final response = await http.post(
+      _url('/loops/$id/pause'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return body['status'] as String? ?? 'paused';
+  }
+
+  Future<String> resumeLoop(String id) async {
+    final response = await http.post(
+      _url('/loops/$id/resume'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return body['status'] as String? ?? 'running';
+  }
+
+  Future<String> stopLoop(String id) async {
+    final response = await http.post(
+      _url('/loops/$id/stop'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return body['status'] as String? ?? 'cancelled';
+  }
+
+  Future<List<CoquiLoopIteration>> listLoopIterations(String id) async {
+    final response = await http.get(
+      _url('/loops/$id/iterations'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final iterations = body['iterations'] as List? ?? [];
+    return iterations
+        .map(
+          (item) => CoquiLoopIteration.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<CoquiLoopIterationDetail> getLoopIterationDetail(
+    String loopId,
+    String iterationId,
+  ) async {
+    final response = await http.get(
+      _url('/loops/$loopId/iterations/$iterationId'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiLoopIterationDetail(
+      iteration: CoquiLoopIteration.fromJson(
+          body['iteration'] as Map<String, dynamic>),
+      stages: (body['stages'] as List? ?? [])
+          .map((item) => CoquiLoopStage.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  // ── Webhooks ───────────────────────────────────────────────────────
+
+  Future<({List<CoquiWebhook> webhooks, CoquiWebhookStats stats})>
+      listWebhooks({
+    bool? enabled,
+    int limit = 100,
+  }) async {
+    final params = <String, String>{'limit': limit.toString()};
+    if (enabled != null) {
+      params['enabled'] = enabled.toString();
+    }
+
+    final response = await http.get(
+      _url('/webhooks', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final webhooks = (body['webhooks'] as List? ?? [])
+        .map((item) => CoquiWebhook.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return (
+      webhooks: webhooks,
+      stats: body['stats'] is Map<String, dynamic>
+          ? CoquiWebhookStats.fromJson(body['stats'] as Map<String, dynamic>)
+          : CoquiWebhookStats.empty,
+    );
+  }
+
+  Future<CoquiWebhook> getWebhook(String id) async {
+    final response = await http.get(
+      _url('/webhooks/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiWebhook.fromJson(body['webhook'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiWebhook> createWebhook({
+    required String name,
+    required String promptTemplate,
+    String source = 'generic',
+    String role = 'orchestrator',
+    String? profile,
+    int maxIterations = 48,
+    String? description,
+    String? eventFilter,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'prompt_template': promptTemplate,
+      'source': source,
+      'role': role,
+      'max_iterations': maxIterations,
+    };
+    if (profile != null && profile.isNotEmpty) payload['profile'] = profile;
+    if (description != null && description.isNotEmpty) {
+      payload['description'] = description;
+    }
+    if (eventFilter != null && eventFilter.isNotEmpty) {
+      payload['event_filter'] = eventFilter;
+    }
+
+    final response = await http.post(
+      _url('/webhooks'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiWebhook.fromJson(body['webhook'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiWebhook> updateWebhook(
+    String id, {
+    String? name,
+    String? description,
+    String? source,
+    String? promptTemplate,
+    String? role,
+    String? profile,
+    bool clearProfile = false,
+    int? maxIterations,
+    bool? enabled,
+    String? eventFilter,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (description != null) payload['description'] = description;
+    if (source != null && source.isNotEmpty) payload['source'] = source;
+    if (promptTemplate != null) payload['prompt_template'] = promptTemplate;
+    if (role != null && role.isNotEmpty) payload['role'] = role;
+    if (clearProfile) {
+      payload['profile'] = '';
+    } else if (profile != null) {
+      payload['profile'] = profile;
+    }
+    if (maxIterations != null) payload['max_iterations'] = maxIterations;
+    if (enabled != null) payload['enabled'] = enabled;
+    if (eventFilter != null) payload['event_filter'] = eventFilter;
+
+    final response = await http.put(
+      _url('/webhooks/$id'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiWebhook.fromJson(body['webhook'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteWebhook(String id) async {
+    final response = await http.delete(
+      _url('/webhooks/$id'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<String> rotateWebhookSecret(String id) async {
+    final response = await http.post(
+      _url('/webhooks/$id/rotate'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    return body['secret'] as String? ?? '';
+  }
+
+  Future<List<CoquiWebhookDelivery>> listWebhookDeliveries(
+    String id, {
+    int limit = 50,
+  }) async {
+    final response = await http.get(
+      _url('/webhooks/$id/deliveries', {'limit': limit.toString()}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final deliveries = body['deliveries'] as List? ?? [];
+    return deliveries
+        .map((item) =>
+            CoquiWebhookDelivery.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Uri getWebhookIncomingUrl(String name) {
+    return _url('/webhooks/incoming/$name');
+  }
+
   // ── Background Tasks ────────────────────────────────────────────────
 
   /// List background tasks, optionally filtered by status.
@@ -1164,4 +1668,11 @@ class CoquiApiService {
     );
     _parseResponse(response);
   }
+}
+
+int _coerceInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
 }

@@ -13,9 +13,12 @@ import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
+import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Providers/schedule_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
+import 'package:coqui_app/Providers/webhook_provider.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
@@ -98,6 +101,21 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => TaskProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => WebhookProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ScheduleProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => LoopProvider(
             apiService: apiService,
           ),
         ),
