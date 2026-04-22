@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:coqui_app/Models/coqui_artifact.dart';
+import 'package:coqui_app/Models/coqui_artifact_version.dart';
 import 'package:coqui_app/Models/coqui_channel.dart';
 import 'package:coqui_app/Models/coqui_channel_delivery.dart';
 import 'package:coqui_app/Models/coqui_channel_driver.dart';
@@ -28,6 +30,8 @@ import 'package:coqui_app/Models/coqui_session_file.dart';
 import 'package:coqui_app/Models/coqui_sprint.dart';
 import 'package:coqui_app/Models/coqui_task.dart';
 import 'package:coqui_app/Models/coqui_task_event.dart';
+import 'package:coqui_app/Models/coqui_todo.dart';
+import 'package:coqui_app/Models/coqui_todo_stats.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/coqui_loop.dart';
 import 'package:coqui_app/Models/coqui_webhook.dart';
@@ -318,6 +322,29 @@ class CoquiApiService {
     }
 
     return activeProjectId ?? project['id'] as String?;
+  }
+
+  Future<void> updateSessionProject(
+    String sessionId, {
+    String? projectId,
+    String? projectSlug,
+    bool clear = false,
+  }) async {
+    final body = <String, dynamic>{};
+    if (clear) {
+      body['clear'] = true;
+    } else if (projectId != null && projectId.isNotEmpty) {
+      body['project_id'] = projectId;
+    } else if (projectSlug != null && projectSlug.isNotEmpty) {
+      body['project_slug'] = projectSlug;
+    }
+
+    final response = await http.patch(
+      _url('/sessions/$sessionId/project'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    _parseResponse(response);
   }
 
   // ── Messages ────────────────────────────────────────────────────────
@@ -659,6 +686,79 @@ class CoquiApiService {
         .toList();
   }
 
+  Future<CoquiProject> getProject(String idOrSlug) async {
+    final response = await http.get(
+      _url('/projects/$idOrSlug'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProject.fromJson(body['project'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiProject> createProject({
+    required String title,
+    required String slug,
+    String? description,
+  }) async {
+    final response = await http.post(
+      _url('/projects'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title,
+        'slug': slug,
+        if (description != null) 'description': description,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiProject.fromJson(body['project'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiProject> updateProject(
+    String idOrSlug, {
+    String? title,
+    String? description,
+    String? status,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (title != null) payload['title'] = title;
+    if (description != null) payload['description'] = description;
+    if (status != null) payload['status'] = status;
+
+    final response = await http.patch(
+      _url('/projects/$idOrSlug'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiProject.fromJson(body['project'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteProject(String idOrSlug) async {
+    final response = await http.delete(
+      _url('/projects/$idOrSlug'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<CoquiProject> archiveProject(String idOrSlug) async {
+    final response = await http.post(
+      _url('/projects/$idOrSlug/archive'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProject.fromJson(body['project'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiProject> activateProject(String idOrSlug) async {
+    final response = await http.post(
+      _url('/projects/$idOrSlug/activate'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProject.fromJson(body['project'] as Map<String, dynamic>);
+  }
+
   Future<List<CoquiSprint>> listProjectSprints(
     String idOrSlug, {
     String? status,
@@ -677,6 +777,454 @@ class CoquiApiService {
     return sprints
         .map((item) => CoquiSprint.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<CoquiSprint> getSprint(String id) async {
+    final response = await http.get(
+      _url('/sprints/$id'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSprint> createSprint({
+    required String projectIdOrSlug,
+    required String title,
+    String? acceptanceCriteria,
+    String? contractArtifactId,
+    String? lastSessionId,
+    int maxReviewRounds = 3,
+  }) async {
+    final response = await http.post(
+      _url('/projects/$projectIdOrSlug/sprints'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title,
+        if (acceptanceCriteria != null)
+          'acceptance_criteria': acceptanceCriteria,
+        if (contractArtifactId != null)
+          'contract_artifact_id': contractArtifactId,
+        if (lastSessionId != null) 'last_session_id': lastSessionId,
+        'max_review_rounds': maxReviewRounds,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSprint> updateSprint(
+    String id, {
+    String? title,
+    String? acceptanceCriteria,
+    String? contractArtifactId,
+    String? lastSessionId,
+    int? maxReviewRounds,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (title != null) payload['title'] = title;
+    if (acceptanceCriteria != null) {
+      payload['acceptance_criteria'] = acceptanceCriteria;
+    }
+    if (contractArtifactId != null) {
+      payload['contract_artifact_id'] = contractArtifactId;
+    }
+    if (lastSessionId != null) {
+      payload['last_session_id'] = lastSessionId;
+    }
+    if (maxReviewRounds != null) {
+      payload['max_review_rounds'] = maxReviewRounds;
+    }
+
+    final response = await http.patch(
+      _url('/sprints/$id'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteSprint(String id) async {
+    final response = await http.delete(
+      _url('/sprints/$id'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<CoquiSprint> startSprint(String id) async {
+    final response = await http.post(
+      _url('/sprints/$id/start'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSprint> submitSprintReview(String id) async {
+    final response = await http.post(
+      _url('/sprints/$id/submit-review'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSprint> completeSprint(String id) async {
+    final response = await http.post(
+      _url('/sprints/$id/complete'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiSprint> rejectSprint(
+    String id, {
+    String? reviewerNotes,
+  }) async {
+    final response = await http.post(
+      _url('/sprints/$id/reject'),
+      headers: _headers,
+      body: reviewerNotes == null
+          ? null
+          : jsonEncode({'reviewer_notes': reviewerNotes}),
+    );
+    final body = _parseResponse(response);
+    return CoquiSprint.fromJson(body['sprint'] as Map<String, dynamic>);
+  }
+
+  Future<CoquiTodoListResult> listTodos(
+    String sessionId, {
+    String? status,
+    String? priority,
+    String? artifactId,
+    bool includeCompleted = true,
+  }) async {
+    final params = <String, String>{
+      'include_completed': includeCompleted ? '1' : '0',
+    };
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    if (priority != null && priority.isNotEmpty) {
+      params['priority'] = priority;
+    }
+    if (artifactId != null && artifactId.isNotEmpty) {
+      params['artifact_id'] = artifactId;
+    }
+
+    final response = await http.get(
+      _url('/sessions/$sessionId/todos', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final todos = (body['todos'] as List? ?? [])
+        .map((item) => CoquiTodo.fromJson(item as Map<String, dynamic>))
+        .toList();
+    final stats = body['stats'] is Map<String, dynamic>
+        ? CoquiTodoStats.fromJson(body['stats'] as Map<String, dynamic>)
+        : const CoquiTodoStats.empty();
+
+    return CoquiTodoListResult(todos: todos, stats: stats);
+  }
+
+  Future<CoquiTodo> getTodo(String sessionId, String todoId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/todos/$todoId'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<CoquiTodo> createTodo(
+    String sessionId, {
+    required String title,
+    String priority = 'medium',
+    String? notes,
+    String? artifactId,
+    String? parentId,
+    String? sprintId,
+    String? createdBy,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/todos'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title,
+        'priority': priority,
+        if (notes != null) 'notes': notes,
+        if (artifactId != null) 'artifact_id': artifactId,
+        if (parentId != null) 'parent_id': parentId,
+        if (sprintId != null) 'sprint_id': sprintId,
+        if (createdBy != null) 'created_by': createdBy,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<CoquiTodo> updateTodo(
+    String sessionId,
+    String todoId, {
+    String? title,
+    String? priority,
+    String? notes,
+    String? status,
+    String? artifactId,
+    String? parentId,
+    String? sprintId,
+    int? sortOrder,
+    bool clearArtifact = false,
+    bool clearParent = false,
+    bool clearSprint = false,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (title != null) payload['title'] = title;
+    if (priority != null) payload['priority'] = priority;
+    if (notes != null) payload['notes'] = notes;
+    if (status != null) payload['status'] = status;
+    if (artifactId != null || clearArtifact) {
+      payload['artifact_id'] = artifactId;
+    }
+    if (parentId != null || clearParent) payload['parent_id'] = parentId;
+    if (sprintId != null || clearSprint) payload['sprint_id'] = sprintId;
+    if (sortOrder != null) payload['sort_order'] = sortOrder;
+
+    final response = await http.patch(
+      _url('/sessions/$sessionId/todos/$todoId'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<void> deleteTodo(String sessionId, String todoId) async {
+    final response = await http.delete(
+      _url('/sessions/$sessionId/todos/$todoId'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<CoquiTodo> completeTodo(
+    String sessionId,
+    String todoId, {
+    String? notes,
+    String? completedBy,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/todos/$todoId/complete'),
+      headers: _headers,
+      body: jsonEncode({
+        if (notes != null) 'notes': notes,
+        if (completedBy != null) 'completed_by': completedBy,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<CoquiTodo> reopenTodo(
+    String sessionId,
+    String todoId, {
+    String? notes,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/todos/$todoId/reopen'),
+      headers: _headers,
+      body: notes == null ? null : jsonEncode({'notes': notes}),
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<CoquiTodo> cancelTodo(
+    String sessionId,
+    String todoId, {
+    String? notes,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/todos/$todoId/cancel'),
+      headers: _headers,
+      body: notes == null ? null : jsonEncode({'notes': notes}),
+    );
+    final body = _parseResponse(response);
+    return CoquiTodo.fromJson(body);
+  }
+
+  Future<List<CoquiArtifact>> listArtifacts(
+    String sessionId, {
+    String? type,
+    String? stage,
+  }) async {
+    final params = <String, String>{};
+    if (type != null && type.isNotEmpty) {
+      params['type'] = type;
+    }
+    if (stage != null && stage.isNotEmpty) {
+      params['stage'] = stage;
+    }
+
+    final response = await http.get(
+      _url('/sessions/$sessionId/artifacts', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final artifacts = body['artifacts'] as List? ?? [];
+    return artifacts
+        .map((item) => CoquiArtifact.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CoquiArtifact> getArtifact(String sessionId, String artifactId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/artifacts/$artifactId'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiArtifact.fromJson(body);
+  }
+
+  Future<CoquiArtifact> createArtifact(
+    String sessionId, {
+    required String title,
+    required String content,
+    String type = 'code',
+    String stage = 'draft',
+    String? language,
+    String? filepath,
+    String? projectId,
+    String? sprintId,
+    bool persistent = false,
+    Map<String, dynamic>? metadata,
+    List<String>? tags,
+    String? summary,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/artifacts'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title,
+        'content': content,
+        'type': type,
+        'stage': stage,
+        if (language != null) 'language': language,
+        if (filepath != null) 'filepath': filepath,
+        if (projectId != null) 'project_id': projectId,
+        if (sprintId != null) 'sprint_id': sprintId,
+        'persistent': persistent,
+        if (metadata != null) 'metadata': metadata,
+        if (tags != null) 'tags': tags,
+        if (summary != null) 'summary': summary,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiArtifact.fromJson(body);
+  }
+
+  Future<CoquiArtifact> updateArtifact(
+    String sessionId,
+    String artifactId, {
+    String? title,
+    String? content,
+    String? changeSummary,
+    String? stage,
+    String? language,
+    String? projectId,
+    String? sprintId,
+    bool? persistent,
+    Map<String, dynamic>? metadata,
+    List<String>? tags,
+    String? summary,
+    bool clearLanguage = false,
+    bool clearProject = false,
+    bool clearSprint = false,
+    bool clearSummary = false,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (title != null) payload['title'] = title;
+    if (content != null) payload['content'] = content;
+    if (changeSummary != null) payload['change_summary'] = changeSummary;
+    if (stage != null) payload['stage'] = stage;
+    if (language != null || clearLanguage) payload['language'] = language;
+    if (projectId != null || clearProject) payload['project_id'] = projectId;
+    if (sprintId != null || clearSprint) payload['sprint_id'] = sprintId;
+    if (persistent != null) payload['persistent'] = persistent;
+    if (metadata != null) payload['metadata'] = metadata;
+    if (tags != null) payload['tags'] = tags;
+    if (summary != null || clearSummary) payload['summary'] = summary;
+
+    final response = await http.patch(
+      _url('/sessions/$sessionId/artifacts/$artifactId'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiArtifact.fromJson(body);
+  }
+
+  Future<void> deleteArtifact(String sessionId, String artifactId) async {
+    final response = await http.delete(
+      _url('/sessions/$sessionId/artifacts/$artifactId'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  Future<List<CoquiArtifactVersion>> listArtifactVersions(
+    String sessionId,
+    String artifactId,
+  ) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/artifacts/$artifactId/versions'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final versions = body['versions'] as List? ?? [];
+    return versions
+        .map((item) =>
+            CoquiArtifactVersion.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CoquiArtifact> createArtifactVersion(
+    String sessionId,
+    String artifactId, {
+    required String content,
+    String? changeSummary,
+    String? title,
+    String? stage,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/artifacts/$artifactId/versions'),
+      headers: _headers,
+      body: jsonEncode({
+        'content': content,
+        if (changeSummary != null) 'change_summary': changeSummary,
+        if (title != null) 'title': title,
+        if (stage != null) 'stage': stage,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiArtifact.fromJson(body);
+  }
+
+  Future<CoquiArtifact> restoreArtifactVersion(
+    String sessionId,
+    String artifactId,
+    String versionId,
+  ) async {
+    final response = await http.post(
+      _url(
+          '/sessions/$sessionId/artifacts/$artifactId/versions/$versionId/restore'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiArtifact.fromJson(body);
   }
 
   /// Get a single role with full details including instructions.

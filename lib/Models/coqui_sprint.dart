@@ -51,6 +51,26 @@ class CoquiSprint {
 
   bool get hasAcceptanceCriteria =>
       acceptanceCriteria != null && acceptanceCriteria!.isNotEmpty;
+
+  bool get isPlanned => status == 'planned';
+
+  bool get isInProgress => status == 'in_progress';
+
+  bool get isReview => status == 'review';
+
+  bool get isComplete => status == 'complete';
+
+  bool get isRejected => status == 'rejected';
+
+  bool get canDelete => isPlanned;
+
+  bool get canStart => isPlanned;
+
+  bool get canSubmitReview => isInProgress;
+
+  bool get canComplete => isReview;
+
+  bool get canReject => isReview;
 }
 
 DateTime? _parseDateTime(Object? value) {

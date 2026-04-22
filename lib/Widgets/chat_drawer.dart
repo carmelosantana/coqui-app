@@ -70,6 +70,7 @@ class ChatDrawer extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
+              _buildWorkButton(context),
               _buildTasksButton(context),
               _buildChannelsButton(context),
               _buildConfigButton(context),
@@ -80,6 +81,28 @@ class ChatDrawer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildWorkButton(BuildContext context) {
+    return Consumer<InstanceProvider>(
+      builder: (context, instanceProvider, _) {
+        final hasInstance = instanceProvider.hasActiveInstance;
+
+        return _DrawerActionChip(
+          icon: Icons.workspaces_outline,
+          label: 'Work',
+          enabled: hasInstance,
+          onPressed: hasInstance
+              ? () {
+                  if (ResponsiveBreakpoints.of(context).isMobile) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/work');
+                }
+              : null,
+        );
+      },
     );
   }
 

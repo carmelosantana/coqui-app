@@ -14,11 +14,14 @@ import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/loop_provider.dart';
+import 'package:coqui_app/Providers/project_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/schedule_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
+import 'package:coqui_app/Providers/work_provider.dart';
 import 'package:coqui_app/Providers/webhook_provider.dart';
+import 'package:coqui_app/Pages/work_page/work_page.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
@@ -116,6 +119,16 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => LoopProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ProjectProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => WorkProvider(
             apiService: apiService,
           ),
         ),
@@ -334,6 +347,12 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/tasks') {
               return MaterialPageRoute(
                 builder: (context) => const TasksPage(),
+              );
+            }
+
+            if (settings.name == '/work') {
+              return MaterialPageRoute(
+                builder: (context) => const WorkPage(),
               );
             }
 

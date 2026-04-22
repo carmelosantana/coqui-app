@@ -47,6 +47,14 @@ class CoquiProject {
 
   bool get hasActiveSprint =>
       activeSprintId != null && activeSprintId!.isNotEmpty;
+
+  bool get isActive => status == 'active';
+
+  bool get isArchived => status == 'archived';
+
+  bool get isCompleted => status == 'completed';
+
+  bool get canDelete => isArchived;
 }
 
 DateTime? _parseDateTime(Object? value) {

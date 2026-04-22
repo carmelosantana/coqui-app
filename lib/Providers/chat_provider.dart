@@ -1218,6 +1218,26 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateSessionActiveProject(
+    String sessionId, {
+    String? projectId,
+    String? projectSlug,
+    bool clear = false,
+  }) async {
+    try {
+      await _apiService.updateSessionProject(
+        sessionId,
+        projectId: projectId,
+        projectSlug: projectSlug,
+        clear: clear,
+      );
+      await refreshSessions();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
   void _replaceSession(CoquiSession updatedSession) {
     final index =
         _sessions.indexWhere((session) => session.id == updatedSession.id);
