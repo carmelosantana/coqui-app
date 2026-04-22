@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/agent_activity_event.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_turn.dart';
+import 'package:coqui_app/Widgets/turn_inspection_widgets.dart';
 
 import 'chat_bubble/chat_bubble.dart';
 import 'package:coqui_app/Utils/observe_size.dart';
@@ -12,6 +14,7 @@ class ChatListView extends StatefulWidget {
   final Widget? error;
   final double? bottomPadding;
   final List<AgentActivityEvent> agentActivity;
+  final CoquiTurn? turnData;
   final String? turnSummary;
   final bool isStreaming;
 
@@ -26,6 +29,7 @@ class ChatListView extends StatefulWidget {
     this.error,
     this.bottomPadding,
     this.agentActivity = const [],
+    this.turnData,
     this.turnSummary,
     this.isStreaming = false,
     this.allMessages = const [],
@@ -89,9 +93,9 @@ class _ChatListViewState extends State<ChatListView> {
             // Agent activity panel (shown during streaming)
             if (widget.isStreaming && widget.agentActivity.isNotEmpty)
               SliverToBoxAdapter(
-                child: _AgentActivityPanel(
+                child: TurnActivityPanel(
                   activity: widget.agentActivity,
-                  turnSummary: widget.turnSummary,
+                  isActive: true,
                 ),
               ),
             if (widget.isAwaitingReply)
@@ -122,7 +126,16 @@ class _ChatListViewState extends State<ChatListView> {
                 ),
               ),
             // Turn summary (shown after streaming completes)
-            if (!widget.isStreaming && widget.turnSummary != null)
+            if (!widget.isStreaming && widget.turnData != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: TurnSummaryCard(turn: widget.turnData!),
+                ),
+              ),
+            if (!widget.isStreaming &&
+                widget.turnData == null &&
+                widget.turnSummary != null)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -199,124 +212,5 @@ class _ChatListViewState extends State<ChatListView> {
       duration: const Duration(milliseconds: 150),
       curve: Curves.easeOut,
     );
-  }
-}
-
-/// Displays real-time agent activity during streaming.
-class _AgentActivityPanel extends StatelessWidget {
-  final List<AgentActivityEvent> activity;
-  final String? turnSummary;
-
-  const _AgentActivityPanel({
-    required this.activity,
-    this.turnSummary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          width: 0.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Agent Activity',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...activity.map((event) => _ActivityEventRow(event: event)),
-          if (turnSummary != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Text(
-                turnSummary!,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityEventRow extends StatelessWidget {
-  final AgentActivityEvent event;
-
-  const _ActivityEventRow({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            _iconForType(event.type),
-            size: 14,
-            color: _colorForType(context, event.type),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              event.description,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _iconForType(AgentActivityType type) {
-    return switch (type) {
-      AgentActivityType.start => Icons.play_arrow_rounded,
-      AgentActivityType.iteration => Icons.loop_rounded,
-      AgentActivityType.toolCall => Icons.build_rounded,
-      AgentActivityType.toolResult => Icons.check_circle_outline,
-      AgentActivityType.childStart => Icons.account_tree_rounded,
-      AgentActivityType.childEnd => Icons.account_tree_rounded,
-      AgentActivityType.error => Icons.error_outline,
-      AgentActivityType.warning => Icons.warning_amber_rounded,
-      AgentActivityType.info => Icons.info_outline,
-    };
-  }
-
-  Color _colorForType(BuildContext context, AgentActivityType type) {
-    return switch (type) {
-      AgentActivityType.error => Theme.of(context).colorScheme.error,
-      AgentActivityType.toolCall => Theme.of(context).colorScheme.tertiary,
-      AgentActivityType.toolResult => Theme.of(context).colorScheme.primary,
-      _ => Theme.of(context).colorScheme.onSurfaceVariant,
-    };
   }
 }

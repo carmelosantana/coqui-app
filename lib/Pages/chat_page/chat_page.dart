@@ -181,6 +181,7 @@ class _ChatPageState extends State<ChatPage> {
               )
             : null,
         agentActivity: chatProvider.currentTurnActivity,
+        turnData: chatProvider.lastCompletedTurn,
         turnSummary: chatProvider.lastTurnSummary,
         isStreaming: chatProvider.isCurrentSessionStreaming,
       );

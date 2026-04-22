@@ -12,6 +12,7 @@ import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
+import 'package:coqui_app/Widgets/turn_history_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -170,12 +171,16 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             children: [
               const BottomSheetHeader(title: 'Session Options'),
               const Divider(),
-              if (chatProvider.lastTurnSummary != null)
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('Last Turn'),
-                  subtitle: Text(chatProvider.lastTurnSummary!),
+              ListTile(
+                leading: const Icon(Icons.history_outlined),
+                title: const Text('Turn History'),
+                subtitle: Text(
+                  chatProvider.lastTurnSummary ?? 'Inspect recent session turns',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                onTap: () => Navigator.pop(context, 'turn_history'),
+              ),
               ListTile(
                 leading: const Icon(Icons.person_outline),
                 title: const Text('Change Profile'),
@@ -228,6 +233,19 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           isScrollControlled: true,
           useSafeArea: true,
           builder: (_) => _SessionFilesSheet(sessionId: session.id),
+        );
+      }
+    } else if (action == 'turn_history') {
+      final session = chatProvider.currentSession;
+      if (session != null && context.mounted) {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => TurnHistorySheet(
+            sessionId: session.id,
+            highlightedTurn: chatProvider.lastCompletedTurn,
+          ),
         );
       }
     } else if (action == 'child_runs') {

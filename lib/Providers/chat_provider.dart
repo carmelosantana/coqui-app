@@ -10,6 +10,7 @@ import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 import 'package:coqui_app/Models/uploaded_file.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -99,6 +100,8 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, List<AgentActivityEvent>> _sessionActivity = {};
   final Map<String, int> _sessionIteration = {};
   final Map<String, String?> _sessionSummary = {};
+  final Map<String, CoquiTurn?> _sessionLastTurn = {};
+  final Map<String, String?> _sessionTurnProcessIds = {};
 
   List<AgentActivityEvent> get currentTurnActivity =>
       _sessionActivity[currentSession?.id] ?? const [];
@@ -107,6 +110,9 @@ class ChatProvider extends ChangeNotifier {
 
   /// Summary from the last completed turn.
   String? get lastTurnSummary => _sessionSummary[currentSession?.id];
+
+  /// Full typed turn payload from the most recent completed turn.
+  CoquiTurn? get lastCompletedTurn => _sessionLastTurn[currentSession?.id];
 
   // ── Error state ────────────────────────────────────────────────────
 
@@ -305,6 +311,8 @@ class ChatProvider extends ChangeNotifier {
     _sessionActivity.remove(sessionId);
     _sessionIteration.remove(sessionId);
     _sessionSummary.remove(sessionId);
+    _sessionLastTurn.remove(sessionId);
+    _sessionTurnProcessIds.remove(sessionId);
 
     try {
       await _apiService.deleteSession(sessionId);
@@ -498,6 +506,8 @@ class ChatProvider extends ChangeNotifier {
     _sessionActivity[session.id] = [];
     _sessionIteration[session.id] = 0;
     _sessionSummary[session.id] = null;
+    _sessionLastTurn[session.id] = null;
+    _sessionTurnProcessIds[session.id] = null;
     notifyListeners();
 
     try {
@@ -620,6 +630,26 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) stateChanged = true;
             break;
 
+          case SseEventType.batchStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.batchEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.reviewStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.reviewEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
           case SseEventType.textDelta:
             // Incremental text streaming — append delta to the running content
             // and update the assistant message bubble in real time.
@@ -636,6 +666,11 @@ class ChatProvider extends ChangeNotifier {
               }
             }
             // Don't set stateChanged — throttled notify handles it
+            break;
+
+          case SseEventType.reasoning:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.done:
@@ -666,31 +701,49 @@ class ChatProvider extends ChangeNotifier {
             break;
 
           case SseEventType.complete:
-            // Build turn summary
-            final parts = <String>[];
             final iterations = event.data['iterations'] as int? ?? 0;
             final tools = event.toolsUsed;
             final childCount = event.data['child_agent_count'] as int? ?? 0;
             final tokens = event.totalTokens;
             final duration = event.durationMs;
-            final completeContent = (event.data['content'] as String?) ?? '';
+            final completeContent =
+                (event.data['content'] as String?) ?? accumulatedContent;
             final completeError = event.data['error'];
-
-            if (iterations > 0) {
-              parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
-            }
-            if (tools.isNotEmpty) {
-              parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
-            }
-            if (childCount > 0) {
-              parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
-            }
-            if (tokens > 0) parts.add('$tokens tokens');
-            if (duration > 0) {
-              final secs = (duration / 1000).toStringAsFixed(1);
-              parts.add('${secs}s');
-            }
-            _sessionSummary[session.id] = parts.join(' · ');
+            final timestamp = DateTime.now().toIso8601String();
+            final turn = CoquiTurn.fromJson({
+              'id': '',
+              'session_id': session.id,
+              'turn_number': 0,
+              'user_prompt': prompt,
+              'response_text': completeContent,
+              'content': completeContent,
+              'model': session.model,
+              'prompt_tokens': event.data['prompt_tokens'] as int? ?? 0,
+              'completion_tokens':
+                  event.data['completion_tokens'] as int? ?? 0,
+              'total_tokens': tokens,
+              'iterations': iterations,
+              'duration_ms': duration,
+              'tools_used': tools,
+              'child_agent_count': childCount,
+              'turn_process_id': _sessionTurnProcessIds[session.id],
+              'restart_requested':
+                  event.data['restart_requested'] as bool? ?? false,
+              'iteration_limit_reached':
+                  event.data['iteration_limit_reached'] as bool? ?? false,
+              'budget_exhausted':
+                  event.data['budget_exhausted'] as bool? ?? false,
+              'context_usage': event.data['context_usage'],
+              'file_edits': event.data['file_edits'],
+              'review_feedback': event.data['review_feedback'],
+              'review_approved': event.data['review_approved'],
+              'background_tasks': event.data['background_tasks'],
+              'error': completeError,
+              'created_at': timestamp,
+              'completed_at': timestamp,
+            });
+            _sessionLastTurn[session.id] = turn;
+            _sessionSummary[session.id] = turn.summary;
             if (isViewing) {
               stateChanged = true;
             } else {
@@ -729,8 +782,58 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) stateChanged = true;
             break;
 
+          case SseEventType.budgetWarning:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.summary:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.memoryExtraction:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.notification:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopIterationStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStageStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStageEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopIterationEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopComplete:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
           case SseEventType.connected:
-            // No-op — server signals stream is ready; turn_process_id is informational
+            _sessionTurnProcessIds[session.id] = event.turnProcessId;
             break;
 
           case SseEventType.unknown:
@@ -1057,6 +1160,8 @@ class ChatProvider extends ChangeNotifier {
     _sessionActivity.clear();
     _sessionIteration.clear();
     _sessionSummary.clear();
+    _sessionLastTurn.clear();
+    _sessionTurnProcessIds.clear();
     notifyListeners();
 
     await refreshSessions();
