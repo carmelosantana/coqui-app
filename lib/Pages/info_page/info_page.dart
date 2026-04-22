@@ -260,7 +260,7 @@ class _InfoPageState extends State<InfoPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.article_outlined,
+              Icons.text_snippet_outlined,
               size: 64,
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
             ),

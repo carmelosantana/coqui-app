@@ -573,6 +573,32 @@ class CoquiApiService {
     return _parseResponse(response);
   }
 
+  /// Get typed turn detail including messages and replayable event history.
+  Future<CoquiTurnDetail> getTurnDetail(
+    String sessionId,
+    String turnId,
+  ) async {
+    final body = await getTurn(sessionId, turnId);
+    return CoquiTurnDetail.fromJson(body);
+  }
+
+  /// List replayable turn events without fetching nested message payloads.
+  Future<List<CoquiTurnEvent>> listTurnEvents(
+    String sessionId,
+    String turnId,
+  ) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/turns/$turnId/events'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    final events = body['events'] as List? ?? [];
+    return events
+        .map((event) => CoquiTurnEvent.fromJson(event as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(

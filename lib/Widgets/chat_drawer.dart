@@ -88,7 +88,7 @@ class ChatDrawer extends StatelessWidget {
 
   Widget _buildInfoButton(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.article_outlined),
+      icon: const Icon(Icons.text_snippet_outlined),
       tooltip: 'System Prompts',
       onPressed: () {
         if (ResponsiveBreakpoints.of(context).isMobile) {

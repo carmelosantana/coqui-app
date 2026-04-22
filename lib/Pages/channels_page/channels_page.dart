@@ -160,7 +160,9 @@ class _ChannelsPageState extends State<ChannelsPage> {
                           children: [
                             Text(
                               'Configured Channels',
-                              style: Theme.of(context).textTheme.titleMedium
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             const Spacer(),
@@ -203,10 +205,9 @@ class _ChannelsPageState extends State<ChannelsPage> {
       return switch (_statusFilter) {
         _ChannelStatusFilter.all => true,
         _ChannelStatusFilter.healthy => channel.isHealthy,
-        _ChannelStatusFilter.issues =>
-          channel.hasIssues ||
-              channel.consecutiveFailures > 0 ||
-              (channel.lastError?.isNotEmpty ?? false),
+        _ChannelStatusFilter.issues => channel.hasIssues ||
+            channel.consecutiveFailures > 0 ||
+            (channel.lastError?.isNotEmpty ?? false),
         _ChannelStatusFilter.disabled => channel.isDisabled,
       };
     }).toList()
@@ -411,8 +412,8 @@ class _TestingHintCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSignal = channels.any((channel) => channel.driver == 'signal');
-    final hasScaffolded =
-        channels.any((channel) => channel.driver == 'telegram' || channel.driver == 'discord');
+    final hasScaffolded = channels.any((channel) =>
+        channel.driver == 'telegram' || channel.driver == 'discord');
 
     return Card(
       child: Padding(
@@ -463,8 +464,7 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...channels]
-      ..sort((left, right) {
+    final sorted = [...channels]..sort((left, right) {
         final leftTime = _latest(left);
         final rightTime = _latest(right);
         if (leftTime == null && rightTime == null) return 0;
@@ -473,7 +473,8 @@ class _RecentActivityCard extends StatelessWidget {
         return rightTime.compareTo(leftTime);
       });
 
-    final items = sorted.where((channel) => _latest(channel) != null).take(3).toList();
+    final items =
+        sorted.where((channel) => _latest(channel) != null).take(3).toList();
 
     return Card(
       child: Padding(
@@ -632,7 +633,8 @@ class _ChannelCard extends StatelessWidget {
                   if (channel.lastReceiveAt != null)
                     _MetaPill(
                       icon: Icons.call_received_outlined,
-                      label: 'Receive ${_formatRelative(channel.lastReceiveAt!)}',
+                      label:
+                          'Receive ${_formatRelative(channel.lastReceiveAt!)}',
                     ),
                   if (channel.lastSendAt != null)
                     _MetaPill(
