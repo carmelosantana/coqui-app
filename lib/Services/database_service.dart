@@ -35,7 +35,7 @@ class DatabaseService {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onCreate: (Database db, int version) async {
           await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
@@ -43,6 +43,10 @@ instance_id TEXT,
 model_role TEXT NOT NULL,
 model TEXT,
 profile TEXT,
+group_enabled INTEGER NOT NULL DEFAULT 0,
+group_max_rounds INTEGER NOT NULL DEFAULT 3,
+group_composition_key TEXT,
+group_members_json TEXT,
 active_project_id TEXT,
 created_at INTEGER NOT NULL,
 updated_at INTEGER NOT NULL,
@@ -88,6 +92,20 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             );
             await db.execute(
               'ALTER TABLE sessions ADD COLUMN closure_reason TEXT',
+            );
+          }
+          if (oldVersion < 4) {
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN group_enabled INTEGER NOT NULL DEFAULT 0',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN group_max_rounds INTEGER NOT NULL DEFAULT 3',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN group_composition_key TEXT',
+            );
+            await db.execute(
+              'ALTER TABLE sessions ADD COLUMN group_members_json TEXT',
             );
           }
         },

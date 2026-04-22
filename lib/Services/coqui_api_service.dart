@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:coqui_app/Models/coqui_artifact.dart';
 import 'package:coqui_app/Models/coqui_artifact_version.dart';
 import 'package:coqui_app/Models/coqui_channel.dart';
+import 'package:coqui_app/Models/coqui_channel_conversation.dart';
 import 'package:coqui_app/Models/coqui_channel_delivery.dart';
 import 'package:coqui_app/Models/coqui_channel_driver.dart';
 import 'package:coqui_app/Models/coqui_channel_event.dart';
@@ -20,6 +21,7 @@ import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_restart_state.dart';
 import 'package:coqui_app/Models/coqui_project.dart';
 import 'package:coqui_app/Models/coqui_prompt_inspection.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
@@ -206,9 +208,20 @@ class CoquiApiService {
   Future<CoquiSession> createSession(
       {String modelRole = 'orchestrator',
       String? profile,
-      bool confirmCloseActiveProfileSession = false}) async {
+      bool groupEnabled = false,
+      List<String> members = const [],
+      int groupMaxRounds = 3,
+      bool confirmCloseActiveProfileSession = false,
+      bool confirmCloseActiveGroupSession = false}) async {
     final payload = <String, dynamic>{'model_role': modelRole};
-    if (profile != null && profile.isNotEmpty) {
+    if (groupEnabled) {
+      payload['group_enabled'] = true;
+      payload['members'] = members;
+      payload['group_max_rounds'] = groupMaxRounds;
+      if (confirmCloseActiveGroupSession) {
+        payload['confirm_close_active_group_session'] = true;
+      }
+    } else if (profile != null && profile.isNotEmpty) {
       payload['profile'] = profile;
     }
     if (confirmCloseActiveProfileSession) {
@@ -228,9 +241,16 @@ class CoquiApiService {
   Future<({CoquiSession session, bool created})> resolveSession({
     String modelRole = 'orchestrator',
     String? profile,
+    bool groupEnabled = false,
+    List<String> members = const [],
+    int groupMaxRounds = 3,
   }) async {
     final payload = <String, dynamic>{'model_role': modelRole};
-    if (profile != null && profile.isNotEmpty) {
+    if (groupEnabled) {
+      payload['group_enabled'] = true;
+      payload['members'] = members;
+      payload['group_max_rounds'] = groupMaxRounds;
+    } else if (profile != null && profile.isNotEmpty) {
       payload['profile'] = profile;
     }
 
@@ -274,11 +294,13 @@ class CoquiApiService {
     String? title,
     String? modelRole,
     String? profile,
+    int? groupMaxRounds,
     bool clearProfile = false,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (modelRole != null) body['model_role'] = modelRole;
+    if (groupMaxRounds != null) body['group_max_rounds'] = groupMaxRounds;
     if (clearProfile) {
       body['profile'] = '';
     } else if (profile != null) {
@@ -437,6 +459,23 @@ class CoquiApiService {
       body: jsonEncode({'prompt': prompt}),
     );
     return _parseResponse(response);
+  }
+
+  Future<CoquiRestartState> restartServer() async {
+    final response = await http.post(
+      _url('/server/restart'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+    final restart = body['restart'];
+    if (restart is Map<String, dynamic>) {
+      return CoquiRestartState.fromJson(restart);
+    }
+    if (restart is Map) {
+      return CoquiRestartState.fromJson(restart.cast<String, dynamic>());
+    }
+    return CoquiRestartState.empty;
   }
 
   // ── File uploads ─────────────────────────────────────────────────────
@@ -1590,6 +1629,25 @@ class CoquiApiService {
     final links = body['links'] as List? ?? [];
     return links
         .map((link) => CoquiChannelLink.fromJson(link as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<CoquiChannelConversation>> listChannelConversations(
+    String id, {
+    int limit = 50,
+  }) async {
+    final response = await http.get(
+      _url('/channels/$id/conversations', {'limit': limit.toString()}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final conversations = body['conversations'] as List? ?? [];
+    return conversations
+        .map(
+          (conversation) => CoquiChannelConversation.fromJson(
+            conversation as Map<String, dynamic>,
+          ),
+        )
         .toList();
   }
 

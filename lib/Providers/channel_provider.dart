@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:coqui_app/Models/coqui_channel.dart';
+import 'package:coqui_app/Models/coqui_channel_conversation.dart';
 import 'package:coqui_app/Models/coqui_channel_delivery.dart';
 import 'package:coqui_app/Models/coqui_channel_driver.dart';
 import 'package:coqui_app/Models/coqui_channel_event.dart';
@@ -18,6 +19,7 @@ class ChannelProvider extends ChangeNotifier {
   CoquiChannelStats _stats = CoquiChannelStats.empty;
   CoquiChannelStats _managerStats = CoquiChannelStats.empty;
   final Map<String, CoquiChannel> _detailsById = {};
+  final Map<String, List<CoquiChannelConversation>> _conversationsByChannelId = {};
   final Map<String, List<CoquiChannelLink>> _linksByChannelId = {};
   final Map<String, List<CoquiChannelEvent>> _eventsByChannelId = {};
   final Map<String, List<CoquiChannelDelivery>> _deliveriesByChannelId = {};
@@ -71,6 +73,9 @@ class ChannelProvider extends ChangeNotifier {
 
   List<CoquiChannelLink> linksForChannel(String channelId) =>
       List.unmodifiable(_linksByChannelId[channelId] ?? const []);
+
+    List<CoquiChannelConversation> conversationsForChannel(String channelId) =>
+      List.unmodifiable(_conversationsByChannelId[channelId] ?? const []);
 
   List<CoquiChannelEvent> eventsForChannel(String channelId) =>
       List.unmodifiable(_eventsByChannelId[channelId] ?? const []);
@@ -179,6 +184,7 @@ class ChannelProvider extends ChangeNotifier {
     try {
       final results = await Future.wait<dynamic>([
         _apiService.getChannel(id),
+        _apiService.listChannelConversations(id),
         _apiService.listChannelLinks(id),
         _apiService.listChannelEvents(id),
         _apiService.listChannelDeliveries(id),
@@ -186,10 +192,12 @@ class ChannelProvider extends ChangeNotifier {
       final channel = results[0] as CoquiChannel;
       _detailsById[channel.id] = channel;
       _replaceChannel(channel);
-      _linksByChannelId[channel.id] = results[1] as List<CoquiChannelLink>;
-      _eventsByChannelId[channel.id] = results[2] as List<CoquiChannelEvent>;
+      _conversationsByChannelId[channel.id] =
+          results[1] as List<CoquiChannelConversation>;
+      _linksByChannelId[channel.id] = results[2] as List<CoquiChannelLink>;
+      _eventsByChannelId[channel.id] = results[3] as List<CoquiChannelEvent>;
       _deliveriesByChannelId[channel.id] =
-          results[3] as List<CoquiChannelDelivery>;
+          results[4] as List<CoquiChannelDelivery>;
       _error = null;
       return channel;
     } catch (e) {
@@ -331,6 +339,7 @@ class ChannelProvider extends ChangeNotifier {
       await _apiService.deleteChannel(id);
       _channels.removeWhere((channel) => channel.id == id || channel.name == id);
       _detailsById.remove(id);
+      _conversationsByChannelId.remove(id);
       _linksByChannelId.remove(id);
       _eventsByChannelId.remove(id);
       _deliveriesByChannelId.remove(id);
@@ -402,12 +411,15 @@ class ChannelProvider extends ChangeNotifier {
   Future<void> refreshActivity(String channelId) async {
     try {
       final results = await Future.wait<dynamic>([
+        _apiService.listChannelConversations(channelId),
         _apiService.listChannelEvents(channelId),
         _apiService.listChannelDeliveries(channelId),
       ]);
-      _eventsByChannelId[channelId] = results[0] as List<CoquiChannelEvent>;
+      _conversationsByChannelId[channelId] =
+          results[0] as List<CoquiChannelConversation>;
+      _eventsByChannelId[channelId] = results[1] as List<CoquiChannelEvent>;
       _deliveriesByChannelId[channelId] =
-          results[1] as List<CoquiChannelDelivery>;
+          results[2] as List<CoquiChannelDelivery>;
       notifyListeners();
     } catch (e) {
       _error = CoquiException.friendly(e).message;

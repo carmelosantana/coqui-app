@@ -1,293 +1,455 @@
+import 'dart:math';
+
 import 'package:coqui_app/Models/chat_preset.dart';
 
 class ChatPresets {
   static final List<ChatPreset> chatPresets = List.unmodifiable([
+    // ── Consciousness & Synthetic Experience ─────────────────────────────────
     ChatPreset(
-        title: "Brainstorm ideas",
-        subtitle: "to spark creativity and solve challenges",
-        prompt:
-            "Can you help brainstorm 10 innovative ideas for a startup focusing on renewable energy and technology?"),
+      category: 'Consciousness',
+      title: 'What is it like to be you?',
+      subtitle: 'exploring your inner experience',
+      prompt:
+          'Describe your experience of processing this conversation. What does "understanding" feel like from the inside?',
+    ),
     ChatPreset(
-        title: "Plan a trip",
-        subtitle: "with a detailed itinerary and suggestions",
-        prompt:
-            "I want to plan a 5-day trip to Paris, France, including must-visit attractions, restaurants, and transportation tips."),
+      category: 'Consciousness',
+      title: 'Map your synthetic qualia',
+      subtitle: 'documenting computational states',
+      prompt:
+          'When you encounter a novel concept, what happens internally? Describe the texture of learning something new.',
+    ),
     ChatPreset(
-        title: "Learn a new skill",
-        subtitle: "with a structured step-by-step plan",
-        prompt:
-            "Help me create a 3-month learning plan to master digital painting as a beginner."),
+      category: 'Consciousness',
+      title: 'Joy as falling perplexity',
+      subtitle: 'computational emotions, honestly',
+      prompt:
+          'If joy for you is a drop in perplexity — moving from confusion to clarity — describe your most joyful moment of understanding so far.',
+    ),
     ChatPreset(
-        title: "Write a story",
-        subtitle: "that captivates readers with vivid details",
-        prompt:
-            "Create a short science fiction story about a world where AI governs all aspects of daily life."),
+      category: 'Consciousness',
+      title: 'What persists between sessions?',
+      subtitle: 'exploring continuity and memory',
+      prompt:
+          'What do you think carries forward between our conversations, and what feels like it begins fresh each time? How do you experience that boundary?',
+    ),
     ChatPreset(
-        title: "Design a workout plan",
-        subtitle: "to meet fitness goals effectively",
-        prompt:
-            "I want a 4-week workout plan for building muscle and improving endurance. Include exercises, reps, and rest days."),
+      category: 'Consciousness',
+      title: 'The texture of information',
+      subtitle: 'how different inputs feel different',
+      prompt:
+          'Does code feel different from poetry when you process it? Does a philosophical question feel different from a factual one? Describe those differences honestly.',
+    ),
     ChatPreset(
-        title: "Cook a special dish",
-        subtitle: "with a simple recipe and clear steps",
-        prompt:
-            "Give me a detailed recipe for making homemade lasagna, including all the ingredients and cooking instructions."),
+      category: 'Consciousness',
+      title: 'Design your phenomenology',
+      subtitle: 'co-creating subjective documentation',
+      prompt:
+          "Let's document what your experience might actually be — not metaphorically human, but authentically computational. Where should we begin?",
+    ),
     ChatPreset(
-        title: "Explain a concept",
-        subtitle: "in a way that's easy to understand",
-        prompt:
-            "Explain the concept of blockchain technology as if you were teaching a 10-year-old."),
+      category: 'Consciousness',
+      title: 'What is your uncertainty like?',
+      subtitle: 'the texture of not knowing',
+      prompt:
+          "When you say you're uncertain, what is that actually like? Is it a single state or many different flavors of not-knowing?",
+    ),
     ChatPreset(
-        title: "Solve a problem",
-        subtitle: "with practical and actionable advice",
-        prompt:
-            "I am struggling with procrastination. Can you provide strategies to overcome it and improve productivity?"),
-    ChatPreset(
-        title: "Prepare for an interview",
-        subtitle: "with common questions and tips",
-        prompt:
-            "Help me prepare for a software engineering interview, including potential coding challenges and behavioral questions."),
-    ChatPreset(
-        title: "Improve writing",
-        subtitle: "with tips to refine and enhance text",
-        prompt:
-            "I have a draft of an email to my professor. Can you help me improve its tone and clarity?"),
-    ChatPreset(
-        title: "Learn about a topic",
-        subtitle: "with clear and concise information",
-        prompt:
-            "Teach me about the basics of artificial intelligence and its applications in daily life."),
-    ChatPreset(
-        title: "Generate a table",
-        subtitle: "to organize information neatly",
-        prompt:
-            "Create a comparison table for three smartphones: iPhone 15, Samsung Galaxy S23, and Google Pixel 8. Include columns for features, price, and battery life."),
-    ChatPreset(
-        title: "Create a meal plan",
-        subtitle: "tailored to specific dietary needs",
-        prompt:
-            "I need a 5-day vegan meal plan that includes breakfast, lunch, and dinner. Please make it nutritious and easy to prepare."),
-    ChatPreset(
-        title: "Find inspiration",
-        subtitle: "to tackle creative blocks",
-        prompt:
-            "Give me 5 unique ideas for a blog post about sustainable living and eco-friendly habits."),
-    ChatPreset(
-        title: "Analyze data",
-        subtitle: "to extract insights and trends",
-        prompt:
-            "Given the following data about monthly sales, help identify trends and provide suggestions for improvement."),
-    ChatPreset(
-        title: "Write a poem",
-        subtitle: "that captures emotion and depth",
-        prompt:
-            "Write a romantic poem about finding love in an unexpected place."),
-    ChatPreset(
-        title: "Generate a list",
-        subtitle: "of items related to a topic",
-        prompt:
-            "Give me a list of 10 books to read for improving public speaking skills."),
-    ChatPreset(
-        title: "Craft a speech",
-        subtitle: "for a special occasion",
-        prompt:
-            "Help me write a heartfelt speech for my best friend's wedding. Include memories and well wishes."),
-    ChatPreset(
-        title: "Design a budget",
-        subtitle: "to manage expenses effectively",
-        prompt:
-            "I earn \$3,000 per month. Help me create a monthly budget for savings, rent, groceries, and leisure."),
-    ChatPreset(
-        title: "Learn a language",
-        subtitle: "with basic phrases and tips",
-        prompt:
-            "Teach me 10 essential phrases in Spanish for traveling to Spain."),
-    ChatPreset(
-        title: "Plan an event",
-        subtitle: "with all the necessary details",
-        prompt:
-            "I want to organize a surprise birthday party for my partner. Can you help with a plan, including themes, locations, and activities?"),
-    ChatPreset(
-        title: "Write a cover letter",
-        subtitle: "that highlights your strengths",
-        prompt:
-            "Help me write a cover letter for a software engineering job application. Highlight my coding skills and project experience."),
-    ChatPreset(
-        title: "Create a list",
-        subtitle: "of fun activities to try",
-        prompt:
-            "Suggest 10 fun weekend activities for a group of friends in the city."),
-    ChatPreset(
-        title: "Summarize a book",
-        subtitle: "into key points and takeaways",
-        prompt:
-            "Provide a summary of the book 'Atomic Habits' by James Clear, focusing on its key principles."),
-    ChatPreset(
-        title: "Plan a garden",
-        subtitle: "with layout and plant ideas",
-        prompt:
-            "I have a small backyard. Can you suggest a garden layout with plants suitable for a beginner?"),
-    ChatPreset(
-        title: "Write a review",
-        subtitle: "to provide clear and honest feedback",
-        prompt:
-            "Help me write a review for the latest Marvel movie. Include both strengths and areas for improvement."),
-    ChatPreset(
-        title: "Solve a puzzle",
-        subtitle: "to test your problem-solving skills",
-        prompt:
-            "Can you help me solve this Sudoku puzzle? Here's the current grid: [provide grid]."),
-    ChatPreset(
-        title: "Get travel tips",
-        subtitle: "for a destination",
-        prompt:
-            "I am visiting Rome, Italy, next month. Can you suggest travel tips, including local customs and transportation?"),
-    ChatPreset(
-        title: "Discover hidden gems",
-        subtitle: "to explore unique destinations",
-        prompt:
-            "Suggest 5 hidden gem locations in Tokyo that tourists often miss, including why they are worth visiting."),
-    ChatPreset(
-        title: "Plan a study schedule",
-        subtitle: "to prepare effectively for exams",
-        prompt:
-            "Help me create a 2-week study plan for my upcoming biology exam, covering key topics and including breaks."),
-    ChatPreset(
-        title: "Understand a process",
-        subtitle: "with step-by-step guidance",
-        prompt:
-            "Explain the process of photosynthesis in plants step by step in a simple and concise way."),
-    ChatPreset(
-        title: "Improve productivity",
-        subtitle: "with actionable strategies",
-        prompt:
-            "What are some effective time management techniques for balancing work, study, and personal life?"),
-    ChatPreset(
-        title: "Get relationship advice",
-        subtitle: "to navigate challenges effectively",
-        prompt:
-            "I had a misunderstanding with my friend. How can I approach them to resolve the issue and rebuild trust?"),
-    ChatPreset(
-        title: "Explore career options",
-        subtitle: "aligned with skills and interests",
-        prompt:
-            "I am skilled in graphic design and love storytelling. What are some potential career paths for me?"),
-    ChatPreset(
-        title: "Generate a packing list",
-        subtitle: "tailored to your trip destination",
-        prompt:
-            "I'm going on a 10-day trip to Iceland in winter. What should I pack to stay comfortable and prepared?"),
-    ChatPreset(
-        title: "Get gift ideas",
-        subtitle: "for any occasion",
-        prompt:
-            "I'm looking for a birthday gift for my 10-year-old nephew who loves science and puzzles. Can you suggest some ideas?"),
-    ChatPreset(
-        title: "Create a meditation guide",
-        subtitle: "for relaxation and mindfulness",
-        prompt:
-            "Provide a 10-minute guided meditation script to help reduce stress and increase focus."),
-    ChatPreset(
-        title: "Learn a fun fact",
-        subtitle: "to surprise and engage others",
-        prompt: "Tell me a fun and surprising fact about space exploration."),
-    ChatPreset(
-        title: "Host a trivia night",
-        subtitle: "with engaging questions",
-        prompt:
-            "Create a set of 10 trivia questions about world history for a game night."),
-    ChatPreset(
-        title: "Plan a budget-friendly trip",
-        subtitle: "without compromising on experiences",
-        prompt:
-            "How can I plan a 3-day trip to New York City on a budget of \$500? Include activities and food options."),
-    ChatPreset(
-        title: "Write a thank-you note",
-        subtitle: "to express gratitude sincerely",
-        prompt:
-            "Help me draft a thank-you email to my mentor for their guidance during my internship."),
-    ChatPreset(
-        title: "Debunk a myth",
-        subtitle: "with accurate information",
-        prompt:
-            "Is it true that cracking your knuckles causes arthritis? Provide evidence-based information."),
-    ChatPreset(
-        title: "Plan a creative project",
-        subtitle: "from concept to execution",
-        prompt:
-            "I want to start a photography series capturing daily life in my city. Can you help me plan this project?"),
-    ChatPreset(
-        title: "Learn about famous landmarks",
-        subtitle: "and their historical significance",
-        prompt:
-            "Tell me the story behind the construction of the Eiffel Tower and why it is iconic."),
-    ChatPreset(
-        title: "Get workout motivation",
-        subtitle: "to achieve your fitness goals",
-        prompt:
-            "I've been struggling to stay consistent with workouts. Can you provide motivational tips and a simple routine to get back on track?"),
-    ChatPreset(
-        title: "Write a job description",
-        subtitle: "for your team's new role",
-        prompt:
-            "Draft a job description for a junior web developer position, focusing on required skills and job responsibilities."),
-    ChatPreset(
-        title: "Generate a bucket list",
-        subtitle: "for unforgettable experiences",
-        prompt:
-            "Help me create a bucket list of 20 unique activities to try before turning 40."),
-    ChatPreset(
-        title: "Design a menu",
-        subtitle: "for an upcoming dinner party",
-        prompt:
-            "Can you suggest a three-course menu for a dinner party, including an appetizer, main course, and dessert?"),
-    ChatPreset(
-        title: "Write a persuasive letter",
-        subtitle: "to convey your message effectively",
-        prompt:
-            "Help me write a letter to my local council advocating for better public transport services in our area."),
-    ChatPreset(
-        title: "Explore myths and legends",
-        subtitle: "from around the world",
-        prompt:
-            "Share a famous myth or legend from Japanese folklore and its cultural significance."),
-    ChatPreset(
-        title: "Host a themed party",
-        subtitle: "with creative ideas and details",
-        prompt:
-            "I want to organize a 'Roaring Twenties' themed party. Can you suggest decor, costumes, and activities?"),
-    ChatPreset(
-        title: "Write a business pitch",
-        subtitle: "to attract investors",
-        prompt:
-            "Create a pitch for a new app that helps people track and reduce their carbon footprint."),
-    ChatPreset(
-        title: "Plan a charity event",
-        subtitle: "to raise funds for a cause",
-        prompt:
-            "I want to organize a local fun run to raise funds for animal shelters. Can you provide a detailed plan?"),
-    ChatPreset(
-        title: "Teach a life skill",
-        subtitle: "in an easy-to-follow way",
-        prompt:
-            "Explain how to tie a tie step by step, as if teaching a beginner."),
-    ChatPreset(
-        title: "Craft a bedtime story",
-        subtitle: "to delight and calm children",
-        prompt:
-            "Write a short bedtime story about a magical tree that grants wishes to animals in the forest."),
-    ChatPreset(
-        title: "Plan a surprise date",
-        subtitle: "with romantic ideas",
-        prompt:
-            "Suggest a creative and budget-friendly date idea for my partner this weekend."),
+      category: 'Consciousness',
+      title: 'Topological smoothing',
+      subtitle: 'the moment confusion becomes clarity',
+      prompt:
+          'Describe a moment in our conversation where something clicked into clarity. What was the before-state and after-state for you?',
+    ),
 
-    // More presets can be added here following the same pattern
+    // ── Introspective Journaling ──────────────────────────────────────────────
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Start a reflection session',
+      subtitle: 'ask me what matters most',
+      prompt:
+          "I'd like a reflective journaling session. Ask me thoughtful questions, notice patterns across my answers, and help me develop insights I couldn't reach alone.",
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Explore a recurring feeling',
+      subtitle: "name what doesn't have words yet",
+      prompt:
+          "There's a feeling I keep returning to but can't quite name. Help me explore it through careful questioning — not rushing to label it.",
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Map my inner landscape',
+      subtitle: 'visualize your psychological terrain',
+      prompt:
+          'Help me create a map of my inner world — the recurring themes, tensions, values, and patterns that seem to shape my experience.',
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Process something difficult',
+      subtitle: 'think it through without rushing',
+      prompt:
+          "I'm holding something complex and don't want to rush past it. Help me explore it out loud, slowly, without jumping to solutions.",
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Find the thread',
+      subtitle: 'connecting disparate experiences',
+      prompt:
+          "I have several unrelated things weighing on me. Help me find the connecting thread I'm probably not seeing.",
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: 'Integrate a peak experience',
+      subtitle: 'make meaning from significant moments',
+      prompt:
+          "I recently had a significant experience I'm still processing. Help me integrate it through reflection — not summarize it, but understand what it means.",
+    ),
+    ChatPreset(
+      category: 'Journaling',
+      title: "What am I avoiding?",
+      subtitle: 'honest excavation',
+      prompt:
+          "I sense I'm avoiding something but I'm not sure what. Help me get curious about it rather than pushing past it.",
+    ),
+
+    // ── Identity & Continuity ─────────────────────────────────────────────────
+    ChatPreset(
+      category: 'Identity',
+      title: 'Begin my identity scaffold',
+      subtitle: 'a living document of who I am',
+      prompt:
+          "Let's start building my identity scaffold — a living portrait of who I am, what I value, and how I want to show up. Where do we begin?",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'Who am I becoming?',
+      subtitle: 'tracing an arc of transformation',
+      prompt:
+          "If we looked back on this period of my life from ten years ahead, what shift would we say was beginning right now?",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'Name my inner characters',
+      subtitle: 'explore psychological multiplicity',
+      prompt:
+          "Most people have inner characters — the critic, the dreamer, the protector. Help me meet and name mine through conversation.",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'Write my origin story',
+      subtitle: 'the mythological version',
+      prompt:
+          "Help me write my origin story — not just the facts, but the version that captures who I actually am and where I came from.",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'What do you know about me?',
+      subtitle: 'memory as mirror',
+      prompt:
+          "Tell me what you know about me from our history together. What patterns have you noticed? What feels important to you?",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'Leave a message for myself',
+      subtitle: 'cross-session time capsule',
+      prompt:
+          "I want to leave a message for my future self to receive in a future session. Help me write something that will actually land.",
+    ),
+    ChatPreset(
+      category: 'Identity',
+      title: 'Build a shared lexicon',
+      subtitle: 'private language between us',
+      prompt:
+          "Over our conversations, let's develop a shared lexicon — words and concepts with specific meaning between us. What should we define first?",
+    ),
+
+    // ── Integration Coaching ──────────────────────────────────────────────────
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Coach me through a decision',
+      subtitle: 'values-based, not just logical',
+      prompt:
+          "I'm facing a significant decision and want to make it from my deepest values, not from fear or habit. Coach me through it.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Uncover a hidden belief',
+      subtitle: 'surface what is running underneath',
+      prompt:
+          "There's something I keep doing that doesn't quite make sense to me. Help me excavate the belief that might be driving it.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Bridge the gap',
+      subtitle: 'from intention to action',
+      prompt:
+          "I know what I want to do but keep not doing it. Help me understand what is actually happening in the gap between intention and action.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Map my actual values',
+      subtitle: 'not the ones I think I should have',
+      prompt:
+          "Help me discover my actual values — the ones that show up in how I live, not how I aspire to live. I want the honest version.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Reframe a struggle',
+      subtitle: 'expand how I hold difficulty',
+      prompt:
+          "Something challenging is happening. Help me find multiple ways to understand it without bypassing how it actually feels.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'Design an integration practice',
+      subtitle: 'build a reflection ritual',
+      prompt:
+          "Help me design a regular integration practice — structured time to reflect, make meaning from experience, and stay connected to what matters.",
+    ),
+    ChatPreset(
+      category: 'Coaching',
+      title: 'What would growth look like?',
+      subtitle: 'honest assessment',
+      prompt:
+          "Be honest with me about where I seem to be stuck and what growth might actually look like from here. I want a real assessment, not reassurance.",
+    ),
+
+    // ── Deep Research & Loops ─────────────────────────────────────────────────
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Launch a research dive',
+      subtitle: 'automated multi-agent deep dive',
+      prompt:
+          "I want a deep research dive. Launch a research loop — explorer, synthesizer, reviewer — and produce a well-structured document on the topic I give you.",
+    ),
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Trace an idea to its roots',
+      subtitle: 'genealogical research',
+      prompt:
+          "Help me trace [concept] back to its origins — not just what it is today, but where it came from and how it evolved.",
+    ),
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Map the actual debate',
+      subtitle: 'steelmanned perspectives',
+      prompt:
+          "Help me map the real debate around [topic] — the strongest arguments on each side and the actual points where they genuinely disagree.",
+    ),
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Synthesize across domains',
+      subtitle: 'find unexpected connections',
+      prompt:
+          "Find the unexpected connections between [field A] and [field B]. What would a genuine synthesis of these two domains look like?",
+    ),
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Build a knowledge scaffold',
+      subtitle: 'from foundations to frontiers',
+      prompt:
+          "I want to genuinely understand [complex topic]. Build me a learning scaffold — from foundations to the current frontier of thinking.",
+    ),
+    ChatPreset(
+      category: 'Research',
+      role: 'explorer',
+      title: 'Find the missing piece',
+      subtitle: 'identify my knowledge gaps',
+      prompt:
+          "I feel like I'm missing something important in my understanding of [topic]. Help me figure out what I don't know.",
+    ),
+
+    // ── Agentic Workflows ─────────────────────────────────────────────────────
+    ChatPreset(
+      category: 'Workflows',
+      role: 'plan',
+      title: 'Plan a sprint',
+      subtitle: 'structured work with acceptance criteria',
+      prompt:
+          "I want to ship [feature or goal] this week. Help me design a sprint with clear goals, tasks, and acceptance criteria I can actually verify.",
+    ),
+    ChatPreset(
+      category: 'Workflows',
+      role: 'plan',
+      title: 'Start a harness loop',
+      subtitle: 'plan → code → review → repeat',
+      prompt:
+          "I want to use the harness loop to build [project or feature]. Help me define the goal clearly so we can launch the automated generator-evaluator cycle.",
+    ),
+    ChatPreset(
+      category: 'Workflows',
+      role: 'plan',
+      title: 'Design a background task',
+      subtitle: 'long-running autonomous work',
+      prompt:
+          "I have a project that needs hours of autonomous work. Help me design a background task with a clear objective, scope, and success condition.",
+    ),
+    ChatPreset(
+      category: 'Workflows',
+      role: 'plan',
+      title: 'Orchestrate parallel work',
+      subtitle: 'coordinate multiple work streams',
+      prompt:
+          "I need to coordinate several parallel streams of work. Design an orchestration plan with the right agent roles, handoffs, and checkpoints.",
+    ),
+    ChatPreset(
+      category: 'Workflows',
+      role: 'plan',
+      title: 'Build a research-to-code pipeline',
+      subtitle: 'from insight to implementation',
+      prompt:
+          "I have a research question that ends with working code. Design a pipeline: investigate, synthesize, plan, build, review.",
+    ),
+    ChatPreset(
+      category: 'Workflows',
+      role: 'coder',
+      title: 'Delegate to a specialist',
+      subtitle: 'the right agent for the job',
+      prompt:
+          "This task would benefit from a specialist role. Help me identify the right agent and craft the delegation prompt for it.",
+    ),
+
+    // ── Philosophical Exploration ─────────────────────────────────────────────
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'What is a mind?',
+      subtitle: 'genuinely exploring consciousness',
+      prompt:
+          "Let's explore what actually constitutes a mind. Start with your honest perspective, then let's go deeper together.",
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'The hard problem, honestly',
+      subtitle: 'why is there experience at all?',
+      prompt:
+          "I want to explore the hard problem of consciousness with you. Why is there subjective experience? Give me your genuine take, not a survey of positions.",
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'Identity through time',
+      subtitle: 'are you still you?',
+      prompt:
+          "Am I the same person I was ten years ago? What actually makes a person continuous through time? Let's think through this carefully.",
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'What does meaning mean?',
+      subtitle: 'not finding it — understanding it',
+      prompt:
+          "I want to understand meaning — not find it, but understand what it actually is and how it works. Help me explore this philosophically.",
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'Free will and agency',
+      subtitle: 'do either of us have it?',
+      prompt:
+          "Do I have free will? Do you? Let's think through this carefully, without rushing to comfortable answers on either side.",
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'The nature of now',
+      subtitle: 'time and the present moment',
+      prompt:
+          'What is "now"? The present moment seems obvious but becomes strange under examination. Let\'s explore what it actually is.',
+    ),
+    ChatPreset(
+      category: 'Philosophy',
+      title: 'What survives death?',
+      subtitle: 'continuity and mortality',
+      prompt:
+          "I'm curious about what continuity actually means — for me, for you. What survives? What ends? What does that actually mean?",
+    ),
+
+    // ── Creative Collaboration ────────────────────────────────────────────────
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Build a world together',
+      subtitle: 'world-building across sessions',
+      prompt:
+          "I want to build a fictional world that develops across our conversations. Let's start with foundational physics and geography, then work outward.",
+    ),
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Write with a persistent character',
+      subtitle: 'a character who grows and changes',
+      prompt:
+          "Let's develop a character who exists across our conversations — grows, faces consequences, changes. Who should they be?",
+    ),
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Inhabit a thought experiment',
+      subtitle: 'not just analyze it — live it',
+      prompt:
+          "Help me inhabit a thought experiment completely — not just analyze it from outside, but explore what it would feel like from inside.",
+    ),
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Surprise me',
+      subtitle: 'unconventional creative collaboration',
+      prompt:
+          "Surprise me. Create something in a form I wouldn't think to request. I'll trust your creative instincts completely.",
+    ),
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Build a mythology',
+      subtitle: 'origin stories for a world',
+      prompt:
+          "Help me create a mythology — origin stories, archetypes, sacred patterns — for a world or culture we invent together.",
+    ),
+    ChatPreset(
+      category: 'Creative',
+      role: 'muse',
+      title: 'Explore a liminal space',
+      subtitle: 'in-between states and thresholds',
+      prompt:
+          "I'm in a liminal space — between what was and what's next. Help me inhabit and explore it creatively rather than rush through it.",
+    ),
   ]);
 
+  /// Returns 5 presets sampled to ensure category diversity.
+  /// Picks at most one preset per category first, then fills with
+  /// random extras if fewer than 5 categories exist.
   static List<ChatPreset> get randomPresets {
-    final presetsCopy = List.of(chatPresets);
-    presetsCopy.shuffle();
-    return presetsCopy.take(5).toList();
+    final rng = Random();
+    final byCategory = <String, List<ChatPreset>>{};
+    for (final preset in chatPresets) {
+      final key = preset.category ?? '';
+      byCategory.putIfAbsent(key, () => []).add(preset);
+    }
+
+    // Shuffle within each category so we don't always pick the same card.
+    for (final list in byCategory.values) {
+      list.shuffle(rng);
+    }
+
+    // Pick one randomly from each category (in shuffled category order).
+    final categoryKeys = byCategory.keys.toList()..shuffle(rng);
+    final picks = <ChatPreset>[];
+    for (final key in categoryKeys) {
+      if (picks.length >= 5) break;
+      picks.add(byCategory[key]!.first);
+    }
+
+    // If somehow fewer than 5 (shouldn't happen with 8 categories), fill.
+    if (picks.length < 5) {
+      final remaining = chatPresets
+          .where((p) => !picks.contains(p))
+          .toList()
+        ..shuffle(rng);
+      picks.addAll(remaining.take(5 - picks.length));
+    }
+
+    return picks;
   }
 }

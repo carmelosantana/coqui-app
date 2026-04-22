@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_channel.dart';
+import 'package:coqui_app/Models/coqui_channel_conversation.dart';
 import 'package:coqui_app/Models/coqui_channel_delivery.dart';
 import 'package:coqui_app/Models/coqui_channel_event.dart';
 import 'package:coqui_app/Models/coqui_channel_link.dart';
 import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
+import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 
 import 'channel_editor_sheet.dart';
@@ -85,6 +87,12 @@ class _ChannelDetailSheetState extends State<ChannelDetailSheet> {
         ),
       ),
     );
+    if (updated != null) {
+      await promptForPendingServerRestart(
+        context,
+        onRestarted: () => _refresh(force: true),
+      );
+    }
   }
 
   Future<void> _edit(CoquiChannel channel) async {
@@ -261,6 +269,11 @@ class _ChannelDetailSheetState extends State<ChannelDetailSheet> {
     final success = await provider.deleteChannel(channel.id);
     if (!mounted) return;
     if (success) {
+      await promptForPendingServerRestart(
+        context,
+        onRestarted: () => context.read<ChannelProvider>().refreshDashboard(silent: true),
+      );
+      if (!mounted) return;
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -274,6 +287,7 @@ class _ChannelDetailSheetState extends State<ChannelDetailSheet> {
     return Consumer<ChannelProvider>(
       builder: (context, provider, _) {
         final channel = provider.channelById(widget.channel.id) ?? widget.channel;
+        final conversations = provider.conversationsForChannel(channel.id);
         final links = provider.linksForChannel(channel.id);
         final events = provider.eventsForChannel(channel.id);
         final deliveries = provider.deliveriesForChannel(channel.id);
@@ -429,6 +443,21 @@ class _ChannelDetailSheetState extends State<ChannelDetailSheet> {
                             onDelete: () => _deleteLink(channel, link),
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      _SectionTitle(
+                        title: 'Conversations',
+                        actionLabel: 'Refresh',
+                        onAction: () => provider.refreshActivity(channel.id),
+                      ),
+                      const SizedBox(height: 8),
+                      if (conversations.isEmpty)
+                        const _ContentCard(
+                          text: 'No channel conversations have been recorded yet.',
+                        )
+                      else
+                        ...conversations
+                            .take(6)
+                            .map((conversation) => _ConversationTile(conversation: conversation)),
                       const SizedBox(height: 16),
                       _SectionTitle(
                         title: 'Recent Events',
@@ -685,6 +714,51 @@ class _LinkTile extends StatelessWidget {
             icon: const Icon(Icons.delete_outline),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ConversationTile extends StatelessWidget {
+  final CoquiChannelConversation conversation;
+
+  const _ConversationTile({required this.conversation});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metadataSummary = conversation.metadata.isEmpty
+        ? null
+        : conversation.metadata.entries
+            .take(2)
+            .map((entry) => '${entry.key}: ${entry.value}')
+            .join(' • ');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(conversation.remoteConversationKey),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (conversation.profile?.isNotEmpty ?? false)
+              Text('Profile: ${conversation.profile}'),
+            if (conversation.sessionId?.isNotEmpty ?? false)
+              Text('Session: ${conversation.sessionId}'),
+            if (conversation.remoteThreadKey?.isNotEmpty ?? false)
+              Text('Thread: ${conversation.remoteThreadKey}'),
+            if (conversation.lastMessageAt != null)
+              Text('Last message: ${conversation.lastMessageAt!.toLocal()}'),
+            if (metadataSummary != null)
+              Text(
+                metadataSummary,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

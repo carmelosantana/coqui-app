@@ -372,7 +372,8 @@ class ChatNavigationDrawer extends StatelessWidget {
         ? session.title!
         : _sessionFallbackTitle(session.createdAt);
     final subtitleParts = <String>[
-      if (session.profileLabel != null) session.profileLabel!,
+      if (session.isGroupSession || session.profileLabel != null)
+        session.compactParticipantSummary,
       if ((chatProvider.projectLabelForSession(session.id) ??
                   session.activeProjectId)
               ?.isNotEmpty ==
@@ -385,13 +386,19 @@ class ChatNavigationDrawer extends StatelessWidget {
     return NavigationDrawerDestination(
       icon: Stack(
         children: [
-          const Icon(Icons.chat_bubble_outline),
+          Icon(
+            session.isGroupSession
+                ? Icons.groups_2_outlined
+                : Icons.chat_bubble_outline,
+          ),
           if (badge != null) Positioned(top: 0, left: 0, child: badge),
         ],
       ),
       selectedIcon: Stack(
         children: [
-          const Icon(Icons.chat_bubble),
+          Icon(
+            session.isGroupSession ? Icons.groups_2 : Icons.chat_bubble,
+          ),
           if (badge != null) Positioned(top: 0, left: 0, child: badge),
         ],
       ),

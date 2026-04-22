@@ -9,6 +9,7 @@ import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Theme/coqui_typography.dart';
+import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
@@ -25,6 +26,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final chatProvider = Provider.of<ChatProvider>(context);
     final instanceProvider = Provider.of<InstanceProvider>(context);
+    final theme = Theme.of(context);
     final currentSession = chatProvider.currentSession;
     final projectLabel = chatProvider.currentSessionProjectLabel ??
         currentSession?.activeProjectId;
@@ -74,9 +76,20 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
               ],
               const SizedBox(width: 6),
               _HeaderActionChip(
-                avatar: const Icon(Icons.person_outline, size: 16),
-                label: Text(currentSession.profileLabel ?? 'No profile'),
-                onPressed: isSessionEditable
+                avatar: Icon(
+                  currentSession.isGroupSession
+                      ? Icons.groups_2_outlined
+                      : Icons.person_outline,
+                  size: 16,
+                ),
+                label: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    currentSession.compactParticipantSummary,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                onPressed: isSessionEditable && !currentSession.isGroupSession
                     ? () => _handleProfileSelection(context)
                     : null,
               ),
@@ -108,6 +121,31 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       actions: [
+        if (instanceProvider.restartRequired || instanceProvider.isRestarting)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: TextButton.icon(
+              onPressed: instanceProvider.isRestarting
+                  ? null
+                  : () => promptForPendingServerRestart(context),
+              icon: instanceProvider.isRestarting
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.error,
+                      ),
+                    )
+                  : const Icon(Icons.restart_alt),
+              label: Text(
+                instanceProvider.isRestarting ? 'Restarting' : 'Restart API',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+            ),
+          ),
         if (currentSession != null)
           IconButton(
             icon: const Icon(Icons.tune),
@@ -202,14 +240,23 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 onTap: () => Navigator.pop(context, 'turn_history'),
               ),
               ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Change Profile'),
-                subtitle: Text(
-                  chatProvider.currentSession?.profile?.isNotEmpty == true
-                      ? chatProvider.currentSession!.profile!
-                      : 'No profile selected',
+                leading: Icon(
+                  chatProvider.currentSession?.isGroupSession == true
+                      ? Icons.groups_2_outlined
+                      : Icons.person_outline,
                 ),
-                onTap: () => Navigator.pop(context, 'profile'),
+                title: Text(
+                  chatProvider.currentSession?.isGroupSession == true
+                      ? 'Group Members'
+                      : 'Change Profile',
+                ),
+                subtitle: Text(
+                  chatProvider.currentSession?.compactParticipantSummary ??
+                      'No profile selected',
+                ),
+                onTap: chatProvider.currentSession?.isGroupSession == true
+                    ? null
+                    : () => Navigator.pop(context, 'profile'),
               ),
               ListTile(
                 leading: const Icon(Icons.folder_outlined),

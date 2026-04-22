@@ -202,10 +202,11 @@ class ChatProvider extends ChangeNotifier {
       final selectedSessionId = currentSession?.id;
       final serverSessions =
           await _apiService.listSessions(limit: 100, status: 'all');
+      final hydratedSessions = await _hydrateGroupSessions(serverSessions);
 
       // Prefer server-provided titles; fall back to cached title for
       // older sessions created before server-side title generation.
-      for (final session in serverSessions) {
+      for (final session in hydratedSessions) {
         if (session.title == null || session.title!.isEmpty) {
           final cached = await _databaseService.getSession(session.id);
           if (cached?.title != null) {
@@ -214,7 +215,7 @@ class ChatProvider extends ChangeNotifier {
         }
       }
 
-      _sessions = serverSessions;
+      _sessions = hydratedSessions;
       _retainProjectLabelsForCurrentSessions();
 
       if (selectedSessionId != null) {
@@ -224,11 +225,11 @@ class ChatProvider extends ChangeNotifier {
       }
 
       // Cache all sessions
-      for (final session in serverSessions) {
+      for (final session in hydratedSessions) {
         await _databaseService.upsertSession(session);
       }
 
-      for (final session in serverSessions) {
+      for (final session in hydratedSessions) {
         if (session.activeProjectId?.isNotEmpty == true) {
           unawaited(_refreshProjectLabelForSession(session));
         }
@@ -247,12 +248,21 @@ class ChatProvider extends ChangeNotifier {
   Future<void> createNewSession(
     CoquiRole role, {
     String? profile,
+    List<String> groupProfiles = const [],
+    int groupMaxRounds = 3,
     bool confirmCloseActiveProfileSession = false,
+    bool confirmCloseActiveGroupSession = false,
   }) async {
+    final normalizedGroupProfiles = _normalizeGroupProfiles(groupProfiles);
+    final isGroupSession = normalizedGroupProfiles.length >= 2;
     final session = await _apiService.createSession(
-      modelRole: role.name,
-      profile: profile,
+      modelRole: isGroupSession ? 'orchestrator' : role.name,
+      profile: isGroupSession ? null : profile,
+      groupEnabled: isGroupSession,
+      members: normalizedGroupProfiles,
+      groupMaxRounds: groupMaxRounds,
       confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
+      confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
     );
 
     _sessions.insert(0, session);
@@ -266,9 +276,12 @@ class ChatProvider extends ChangeNotifier {
     unawaited(_refreshProjectLabelForSession(session));
 
     AnalyticsService.trackEvent('session_created', {
-      'role': role.name,
+      'role': isGroupSession ? 'orchestrator' : role.name,
       if (profile != null && profile.isNotEmpty) 'profile': profile,
+      if (isGroupSession) 'group_member_count': normalizedGroupProfiles.length,
+      if (isGroupSession) 'group_max_rounds': groupMaxRounds,
       if (confirmCloseActiveProfileSession) 'replaced_existing_profile': true,
+      if (confirmCloseActiveGroupSession) 'replaced_existing_group': true,
     });
 
     notifyListeners();
@@ -332,6 +345,8 @@ class ChatProvider extends ChangeNotifier {
   Future<void> _loadCurrentSession() async {
     final session = currentSession;
     if (session == null) return;
+
+    await _hydrateCurrentSessionIfNeeded(session);
 
     unawaited(_refreshProjectLabelForSession(session));
 
@@ -1044,6 +1059,28 @@ class ChatProvider extends ChangeNotifier {
     return null;
   }
 
+  CoquiSession? latestActiveSessionForGroupMembers(
+    List<String> members, {
+    String? excludingSessionId,
+  }) {
+    final normalizedKey = _normalizeGroupCompositionKey(members);
+    if (normalizedKey == null) return null;
+
+    for (final session in _sessions) {
+      if (!session.isGroupSession || session.isClosed) {
+        continue;
+      }
+
+      final sessionKey = session.groupCompositionKey ??
+          _normalizeGroupCompositionKey(session.groupProfileNames);
+      if (sessionKey == normalizedKey && session.id != excludingSessionId) {
+        return session;
+      }
+    }
+
+    return null;
+  }
+
   // ── File attachments ──────────────────────────────────────────────
 
   /// Pick and upload files, showing upload progress via [pendingFiles].
@@ -1249,5 +1286,59 @@ class ChatProvider extends ChangeNotifier {
   void _upsertSessionAtTop(CoquiSession session) {
     _sessions.removeWhere((existing) => existing.id == session.id);
     _sessions.insert(0, session);
+  }
+
+  Future<List<CoquiSession>> _hydrateGroupSessions(
+    List<CoquiSession> sessions,
+  ) async {
+    final hydrated = await Future.wait(
+      sessions.map((session) async {
+        if (!session.isGroupSession || session.groupMembers.isNotEmpty) {
+          return session;
+        }
+
+        return await _apiService.getSession(session.id) ?? session;
+      }),
+    );
+
+    return hydrated;
+  }
+
+  Future<void> _hydrateCurrentSessionIfNeeded(CoquiSession session) async {
+    if (!session.isGroupSession || session.groupMembers.isNotEmpty) {
+      return;
+    }
+
+    final hydrated = await _apiService.getSession(session.id);
+    if (hydrated == null) return;
+
+    _replaceSession(hydrated);
+
+    if (currentSession?.id == hydrated.id) {
+      _currentSessionIndex =
+          _sessions.indexWhere((candidate) => candidate.id == hydrated.id);
+    }
+
+    await _databaseService.upsertSession(hydrated);
+    notifyListeners();
+  }
+
+  List<String> _normalizeGroupProfiles(List<String> members) {
+    final uniqueMembers = members
+        .map((member) => member.trim())
+        .where((member) => member.isNotEmpty)
+        .toSet()
+        .toList();
+    uniqueMembers.sort();
+    return uniqueMembers;
+  }
+
+  String? _normalizeGroupCompositionKey(List<String> members) {
+    final normalized = _normalizeGroupProfiles(members);
+    if (normalized.length < 2) {
+      return null;
+    }
+
+    return normalized.join('|');
   }
 }

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:coqui_app/Models/coqui_channel.dart';
 import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 
 class ChannelEditorSheet extends StatefulWidget {
@@ -161,6 +162,11 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
 
     if (!mounted) return;
     if (result != null) {
+      await promptForPendingServerRestart(
+        context,
+        onRestarted: () => context.read<ChannelProvider>().refreshDashboard(silent: true),
+      );
+      if (!mounted) return;
       Navigator.pop(context, result);
     } else {
       _showSnack(provider.error ?? 'Unable to save channel');

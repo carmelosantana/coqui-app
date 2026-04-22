@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_session_member.dart';
 
 void main() {
   group('CoquiSession', () {
@@ -63,6 +64,90 @@ void main() {
       expect(restored.closedAt, session.closedAt);
       expect(restored.closureReason, 'manual_close');
       expect(restored.title, 'Closed Session');
+    });
+
+    test('parses group session fields from API payloads', () {
+      final session = CoquiSession.fromJson({
+        'id': 'group-session-1',
+        'model_role': 'orchestrator',
+        'model': 'gpt-test',
+        'profile': null,
+        'group_enabled': 1,
+        'group_max_rounds': 4,
+        'group_composition_key': 'caelum|nova|trinity',
+        'group_members': [
+          {'profile': 'caelum', 'position': 0},
+          {'profile': 'nova', 'position': 1},
+          {'profile': 'trinity', 'position': 2},
+        ],
+        'created_at': '2026-04-21T10:00:00Z',
+        'updated_at': '2026-04-21T11:00:00Z',
+      });
+
+      expect(session.isGroupSession, isTrue);
+      expect(session.groupMaxRounds, 4);
+      expect(session.groupCompositionKey, 'caelum|nova|trinity');
+      expect(session.groupProfileNames, ['caelum', 'nova', 'trinity']);
+      expect(session.primaryProfileLabel, 'caelum');
+      expect(session.participantSummary, 'caelum, nova, trinity');
+      expect(session.compactParticipantSummary, 'caelum, nova, trinity');
+    });
+
+    test('round-trips group session fields through database maps', () {
+      final session = CoquiSession(
+        id: 'group-session-2',
+        modelRole: 'orchestrator',
+        model: 'gpt-test',
+        groupEnabled: true,
+        groupMaxRounds: 5,
+        groupCompositionKey: 'caelum|nova|trinity|iris',
+        groupMembers: const [
+          CoquiSessionMember(profile: 'caelum', position: 0),
+          CoquiSessionMember(profile: 'nova', position: 1),
+          CoquiSessionMember(profile: 'trinity', position: 2),
+          CoquiSessionMember(profile: 'iris', position: 3),
+        ],
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(1700000005000),
+      );
+
+      final restored = CoquiSession.fromDatabase(session.toDatabaseMap());
+
+      expect(restored.isGroupSession, isTrue);
+      expect(restored.groupMaxRounds, 5);
+      expect(restored.groupCompositionKey, 'caelum|nova|trinity|iris');
+      expect(
+        restored.groupProfileNames,
+        ['caelum', 'nova', 'trinity', 'iris'],
+      );
+      expect(restored.compactParticipantSummary, 'caelum, nova +2');
+    });
+
+    test('fromDatabase tolerates missing cached group members', () {
+      final session = CoquiSession.fromDatabase({
+        'id': 'group-session-3',
+        'model_role': 'orchestrator',
+        'model': 'gpt-test',
+        'profile': null,
+        'group_enabled': 1,
+        'group_max_rounds': 3,
+        'group_composition_key': 'caelum|nova',
+        'group_members_json': null,
+        'active_project_id': null,
+        'created_at': 1700000000000,
+        'updated_at': 1700000005000,
+        'token_count': 0,
+        'is_closed': 0,
+        'is_archived': 0,
+        'closed_at': null,
+        'archived_at': null,
+        'closure_reason': null,
+        'title': 'Group Session',
+      });
+
+      expect(session.isGroupSession, isTrue);
+      expect(session.groupMembers, isEmpty);
+      expect(session.compactParticipantSummary, 'Group session');
     });
   });
 }

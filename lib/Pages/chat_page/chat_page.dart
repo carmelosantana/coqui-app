@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
@@ -21,7 +22,9 @@ import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
 import 'subwidgets/subwidgets.dart';
 
-enum _ProfileSessionChoice { resume, startNew }
+enum _SessionContinuationChoice { resume, startNew }
+
+enum _SessionCreationMode { single, group }
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -34,6 +37,9 @@ class _ChatPageState extends State<ChatPage> {
   // Selected role for new session creation
   CoquiRole? _selectedRole;
   String? _selectedProfile;
+  var _sessionCreationMode = _SessionCreationMode.single;
+  List<String> _selectedGroupProfiles = const [];
+  final _groupRoundsController = TextEditingController(text: '3');
 
   // Cached preset suggestions — only regenerated on new conversation
   final List<ChatPreset> _presets = ChatPresets.randomPresets;
@@ -68,6 +74,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _groupRoundsController.dispose();
     _textFieldFocusNode.dispose();
     _textFieldController.dispose();
     _hasText.dispose();
@@ -143,25 +150,7 @@ class _ChatPageState extends State<ChatPage> {
           );
         } else {
           return ChatEmpty(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ChatSelectRoleButton(
-                  currentRoleName: _selectedRole?.name,
-                  onPressed: () => _showRoleSelectionBottomSheet(context),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _showProfileSelectionDialog(context),
-                  icon: const Icon(Icons.person_outline),
-                  label: Text(
-                    _selectedProfile == null || _selectedProfile!.isEmpty
-                        ? 'Optional profile'
-                        : 'Profile: $_selectedProfile',
-                  ),
-                ),
-              ],
-            ),
+            child: _buildSessionSetupControls(chatProvider),
           );
         }
       } else {
@@ -198,10 +187,15 @@ class _ChatPageState extends State<ChatPage> {
           final preset = _presets[index];
           return ChatAttachmentPreset(
             preset: preset,
-            onPressed: () async {
+            onPressed: () {
               _textFieldController.text = preset.prompt;
               _hasText.value = preset.prompt.trim().isNotEmpty;
-              await _handleSendButton(chatProvider);
+              if (preset.role != null) {
+                setState(() {
+                  _selectedRole = CoquiRole(name: preset.role!, model: '');
+                });
+              }
+              _textFieldFocusNode.requestFocus();
             },
           );
         },
@@ -209,6 +203,130 @@ class _ChatPageState extends State<ChatPage> {
     } else {
       return const SizedBox();
     }
+  }
+
+  Widget _buildSessionSetupControls(ChatProvider chatProvider) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SegmentedButton<_SessionCreationMode>(
+            segments: const [
+              ButtonSegment<_SessionCreationMode>(
+                value: _SessionCreationMode.single,
+                icon: Icon(Icons.person_outline),
+                label: Text('Single'),
+              ),
+              ButtonSegment<_SessionCreationMode>(
+                value: _SessionCreationMode.group,
+                icon: Icon(Icons.groups_2_outlined),
+                label: Text('Group'),
+              ),
+            ],
+            selected: {_sessionCreationMode},
+            onSelectionChanged: (selection) {
+              if (selection.isEmpty) return;
+              setState(() {
+                _sessionCreationMode = selection.first;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: _sessionCreationMode == _SessionCreationMode.single
+                ? _buildSingleSessionControls()
+                : _buildGroupSessionControls(chatProvider),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleSessionControls() {
+    return Wrap(
+      key: const ValueKey<String>('single-session-controls'),
+      spacing: 12,
+      runSpacing: 12,
+      alignment: WrapAlignment.center,
+      children: [
+        SizedBox(
+          width: 220,
+          child: ChatSelectRoleButton(
+            currentRoleName: _selectedRole?.name,
+            onPressed: () => _showRoleSelectionBottomSheet(context),
+          ),
+        ),
+        SizedBox(
+          width: 220,
+          child: OutlinedButton.icon(
+            onPressed: () => _showProfileSelectionDialog(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 16,
+              ),
+            ),
+            icon: const Icon(Icons.person_outline),
+            label: Text(
+              _selectedProfile == null || _selectedProfile!.isEmpty
+                  ? 'Select a profile'
+                  : 'Profile: $_selectedProfile',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupSessionControls(ChatProvider chatProvider) {
+    final hasEnoughProfiles = _selectedGroupProfiles.length >= 2;
+
+    return Column(
+      key: const ValueKey<String>('group-session-controls'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 320,
+          child: OutlinedButton.icon(
+            onPressed: () => _showGroupProfileSelectionDialog(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 16,
+              ),
+            ),
+            icon: const Icon(Icons.groups_2_outlined),
+            label: Text(_groupSelectionLabel),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 220,
+          child: TextField(
+            controller: _groupRoundsController,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Number of rounds',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        if (_selectedGroupProfiles.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            hasEnoughProfiles
+                ? 'Selected: ${_selectedGroupProfiles.join(', ')}'
+                : 'Select at least two profiles for a group session.',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildTextFieldSuffixIcon(ChatProvider chatProvider) {
@@ -321,7 +439,53 @@ class _ChatPageState extends State<ChatPage> {
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
-        if (_selectedProfile != null && _selectedProfile!.isNotEmpty) {
+        if (_sessionCreationMode == _SessionCreationMode.group) {
+          final groupMaxRounds = _parsedGroupMaxRounds;
+          if (_selectedGroupProfiles.length < 2) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Select at least two profiles for a group session.',
+                ),
+                backgroundColor: errorColor,
+              ),
+            );
+            return;
+          }
+          if (groupMaxRounds == null || groupMaxRounds < 1) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: const Text('Number of rounds must be at least 1.'),
+                backgroundColor: errorColor,
+              ),
+            );
+            return;
+          }
+
+          await chatProvider.refreshSessions();
+          final choice = await _resolveGroupSessionChoice(
+            chatProvider,
+            _selectedGroupProfiles,
+          );
+          if (choice == null) return;
+
+          final existingSession =
+              chatProvider.latestActiveSessionForGroupMembers(
+            _selectedGroupProfiles,
+          );
+
+          if (choice == _SessionContinuationChoice.resume &&
+              existingSession != null) {
+            chatProvider.openSession(existingSession.id);
+          } else {
+            await chatProvider.createNewSession(
+              _groupSessionRole,
+              groupProfiles: _selectedGroupProfiles,
+              groupMaxRounds: groupMaxRounds,
+              confirmCloseActiveGroupSession: existingSession != null,
+            );
+          }
+        } else if (_selectedProfile != null && _selectedProfile!.isNotEmpty) {
           await chatProvider.refreshSessions();
           final choice = await _resolveProfileSessionChoice(
             chatProvider,
@@ -333,7 +497,7 @@ class _ChatPageState extends State<ChatPage> {
             _selectedProfile,
           );
 
-          if (choice == _ProfileSessionChoice.resume &&
+          if (choice == _SessionContinuationChoice.resume &&
               existingSession != null) {
             chatProvider.openSession(existingSession.id);
           } else {
@@ -447,7 +611,7 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
 
-      if (choice == _ProfileSessionChoice.resume) {
+      if (choice == _SessionContinuationChoice.resume) {
         chatProvider.openSession(existingSession.id);
         return;
       }
@@ -460,18 +624,81 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _showGroupProfileSelectionDialog(BuildContext context) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    final selectedProfiles = await showMultiProfilePickerDialog(
+      context: context,
+      title: 'Select Profiles',
+      fetchProfiles: chatProvider.fetchAvailableProfiles,
+      initialValues: _selectedGroupProfiles,
+    );
+
+    if (!context.mounted || selectedProfiles == null) return;
+
+    setState(() {
+      _selectedGroupProfiles = selectedProfiles;
+    });
+
+    if (selectedProfiles.length < 2) {
+      return;
+    }
+
+    await chatProvider.refreshSessions();
+    if (!context.mounted) return;
+
+    final existingSession = chatProvider.latestActiveSessionForGroupMembers(
+      selectedProfiles,
+    );
+    if (existingSession == null || !mounted) {
+      return;
+    }
+
+    final choice = await _showExistingGroupSessionDialog(
+      context,
+      profiles: selectedProfiles,
+    );
+    if (!context.mounted || choice == null || !mounted) {
+      return;
+    }
+
+    if (choice == _SessionContinuationChoice.resume) {
+      chatProvider.openSession(existingSession.id);
+      return;
+    }
+
+    await _createSessionForGroupSelection(
+      chatProvider,
+      groupProfiles: selectedProfiles,
+      groupMaxRounds: _parsedGroupMaxRounds ?? 3,
+      confirmCloseActiveGroupSession: true,
+    );
+  }
+
   Widget _buildClosedSessionNotice(ChatProvider chatProvider) {
     final session = chatProvider.currentSession;
     if (session == null) return const SizedBox.shrink();
 
-    final resumeTarget = chatProvider.latestActiveSessionForProfile(
-      session.profile,
-      excludingSessionId: session.id,
-    );
+    final resumeTarget = session.isGroupSession
+        ? chatProvider.latestActiveSessionForGroupMembers(
+            session.groupProfileNames,
+            excludingSessionId: session.id,
+          )
+        : chatProvider.latestActiveSessionForProfile(
+            session.profile,
+            excludingSessionId: session.id,
+          );
 
     final projectLabel =
         chatProvider.currentSessionProjectLabel ?? session.activeProjectId;
     final statusLabel = session.isArchived ? 'archived' : 'closed';
+    final scopeDescription = session.isGroupSession
+        ? 'It includes ${session.compactParticipantSummary}. '
+        : session.profileLabel != null
+            ? 'It belongs to the ${session.profileLabel} profile. '
+            : '';
+    final resumeScopeLabel =
+        session.isGroupSession ? 'for this group' : 'for this profile';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
@@ -490,7 +717,7 @@ class _ChatPageState extends State<ChatPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This conversation is $statusLabel. ${session.profileLabel != null ? 'It belongs to the ${session.profileLabel} profile. ' : ''}${projectLabel != null ? 'Project context: $projectLabel. ' : ''}Resume an active session${resumeTarget != null ? ' for this profile' : ''} or start a new one to continue writing.',
+              'This conversation is $statusLabel. $scopeDescription${projectLabel != null ? 'Project context: $projectLabel. ' : ''}Resume an active session${resumeTarget != null ? ' $resumeScopeLabel' : ''} or start a new one to continue writing.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             if (session.closureReason?.isNotEmpty == true) ...[
@@ -558,19 +785,45 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  CoquiRole get _groupSessionRole => CoquiRole(
+        name: 'orchestrator',
+        model: '',
+      );
+
+  String get _groupSelectionLabel {
+    if (_selectedGroupProfiles.isEmpty) {
+      return 'Select profiles';
+    }
+
+    if (_selectedGroupProfiles.length <= 3) {
+      return _selectedGroupProfiles.join(', ');
+    }
+
+    return '${_selectedGroupProfiles.take(2).join(', ')} +${_selectedGroupProfiles.length - 2}';
+  }
+
+  int? get _parsedGroupMaxRounds {
+    final text = _groupRoundsController.text.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    return int.tryParse(text);
+  }
+
   void _clearComposer() {
     _textFieldController.clear();
     _hasText.value = false;
   }
 
-  Future<_ProfileSessionChoice?> _resolveProfileSessionChoice(
+  Future<_SessionContinuationChoice?> _resolveProfileSessionChoice(
     ChatProvider chatProvider,
     String profileName,
   ) async {
     final existingSession =
         chatProvider.latestActiveSessionForProfile(profileName);
     if (existingSession == null || !mounted) {
-      return _ProfileSessionChoice.startNew;
+      return _SessionContinuationChoice.startNew;
     }
 
     return _showExistingProfileSessionDialog(
@@ -579,11 +832,27 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Future<_ProfileSessionChoice?> _showExistingProfileSessionDialog(
+  Future<_SessionContinuationChoice?> _resolveGroupSessionChoice(
+    ChatProvider chatProvider,
+    List<String> groupProfiles,
+  ) async {
+    final existingSession =
+        chatProvider.latestActiveSessionForGroupMembers(groupProfiles);
+    if (existingSession == null || !mounted) {
+      return _SessionContinuationChoice.startNew;
+    }
+
+    return _showExistingGroupSessionDialog(
+      context,
+      profiles: groupProfiles,
+    );
+  }
+
+  Future<_SessionContinuationChoice?> _showExistingProfileSessionDialog(
     BuildContext context, {
     required String profileName,
   }) {
-    return showDialog<_ProfileSessionChoice>(
+    return showDialog<_SessionContinuationChoice>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Resume or Start New'),
@@ -597,13 +866,45 @@ class _ChatPageState extends State<ChatPage> {
           ),
           OutlinedButton(
             onPressed: () =>
-                Navigator.pop(context, _ProfileSessionChoice.resume),
+                Navigator.pop(context, _SessionContinuationChoice.resume),
             child: const Text('Resume previous session'),
           ),
           FilledButton(
             onPressed: () =>
-                Navigator.pop(context, _ProfileSessionChoice.startNew),
+                Navigator.pop(context, _SessionContinuationChoice.startNew),
             child: Text('Start new $profileName session'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<_SessionContinuationChoice?> _showExistingGroupSessionDialog(
+    BuildContext context, {
+    required List<String> profiles,
+  }) {
+    final summary = profiles.join(', ');
+    return showDialog<_SessionContinuationChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Resume or Start New'),
+        content: Text(
+          'A group conversation already exists for $summary. Would you like to resume that session or start a new group session? Starting a new session will archive and close the previous group conversation.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () =>
+                Navigator.pop(context, _SessionContinuationChoice.resume),
+            child: const Text('Resume previous session'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, _SessionContinuationChoice.startNew),
+            child: const Text('Start new group session'),
           ),
         ],
       ),
@@ -641,6 +942,39 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _createSessionForGroupSelection(
+    ChatProvider chatProvider, {
+    required List<String> groupProfiles,
+    required int groupMaxRounds,
+    required bool confirmCloseActiveGroupSession,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    try {
+      await chatProvider.createNewSession(
+        _groupSessionRole,
+        groupProfiles: groupProfiles,
+        groupMaxRounds: groupMaxRounds,
+        confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
+      );
+    } on CoquiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: errorColor,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(CoquiException.friendly(e).message),
+          backgroundColor: errorColor,
+        ),
+      );
+    }
+  }
+
   Future<void> _startNewSessionFromClosedNotice(
     ChatProvider chatProvider,
     CoquiSession session, {
@@ -650,11 +984,20 @@ class _ChatPageState extends State<ChatPage> {
     final errorColor = Theme.of(context).colorScheme.error;
 
     try {
-      await chatProvider.createNewSession(
-        CoquiRole(name: session.modelRole, model: session.model),
-        profile: session.profile,
-        confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
-      );
+      if (session.isGroupSession) {
+        await chatProvider.createNewSession(
+          _groupSessionRole,
+          groupProfiles: session.groupProfileNames,
+          groupMaxRounds: session.groupMaxRounds,
+          confirmCloseActiveGroupSession: confirmCloseActiveProfileSession,
+        );
+      } else {
+        await chatProvider.createNewSession(
+          CoquiRole(name: session.modelRole, model: session.model),
+          profile: session.profile,
+          confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
+        );
+      }
       _clearComposer();
     } on CoquiException catch (e) {
       messenger.showSnackBar(

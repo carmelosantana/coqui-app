@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:coqui_app/Models/coqui_session_member.dart';
+
 /// Represents a Coqui API session (conversation context).
 ///
 /// Sessions are persistent server-side and identified by a 32-char hex ID.
@@ -9,6 +13,10 @@ class CoquiSession {
   final String modelRole;
   final String model;
   final String? profile;
+  final bool groupEnabled;
+  final int groupMaxRounds;
+  final String? groupCompositionKey;
+  final List<CoquiSessionMember> groupMembers;
   final String? activeProjectId;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -27,6 +35,10 @@ class CoquiSession {
     required this.modelRole,
     required this.model,
     this.profile,
+    this.groupEnabled = false,
+    this.groupMaxRounds = 3,
+    this.groupCompositionKey,
+    this.groupMembers = const [],
     this.activeProjectId,
     required this.createdAt,
     required this.updatedAt,
@@ -54,11 +66,43 @@ class CoquiSession {
       return false;
     }
 
+    int parseInt(dynamic value, {int fallback = 0}) {
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) {
+        return int.tryParse(value) ?? fallback;
+      }
+      return fallback;
+    }
+
+    List<CoquiSessionMember> parseGroupMembers(dynamic value) {
+      if (value is! List) return const [];
+
+      final members = value
+          .whereType<Map>()
+          .map(
+            (member) => CoquiSessionMember.fromJson(
+              member.map(
+                (key, value) => MapEntry(key.toString(), value),
+              ),
+            ),
+          )
+          .where((member) => member.profile.isNotEmpty)
+          .toList();
+
+      members.sort((left, right) => left.position.compareTo(right.position));
+      return members;
+    }
+
     return CoquiSession(
       id: json['id'] as String,
       modelRole: json['model_role'] as String? ?? 'orchestrator',
       model: json['model'] as String? ?? '',
       profile: json['profile'] as String?,
+      groupEnabled: parseFlag(json['group_enabled']),
+      groupMaxRounds: parseInt(json['group_max_rounds'], fallback: 3),
+      groupCompositionKey: json['group_composition_key'] as String?,
+      groupMembers: parseGroupMembers(json['group_members']),
       activeProjectId: json['active_project_id'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -79,12 +123,31 @@ class CoquiSession {
   factory CoquiSession.fromDatabase(Map<String, dynamic> map) {
     final closedAtMillis = map['closed_at'] as int?;
     final archivedAtMillis = map['archived_at'] as int?;
+    final groupMembersJson = map['group_members_json'] as String?;
+    final groupMembers = groupMembersJson == null || groupMembersJson.isEmpty
+        ? <CoquiSessionMember>[]
+        : (jsonDecode(groupMembersJson) as List<dynamic>)
+            .whereType<Map>()
+            .map(
+              (member) => CoquiSessionMember.fromDatabase(
+                member.map(
+                  (key, value) => MapEntry(key.toString(), value),
+                ),
+              ),
+            )
+            .toList();
+
+    groupMembers.sort((left, right) => left.position.compareTo(right.position));
 
     return CoquiSession(
       id: map['id'] as String,
       modelRole: map['model_role'] as String,
       model: map['model'] as String? ?? '',
       profile: map['profile'] as String?,
+      groupEnabled: (map['group_enabled'] as int? ?? 0) != 0,
+      groupMaxRounds: map['group_max_rounds'] as int? ?? 3,
+      groupCompositionKey: map['group_composition_key'] as String?,
+      groupMembers: groupMembers,
       activeProjectId: map['active_project_id'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
@@ -108,6 +171,12 @@ class CoquiSession {
       'model_role': modelRole,
       'model': model,
       'profile': profile,
+      'group_enabled': groupEnabled ? 1 : 0,
+      'group_max_rounds': groupMaxRounds,
+      'group_composition_key': groupCompositionKey,
+      'group_members_json': jsonEncode(
+        orderedGroupMembers.map((member) => member.toDatabaseMap()).toList(),
+      ),
       'active_project_id': activeProjectId,
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt.millisecondsSinceEpoch,
@@ -125,6 +194,10 @@ class CoquiSession {
     String? modelRole,
     String? model,
     String? profile,
+    bool? groupEnabled,
+    int? groupMaxRounds,
+    String? groupCompositionKey,
+    List<CoquiSessionMember>? groupMembers,
     String? activeProjectId,
     String? title,
     int? tokenCount,
@@ -140,6 +213,10 @@ class CoquiSession {
       modelRole: modelRole ?? this.modelRole,
       model: model ?? this.model,
       profile: profile ?? this.profile,
+      groupEnabled: groupEnabled ?? this.groupEnabled,
+      groupMaxRounds: groupMaxRounds ?? this.groupMaxRounds,
+      groupCompositionKey: groupCompositionKey ?? this.groupCompositionKey,
+      groupMembers: groupMembers ?? this.groupMembers,
       activeProjectId: activeProjectId ?? this.activeProjectId,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -156,6 +233,51 @@ class CoquiSession {
   bool get isReadOnly => isClosed || isArchived;
 
   bool get isActive => !isClosed;
+
+  bool get isGroupSession => groupEnabled;
+
+  List<CoquiSessionMember> get orderedGroupMembers {
+    final members = List<CoquiSessionMember>.from(groupMembers);
+    members.sort((left, right) => left.position.compareTo(right.position));
+    return List.unmodifiable(members);
+  }
+
+  List<String> get groupProfileNames => orderedGroupMembers
+      .map((member) => member.profile)
+      .where((profile) => profile.isNotEmpty)
+      .toList(growable: false);
+
+  String? get primaryProfileLabel {
+    if (isGroupSession) {
+      return groupProfileNames.isNotEmpty ? groupProfileNames.first : null;
+    }
+
+    return profileLabel;
+  }
+
+  String get participantSummary {
+    if (isGroupSession) {
+      final names = groupProfileNames;
+      if (names.isEmpty) {
+        return 'Group session';
+      }
+
+      return names.join(', ');
+    }
+
+    return profileLabel ?? 'No profile';
+  }
+
+  String get compactParticipantSummary {
+    if (!isGroupSession) {
+      return participantSummary;
+    }
+
+    final names = groupProfileNames;
+    if (names.isEmpty) return 'Group session';
+    if (names.length <= 3) return names.join(', ');
+    return '${names.take(2).join(', ')} +${names.length - 2}';
+  }
 
   String get status {
     if (isArchived) return 'archived';
