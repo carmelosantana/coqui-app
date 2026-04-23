@@ -339,6 +339,11 @@ class CoquiSession {
     return channel?.summaryLabel ?? 'Channel linked';
   }
 
+  String? get channelBadgeLabel {
+    if (!isChannelBound) return null;
+    return channel?.compactLabel ?? 'Channel linked';
+  }
+
   @override
   String toString() => title ?? 'Session ${id.substring(0, 8)}';
 }

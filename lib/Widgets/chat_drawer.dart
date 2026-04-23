@@ -380,7 +380,7 @@ class ChatNavigationDrawer extends StatelessWidget {
       if (session.isArchived) 'Archived' else if (session.isClosed) 'Closed',
     ];
     final title = _sessionNavigationTitle(session);
-    final channelLabel = session.channelSummaryLabel;
+    final channelLabel = session.channelBadgeLabel;
     final subtitle = subtitleParts.join(' • ');
 
     return NavigationDrawerDestination(

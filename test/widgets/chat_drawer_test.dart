@@ -124,7 +124,8 @@ void main() {
       find.text('Channel · gvoice2 · signal-remote-conversation'),
       findsNothing,
     );
-    expect(find.text('Signal • gvoice2'), findsOneWidget);
+    expect(find.text('gvoice2'), findsOneWidget);
+    expect(find.text('Signal • gvoice2'), findsNothing);
     expect(find.text('trinity'), findsOneWidget);
   });
 }

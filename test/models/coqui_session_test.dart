@@ -45,6 +45,7 @@ void main() {
       expect(session.displayTitle, 'Session Title');
       expect(session.shortId, 'session-');
       expect(session.channelSummaryLabel, 'Signal • Signal Primary');
+      expect(session.channelBadgeLabel, 'Signal Primary');
       expect(session.title, 'Session Title');
     });
 

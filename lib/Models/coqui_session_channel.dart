@@ -42,6 +42,9 @@ class CoquiSessionChannel {
 
   String get displayLabel => displayName.isNotEmpty ? displayName : name;
 
+  String get compactLabel =>
+      displayLabel.isNotEmpty ? displayLabel : summaryLabel;
+
   String get summaryLabel {
     final label = displayLabel;
     final source = driverLabel;
