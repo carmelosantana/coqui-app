@@ -82,6 +82,8 @@ class _WorkPageState extends State<WorkPage>
   @override
   void initState() {
     super.initState();
+    final initialArguments = widget.arguments;
+    final initialTabIndex = initialArguments?.initialTab.index ?? 0;
     _restoredTabIndex = RestorableInt(widget.arguments?.initialTab.index ?? 0);
     _restoredSessionId = RestorableStringN(widget.arguments?.sessionId);
     _restoredProjectId = RestorableStringN(widget.arguments?.projectId);
@@ -90,12 +92,12 @@ class _WorkPageState extends State<WorkPage>
     _restoredSprintStatusFilter = RestorableStringN(null);
     _restoredTodoStatusFilter = RestorableStringN(null);
     _restoredArtifactStageFilter = RestorableStringN(null);
-    _selectedProjectId = _restoredProjectId.value;
-    _selectedSprintId = _restoredSprintId.value;
-    _projectStatusFilter = _restoredProjectStatusFilter.value;
-    _sprintStatusFilter = _restoredSprintStatusFilter.value;
-    _todoStatusFilter = _restoredTodoStatusFilter.value;
-    _artifactStageFilter = _restoredArtifactStageFilter.value;
+    _selectedProjectId = initialArguments?.projectId;
+    _selectedSprintId = initialArguments?.sprintId;
+    _projectStatusFilter = null;
+    _sprintStatusFilter = null;
+    _todoStatusFilter = null;
+    _artifactStageFilter = null;
 
     _tabController =
         TabController(length: WorkPageTab.values.length, vsync: this)
@@ -106,7 +108,7 @@ class _WorkPageState extends State<WorkPage>
             }
           });
 
-    _tabController.index = _restoredTabIndex.value;
+    _tabController.index = initialTabIndex;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final chatProvider = context.read<ChatProvider>();
@@ -151,6 +153,10 @@ class _WorkPageState extends State<WorkPage>
       'work_artifact_stage_filter',
     );
 
+    _restoreViewState();
+  }
+
+  void _restoreViewState() {
     _tabController.index = _restoredTabIndex.value.clamp(
       0,
       WorkPageTab.values.length - 1,

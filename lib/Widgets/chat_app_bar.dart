@@ -220,93 +220,98 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     final action = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       builder: (BuildContext context) {
         return SafeArea(
           minimum: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const BottomSheetHeader(title: 'Session Options'),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.history_outlined),
-                title: const Text('Turn History'),
-                subtitle: Text(
-                  chatProvider.lastTurnSummary ??
-                      'Inspect recent session turns',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const BottomSheetHeader(title: 'Session Options'),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.history_outlined),
+                  title: const Text('Turn History'),
+                  subtitle: Text(
+                    chatProvider.lastTurnSummary ??
+                        'Inspect recent session turns',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => Navigator.pop(context, 'turn_history'),
                 ),
-                onTap: () => Navigator.pop(context, 'turn_history'),
-              ),
-              ListTile(
-                leading: Icon(
-                  chatProvider.currentSession?.isGroupSession == true
-                      ? Icons.groups_2_outlined
-                      : Icons.person_outline,
+                ListTile(
+                  leading: Icon(
+                    chatProvider.currentSession?.isGroupSession == true
+                        ? Icons.groups_2_outlined
+                        : Icons.person_outline,
+                  ),
+                  title: Text(
+                    chatProvider.currentSession?.isGroupSession == true
+                        ? 'Group Members'
+                        : 'Change Profile',
+                  ),
+                  subtitle: Text(
+                    chatProvider.currentSession?.compactParticipantSummary ??
+                        'No profile selected',
+                  ),
+                  onTap: chatProvider.currentSession?.isGroupSession == true
+                      ? null
+                      : () => Navigator.pop(context, 'profile'),
                 ),
-                title: Text(
-                  chatProvider.currentSession?.isGroupSession == true
-                      ? 'Group Members'
-                      : 'Change Profile',
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: const Text('Session Files'),
+                  onTap: () => Navigator.pop(context, 'files'),
                 ),
-                subtitle: Text(
-                  chatProvider.currentSession?.compactParticipantSummary ??
-                      'No profile selected',
+                ListTile(
+                  leading: const Icon(Icons.workspaces_outline),
+                  title: const Text('Open Project In Work'),
+                  subtitle: Text(
+                    chatProvider.currentSessionProjectLabel ??
+                        chatProvider.currentSession?.activeProjectId ??
+                        'Use the current chat project and sprint context',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => Navigator.pop(context, 'work_project'),
                 ),
-                onTap: chatProvider.currentSession?.isGroupSession == true
-                    ? null
-                    : () => Navigator.pop(context, 'profile'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: const Text('Session Files'),
-                onTap: () => Navigator.pop(context, 'files'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.workspaces_outline),
-                title: const Text('Open Project In Work'),
-                subtitle: Text(
-                  chatProvider.currentSessionProjectLabel ??
-                      chatProvider.currentSession?.activeProjectId ??
-                      'Use the current chat project and sprint context',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                ListTile(
+                  leading: const Icon(Icons.checklist_outlined),
+                  title: const Text('Open Session Todos'),
+                  subtitle:
+                      const Text('Jump into the current session work list'),
+                  onTap: () => Navigator.pop(context, 'work_todos'),
                 ),
-                onTap: () => Navigator.pop(context, 'work_project'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.checklist_outlined),
-                title: const Text('Open Session Todos'),
-                subtitle: const Text('Jump into the current session work list'),
-                onTap: () => Navigator.pop(context, 'work_todos'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.description_outlined),
-                title: const Text('Open Session Artifacts'),
-                subtitle: const Text(
-                  'Open versioned artifacts for this session in Work',
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Open Session Artifacts'),
+                  subtitle: const Text(
+                    'Open versioned artifacts for this session in Work',
+                  ),
+                  onTap: () => Navigator.pop(context, 'work_artifacts'),
                 ),
-                onTap: () => Navigator.pop(context, 'work_artifacts'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.account_tree_outlined),
-                title: const Text('Child Runs'),
-                onTap: () => Navigator.pop(context, 'child_runs'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Rename Session'),
-                onTap: () => Navigator.pop(context, 'rename'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete Session'),
-                textColor: Theme.of(context).colorScheme.error,
-                iconColor: Theme.of(context).colorScheme.error,
-                onTap: () => Navigator.pop(context, 'delete'),
-              ),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.account_tree_outlined),
+                  title: const Text('Child Runs'),
+                  onTap: () => Navigator.pop(context, 'child_runs'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Rename Session'),
+                  onTap: () => Navigator.pop(context, 'rename'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Delete Session'),
+                  textColor: Theme.of(context).colorScheme.error,
+                  iconColor: Theme.of(context).colorScheme.error,
+                  onTap: () => Navigator.pop(context, 'delete'),
+                ),
+              ],
+            ),
           ),
         );
       },
