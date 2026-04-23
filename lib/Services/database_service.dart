@@ -74,53 +74,157 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
           if (oldVersion < 2) {
-            await db.execute('ALTER TABLE sessions ADD COLUMN profile TEXT');
+            await _addColumnIfMissing(db, 'sessions', 'profile', 'TEXT');
           }
           if (oldVersion < 3) {
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN active_project_id TEXT',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'active_project_id',
+              'TEXT',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'is_closed',
+              'INTEGER NOT NULL DEFAULT 0',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'is_archived',
+              'INTEGER NOT NULL DEFAULT 0',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN closed_at INTEGER',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'closed_at',
+              'INTEGER',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN archived_at INTEGER',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'archived_at',
+              'INTEGER',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN closure_reason TEXT',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'closure_reason',
+              'TEXT',
             );
           }
           if (oldVersion < 4) {
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN group_enabled INTEGER NOT NULL DEFAULT 0',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_enabled',
+              'INTEGER NOT NULL DEFAULT 0',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN group_max_rounds INTEGER NOT NULL DEFAULT 3',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_max_rounds',
+              'INTEGER NOT NULL DEFAULT 3',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN group_composition_key TEXT',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_composition_key',
+              'TEXT',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN group_members_json TEXT',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_members_json',
+              'TEXT',
             );
           }
           if (oldVersion < 5) {
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN channel_bound INTEGER NOT NULL DEFAULT 0',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'channel_bound',
+              'INTEGER NOT NULL DEFAULT 0',
             );
-            await db.execute(
-              'ALTER TABLE sessions ADD COLUMN channel_json TEXT',
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'channel_json',
+              'TEXT',
             );
           }
         },
+        onOpen: (Database db) async {
+          await _ensureSessionSchema(db);
+        },
       ),
     );
+  }
+
+  Future<void> _ensureSessionSchema(Database db) async {
+    await _addColumnIfMissing(db, 'sessions', 'profile', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'active_project_id', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'is_closed',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'is_archived',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'closed_at', 'INTEGER');
+    await _addColumnIfMissing(db, 'sessions', 'archived_at', 'INTEGER');
+    await _addColumnIfMissing(db, 'sessions', 'closure_reason', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'group_enabled',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'group_max_rounds',
+      'INTEGER NOT NULL DEFAULT 3',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'group_composition_key', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'group_members_json', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'channel_bound',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'channel_json', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'title', 'TEXT');
+  }
+
+  Future<void> _addColumnIfMissing(
+    DatabaseExecutor db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    if (await _tableHasColumn(db, table, column)) {
+      return;
+    }
+
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+  }
+
+  Future<bool> _tableHasColumn(
+    DatabaseExecutor db,
+    String table,
+    String column,
+  ) async {
+    final rows = await db.rawQuery('PRAGMA table_info($table)');
+
+    return rows.any((row) => row['name'] == column);
   }
 
   Future<void> close() async => _db.close();
