@@ -58,7 +58,7 @@ class CoquiChannel {
           json['displayName'] as String? ??
           json['name'] as String? ??
           '',
-      enabled: json['enabled'] as bool? ?? true,
+      enabled: _coerceBool(json['enabled'], fallback: true),
       defaultProfile: json['default_profile'] as String? ??
           json['defaultProfile'] as String?,
       boundSessionId: json['bound_session_id'] as String? ??
@@ -69,7 +69,7 @@ class CoquiChannel {
       security: _coerceMap(json['security']),
       capabilities: _coerceMap(json['capabilities']),
       workerStatus: json['worker_status'] as String? ?? 'missing',
-      ready: json['ready'] as bool? ?? false,
+      ready: _coerceBool(json['ready']),
       summary: json['summary'] as String? ?? '',
       lastHeartbeatAt: _parseDateTime(json['last_heartbeat_at']),
       lastReceiveAt: _parseDateTime(json['last_receive_at']),
@@ -189,4 +189,15 @@ int _coerceInt(Object? value) {
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value) ?? 0;
   return 0;
+}
+
+bool _coerceBool(Object? value, {bool fallback = false}) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1') return true;
+    if (normalized == 'false' || normalized == '0') return false;
+  }
+  return fallback;
 }

@@ -50,6 +50,45 @@ void main() {
       expect(channel.statusLabel, 'Healthy');
     });
 
+    test('parses live channel payloads that use numeric booleans', () {
+      final channel = CoquiChannel.fromJson({
+        'id': '5e3f60345738867c97308122e63397ca',
+        'name': 'gvoice2',
+        'driver': 'signal',
+        'source': 'config',
+        'enabled': 1,
+        'display_name': 'gvoice2',
+        'default_profile': null,
+        'bound_session_id': null,
+        'worker_status': 'running',
+        'ready': 1,
+        'summary': 'Signal JSON-RPC runtime active for gvoice2.',
+        'last_heartbeat_at': '2026-04-23T03:40:03Z',
+        'last_receive_at': null,
+        'last_send_at': null,
+        'inbound_backlog': 0,
+        'outbound_backlog': 0,
+        'consecutive_failures': 0,
+        'last_error': null,
+        'created_at': '2026-04-22T20:31:00Z',
+        'updated_at': '2026-04-23T03:40:03Z',
+        'settings': {
+          'account': '+12013380755',
+        },
+        'allowed_scopes': [],
+        'security': [],
+        'capabilities': {
+          'direct_messages': true,
+          'groups': true,
+        },
+      });
+
+      expect(channel.enabled, isTrue);
+      expect(channel.ready, isTrue);
+      expect(channel.isHealthy, isTrue);
+      expect(channel.displayName, 'gvoice2');
+    });
+
     test('treats placeholder driver state as scaffolded', () {
       final channel = CoquiChannel.fromJson({
         'id': 'channel-2',
