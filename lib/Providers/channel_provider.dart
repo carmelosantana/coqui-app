@@ -19,7 +19,8 @@ class ChannelProvider extends ChangeNotifier {
   CoquiChannelStats _stats = CoquiChannelStats.empty;
   CoquiChannelStats _managerStats = CoquiChannelStats.empty;
   final Map<String, CoquiChannel> _detailsById = {};
-  final Map<String, List<CoquiChannelConversation>> _conversationsByChannelId = {};
+  final Map<String, List<CoquiChannelConversation>> _conversationsByChannelId =
+      {};
   final Map<String, List<CoquiChannelLink>> _linksByChannelId = {};
   final Map<String, List<CoquiChannelEvent>> _eventsByChannelId = {};
   final Map<String, List<CoquiChannelDelivery>> _deliveriesByChannelId = {};
@@ -52,8 +53,7 @@ class ChannelProvider extends ChangeNotifier {
       channel.consecutiveFailures > 0 ||
       (channel.lastError?.isNotEmpty ?? false));
 
-  bool get hasHealthyChannels =>
-      _channels.any((channel) => channel.isHealthy);
+  bool get hasHealthyChannels => _channels.any((channel) => channel.isHealthy);
 
   int get activeChannelsCount =>
       _channels.where((channel) => channel.isHealthy).length;
@@ -66,7 +66,8 @@ class ChannelProvider extends ChangeNotifier {
       .length;
 
   CoquiChannel? channelById(String id) =>
-      _detailsById[id] ?? _channels.cast<CoquiChannel?>().firstWhere(
+      _detailsById[id] ??
+      _channels.cast<CoquiChannel?>().firstWhere(
             (channel) => channel?.id == id || channel?.name == id,
             orElse: () => null,
           );
@@ -74,7 +75,7 @@ class ChannelProvider extends ChangeNotifier {
   List<CoquiChannelLink> linksForChannel(String channelId) =>
       List.unmodifiable(_linksByChannelId[channelId] ?? const []);
 
-    List<CoquiChannelConversation> conversationsForChannel(String channelId) =>
+  List<CoquiChannelConversation> conversationsForChannel(String channelId) =>
       List.unmodifiable(_conversationsByChannelId[channelId] ?? const []);
 
   List<CoquiChannelEvent> eventsForChannel(String channelId) =>
@@ -83,7 +84,8 @@ class ChannelProvider extends ChangeNotifier {
   List<CoquiChannelDelivery> deliveriesForChannel(String channelId) =>
       List.unmodifiable(_deliveriesByChannelId[channelId] ?? const []);
 
-  bool isDetailLoading(String channelId) => _loadingDetailIds.contains(channelId);
+  bool isDetailLoading(String channelId) =>
+      _loadingDetailIds.contains(channelId);
 
   bool isMutating(String channelId) => _mutatingIds.contains(channelId);
 
@@ -215,6 +217,7 @@ class ChannelProvider extends ChangeNotifier {
     bool enabled = true,
     String? displayName,
     String? defaultProfile,
+    String? boundSessionId,
     Map<String, dynamic>? settings,
     List<String>? allowedScopes,
     Map<String, dynamic>? security,
@@ -230,12 +233,16 @@ class ChannelProvider extends ChangeNotifier {
         enabled: enabled,
         displayName: displayName,
         defaultProfile: defaultProfile,
+        boundSessionId: boundSessionId,
         settings: settings,
         allowedScopes: allowedScopes,
         security: security,
       );
       _detailsById[channel.id] = channel;
-      _channels = [channel, ..._channels.where((item) => item.id != channel.id)];
+      _channels = [
+        channel,
+        ..._channels.where((item) => item.id != channel.id)
+      ];
       await fetchChannels(
         enabled: _enabledFilter,
         driver: _driverFilter,
@@ -257,6 +264,7 @@ class ChannelProvider extends ChangeNotifier {
     bool? enabled,
     String? displayName,
     String? defaultProfile,
+    String? boundSessionId,
     Map<String, dynamic>? settings,
     List<String>? allowedScopes,
     Map<String, dynamic>? security,
@@ -272,6 +280,7 @@ class ChannelProvider extends ChangeNotifier {
         enabled: enabled,
         displayName: displayName,
         defaultProfile: defaultProfile,
+        boundSessionId: boundSessionId,
         settings: settings,
         allowedScopes: allowedScopes,
         security: security,
@@ -337,7 +346,8 @@ class ChannelProvider extends ChangeNotifier {
 
     try {
       await _apiService.deleteChannel(id);
-      _channels.removeWhere((channel) => channel.id == id || channel.name == id);
+      _channels
+          .removeWhere((channel) => channel.id == id || channel.name == id);
       _detailsById.remove(id);
       _conversationsByChannelId.remove(id);
       _linksByChannelId.remove(id);
@@ -375,7 +385,8 @@ class ChannelProvider extends ChangeNotifier {
         profile: profile,
         remoteScopeKey: remoteScopeKey,
       );
-      final links = List<CoquiChannelLink>.from(_linksByChannelId[channelId] ?? const []);
+      final links =
+          List<CoquiChannelLink>.from(_linksByChannelId[channelId] ?? const []);
       links.insert(0, link);
       _linksByChannelId[channelId] = links;
       return link;
@@ -395,7 +406,8 @@ class ChannelProvider extends ChangeNotifier {
 
     try {
       await _apiService.deleteChannelLink(channelId, linkId);
-      final links = List<CoquiChannelLink>.from(_linksByChannelId[channelId] ?? const []);
+      final links =
+          List<CoquiChannelLink>.from(_linksByChannelId[channelId] ?? const []);
       links.removeWhere((link) => link.id == linkId);
       _linksByChannelId[channelId] = links;
       return true;

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:coqui_app/Models/coqui_session_channel.dart';
 import 'package:coqui_app/Models/coqui_session_member.dart';
 
 /// Represents a Coqui API session (conversation context).
@@ -26,6 +27,8 @@ class CoquiSession {
   final DateTime? closedAt;
   final DateTime? archivedAt;
   final String? closureReason;
+  final bool channelBound;
+  final CoquiSessionChannel? channel;
 
   /// Server-generated session title, delivered via SSE `title` event.
   String? title;
@@ -48,6 +51,8 @@ class CoquiSession {
     this.closedAt,
     this.archivedAt,
     this.closureReason,
+    this.channelBound = false,
+    this.channel,
     this.title,
   });
 
@@ -94,6 +99,16 @@ class CoquiSession {
       return members;
     }
 
+    CoquiSessionChannel? parseChannel(dynamic value) {
+      if (value is! Map) return null;
+
+      return CoquiSessionChannel.fromJson(
+        value.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+
+    final channel = parseChannel(json['channel']);
+
     return CoquiSession(
       id: json['id'] as String,
       modelRole: json['model_role'] as String? ?? 'orchestrator',
@@ -116,6 +131,8 @@ class CoquiSession {
       closedAt: parseDate(json['closed_at']),
       archivedAt: parseDate(json['archived_at']),
       closureReason: json['closure_reason'] as String?,
+      channelBound: parseFlag(json['channel_bound']) || channel != null,
+      channel: channel,
       title: json['title'] as String?,
     );
   }
@@ -124,6 +141,7 @@ class CoquiSession {
     final closedAtMillis = map['closed_at'] as int?;
     final archivedAtMillis = map['archived_at'] as int?;
     final groupMembersJson = map['group_members_json'] as String?;
+    final channelJson = map['channel_json'] as String?;
     final groupMembers = groupMembersJson == null || groupMembersJson.isEmpty
         ? <CoquiSessionMember>[]
         : (jsonDecode(groupMembersJson) as List<dynamic>)
@@ -136,6 +154,13 @@ class CoquiSession {
               ),
             )
             .toList();
+    final channel = channelJson == null || channelJson.isEmpty
+        ? null
+        : CoquiSessionChannel.fromDatabase(
+            (jsonDecode(channelJson) as Map<dynamic, dynamic>).map(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          );
 
     groupMembers.sort((left, right) => left.position.compareTo(right.position));
 
@@ -161,6 +186,8 @@ class CoquiSession {
           ? DateTime.fromMillisecondsSinceEpoch(archivedAtMillis)
           : null,
       closureReason: map['closure_reason'] as String?,
+      channelBound: (map['channel_bound'] as int? ?? 0) != 0 || channel != null,
+      channel: channel,
       title: map['title'] as String?,
     );
   }
@@ -186,6 +213,9 @@ class CoquiSession {
       'closed_at': closedAt?.millisecondsSinceEpoch,
       'archived_at': archivedAt?.millisecondsSinceEpoch,
       'closure_reason': closureReason,
+      'channel_bound': isChannelBound ? 1 : 0,
+      'channel_json':
+          channel == null ? null : jsonEncode(channel!.toDatabaseMap()),
       'title': title,
     };
   }
@@ -207,6 +237,8 @@ class CoquiSession {
     DateTime? closedAt,
     DateTime? archivedAt,
     String? closureReason,
+    bool? channelBound,
+    CoquiSessionChannel? channel,
   }) {
     return CoquiSession(
       id: id,
@@ -226,11 +258,15 @@ class CoquiSession {
       closedAt: closedAt ?? this.closedAt,
       archivedAt: archivedAt ?? this.archivedAt,
       closureReason: closureReason ?? this.closureReason,
+      channelBound: channelBound ?? this.channelBound,
+      channel: channel ?? this.channel,
       title: title ?? this.title,
     );
   }
 
   bool get isReadOnly => isClosed || isArchived;
+
+  bool get isChannelBound => channelBound || channel != null;
 
   bool get isActive => !isClosed;
 
@@ -286,6 +322,22 @@ class CoquiSession {
   }
 
   String? get profileLabel => profile?.isNotEmpty == true ? profile : null;
+
+  String get shortId => id.length <= 8 ? id : id.substring(0, 8);
+
+  String get displayTitle {
+    final trimmedTitle = title?.trim();
+    if (trimmedTitle != null && trimmedTitle.isNotEmpty) {
+      return trimmedTitle;
+    }
+
+    return 'Session $shortId';
+  }
+
+  String? get channelSummaryLabel {
+    if (!isChannelBound) return null;
+    return channel?.summaryLabel ?? 'Channel linked';
+  }
 
   @override
   String toString() => title ?? 'Session ${id.substring(0, 8)}';

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_session_channel.dart';
 import 'package:coqui_app/Models/coqui_session_member.dart';
 
 void main() {
@@ -20,6 +21,13 @@ void main() {
         'closed_at': '2026-04-21T12:00:00Z',
         'archived_at': '2026-04-21T12:05:00Z',
         'closure_reason': 'profile_rotation',
+        'channel_bound': true,
+        'channel': {
+          'instance_id': 'channel-1',
+          'name': 'signal-primary',
+          'driver': 'signal',
+          'display_name': 'Signal Primary',
+        },
         'title': 'Session Title',
       });
 
@@ -32,6 +40,11 @@ void main() {
       expect(session.closureReason, 'profile_rotation');
       expect(session.closedAt, DateTime.parse('2026-04-21T12:00:00Z'));
       expect(session.archivedAt, DateTime.parse('2026-04-21T12:05:00Z'));
+      expect(session.isChannelBound, isTrue);
+      expect(session.channel?.instanceId, 'channel-1');
+      expect(session.displayTitle, 'Session Title');
+      expect(session.shortId, 'session-');
+      expect(session.channelSummaryLabel, 'Signal • Signal Primary');
       expect(session.title, 'Session Title');
     });
 
@@ -49,6 +62,13 @@ void main() {
         isArchived: false,
         closedAt: DateTime.fromMillisecondsSinceEpoch(1700000010000),
         closureReason: 'manual_close',
+        channelBound: true,
+        channel: const CoquiSessionChannel(
+          instanceId: 'channel-2',
+          name: 'discord-primary',
+          driver: 'discord',
+          displayName: 'Discord Primary',
+        ),
         title: 'Closed Session',
       );
 
@@ -63,7 +83,23 @@ void main() {
       expect(restored.status, 'closed');
       expect(restored.closedAt, session.closedAt);
       expect(restored.closureReason, 'manual_close');
+      expect(restored.isChannelBound, isTrue);
+      expect(restored.displayTitle, 'Closed Session');
+      expect(restored.channel?.summaryLabel, 'Discord • Discord Primary');
       expect(restored.title, 'Closed Session');
+    });
+
+    test('falls back to session id when no title exists', () {
+      final session = CoquiSession.fromJson({
+        'id': 'abcdef1234567890',
+        'model_role': 'orchestrator',
+        'model': 'gpt-test',
+        'created_at': '2026-04-21T10:00:00Z',
+        'updated_at': '2026-04-21T11:00:00Z',
+      });
+
+      expect(session.shortId, 'abcdef12');
+      expect(session.displayTitle, 'Session abcdef12');
     });
 
     test('parses group session fields from API payloads', () {

@@ -1489,6 +1489,7 @@ class CoquiApiService {
     bool enabled = true,
     String? displayName,
     String? defaultProfile,
+    String? boundSessionId,
     Map<String, dynamic>? settings,
     List<String>? allowedScopes,
     Map<String, dynamic>? security,
@@ -1503,6 +1504,9 @@ class CoquiApiService {
     }
     if (defaultProfile != null) {
       payload['defaultProfile'] = defaultProfile;
+    }
+    if (boundSessionId != null) {
+      payload['boundSessionId'] = boundSessionId;
     }
     if (settings != null) {
       payload['settings'] = settings;
@@ -1529,6 +1533,7 @@ class CoquiApiService {
     bool? enabled,
     String? displayName,
     String? defaultProfile,
+    String? boundSessionId,
     Map<String, dynamic>? settings,
     List<String>? allowedScopes,
     Map<String, dynamic>? security,
@@ -1545,6 +1550,9 @@ class CoquiApiService {
     }
     if (defaultProfile != null) {
       payload['defaultProfile'] = defaultProfile;
+    }
+    if (boundSessionId != null) {
+      payload['boundSessionId'] = boundSessionId;
     }
     if (settings != null) {
       payload['settings'] = settings;

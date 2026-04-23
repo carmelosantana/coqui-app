@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_channel.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
+
+import 'channel_bound_session_picker.dart';
 
 class ChannelEditorSheet extends StatefulWidget {
   final CoquiChannel? channel;
@@ -26,16 +29,20 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
   final _displayNameController = TextEditingController();
   final _accountController = TextEditingController();
   final _binaryController = TextEditingController();
+  final _boundSessionController = TextEditingController();
   final _allowedScopesController = TextEditingController();
   final _settingsJsonController = TextEditingController();
   final _securityJsonController = TextEditingController();
 
   String _selectedDriver = 'signal';
   String? _selectedProfile;
+  CoquiSession? _selectedBoundSession;
   bool _enabled = true;
   bool _ignoreAttachments = true;
   bool _sendReadReceipts = false;
   bool _linkRequired = true;
+  bool _isLoadingBoundSession = false;
+  String? _boundSessionError;
 
   bool get _isEditing => widget.channel != null;
 
@@ -49,16 +56,20 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
       _selectedProfile = channel.defaultProfile;
       _nameController.text = channel.name;
       _displayNameController.text = channel.displayName;
+      _boundSessionController.text = channel.boundSessionId ?? '';
       _allowedScopesController.text = channel.allowedScopes.join('\n');
       _accountController.text = (channel.settings['account'] as String?) ?? '';
-      _binaryController.text = (channel.settings['binary'] as String?) ?? 'signal-cli';
-      _ignoreAttachments = channel.settings['ignoreAttachments'] as bool? ?? true;
-      _sendReadReceipts = channel.settings['sendReadReceipts'] as bool? ?? false;
+      _binaryController.text =
+          (channel.settings['binary'] as String?) ?? 'signal-cli';
+      _ignoreAttachments =
+          channel.settings['ignoreAttachments'] as bool? ?? true;
+      _sendReadReceipts =
+          channel.settings['sendReadReceipts'] as bool? ?? false;
       _linkRequired = channel.security['linkRequired'] as bool? ?? true;
-      _settingsJsonController.text = const JsonEncoder.withIndent('  ')
-          .convert(channel.settings);
-      _securityJsonController.text = const JsonEncoder.withIndent('  ')
-          .convert(channel.security);
+      _settingsJsonController.text =
+          const JsonEncoder.withIndent('  ').convert(channel.settings);
+      _securityJsonController.text =
+          const JsonEncoder.withIndent('  ').convert(channel.security);
     } else {
       _binaryController.text = 'signal-cli';
       _settingsJsonController.text = '{\n  \n}';
@@ -67,6 +78,10 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChannelProvider>().fetchDrivers();
+      final boundSessionId = _boundSessionController.text.trim();
+      if (boundSessionId.isNotEmpty) {
+        _loadBoundSession(boundSessionId);
+      }
     });
   }
 
@@ -76,6 +91,7 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
     _displayNameController.dispose();
     _accountController.dispose();
     _binaryController.dispose();
+    _boundSessionController.dispose();
     _allowedScopesController.dispose();
     _settingsJsonController.dispose();
     _securityJsonController.dispose();
@@ -95,10 +111,77 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
     });
   }
 
+  Future<void> _pickBoundSession() async {
+    final selected = await showChannelBoundSessionPicker(
+      context: context,
+      apiService: context.read<CoquiApiService>(),
+      currentChannelId: widget.channel?.id,
+      currentSelectionId: _boundSessionController.text.trim().isEmpty
+          ? null
+          : _boundSessionController.text.trim(),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    setState(() {
+      _boundSessionController.text = selected.id;
+      _selectedBoundSession = selected;
+      _boundSessionError = null;
+    });
+  }
+
+  Future<void> _loadBoundSession(String sessionId) async {
+    setState(() {
+      _isLoadingBoundSession = true;
+      _boundSessionError = null;
+    });
+
+    try {
+      final session =
+          await context.read<CoquiApiService>().getSession(sessionId);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedBoundSession = session;
+        if (session == null) {
+          _boundSessionError = 'The selected session could not be found.';
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedBoundSession = null;
+        _boundSessionError = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingBoundSession = false;
+        });
+      }
+    }
+  }
+
+  void _clearBoundSession() {
+    setState(() {
+      _boundSessionController.clear();
+      _selectedBoundSession = null;
+      _boundSessionError = null;
+    });
+  }
+
   Future<void> _save() async {
     final provider = context.read<ChannelProvider>();
     final name = _nameController.text.trim();
     final displayName = _displayNameController.text.trim();
+    final boundSessionId =
+        _selectedBoundSession?.id ?? _boundSessionController.text.trim();
     final allowedScopes = _allowedScopesController.text
         .split(RegExp(r'[\n,]'))
         .map((value) => value.trim())
@@ -145,6 +228,7 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
             enabled: _enabled,
             displayName: displayName.isEmpty ? null : displayName,
             defaultProfile: _selectedProfile,
+            boundSessionId: boundSessionId.isEmpty ? '' : boundSessionId,
             settings: settings,
             allowedScopes: allowedScopes,
             security: security,
@@ -155,6 +239,7 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
             enabled: _enabled,
             displayName: displayName.isEmpty ? null : displayName,
             defaultProfile: _selectedProfile,
+            boundSessionId: boundSessionId.isEmpty ? '' : boundSessionId,
             settings: settings,
             allowedScopes: allowedScopes,
             security: security,
@@ -164,7 +249,8 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
     if (result != null) {
       await promptForPendingServerRestart(
         context,
-        onRestarted: () => context.read<ChannelProvider>().refreshDashboard(silent: true),
+        onRestarted: () =>
+            context.read<ChannelProvider>().refreshDashboard(silent: true),
       );
       if (!mounted) return;
       Navigator.pop(context, result);
@@ -266,7 +352,9 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
                           (driver) => driver.name == _selectedDriver,
                         )
                             ? _selectedDriver
-                            : (drivers.isNotEmpty ? drivers.first.name : _selectedDriver);
+                            : (drivers.isNotEmpty
+                                ? drivers.first.name
+                                : _selectedDriver);
                         return InputDecorator(
                           decoration: const InputDecoration(
                             labelText: 'Driver',
@@ -300,7 +388,8 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
                       value: _enabled,
                       onChanged: (value) => setState(() => _enabled = value),
                       title: const Text('Enabled'),
-                      subtitle: const Text('Start and reconcile this channel in the API runtime'),
+                      subtitle: const Text(
+                          'Start and reconcile this channel in the API runtime'),
                     ),
                     const SizedBox(height: 12),
                     ListTile(
@@ -309,6 +398,27 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
                       subtitle: Text(_selectedProfile ?? 'No profile selected'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: _pickProfile,
+                    ),
+                    const SizedBox(height: 12),
+                    SessionSummaryCard(
+                      title: 'Bound Interactive Session',
+                      emptyText:
+                          'Optional. Choose one active interactive session and Coqui will reuse it for inbound messages on this channel.',
+                      session: _selectedBoundSession,
+                      fallbackSessionId:
+                          _boundSessionController.text.trim().isEmpty
+                              ? null
+                              : _boundSessionController.text.trim(),
+                      isLoading: _isLoadingBoundSession,
+                      errorText: _boundSessionError,
+                      onSelect: _pickBoundSession,
+                      onOpenSession: _selectedBoundSession == null
+                          ? null
+                          : () => openChannelBoundSession(
+                                context,
+                                _selectedBoundSession!,
+                              ),
+                      onClear: _clearBoundSession,
                     ),
                     const SizedBox(height: 16),
                     _DriverSpecificForm(
@@ -430,7 +540,8 @@ class _DriverSpecificForm extends StatelessWidget {
             value: ignoreAttachments,
             onChanged: onIgnoreAttachmentsChanged,
             title: const Text('Ignore attachments'),
-            subtitle: const Text('Recommended for the current Signal first pass'),
+            subtitle:
+                const Text('Recommended for the current Signal first pass'),
           ),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
@@ -444,7 +555,8 @@ class _DriverSpecificForm extends StatelessWidget {
             value: linkRequired,
             onChanged: onLinkRequiredChanged,
             title: const Text('Require linked senders'),
-            subtitle: const Text('Recommended so unknown senders do not automatically open sessions'),
+            subtitle: const Text(
+                'Recommended so unknown senders do not automatically open sessions'),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -460,14 +572,16 @@ class _DriverSpecificForm extends StatelessWidget {
       );
     }
 
-    final scaffolded = selectedDriver == 'telegram' || selectedDriver == 'discord';
+    final scaffolded =
+        selectedDriver == 'telegram' || selectedDriver == 'discord';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionLabel(label: '${_titleForDriver(selectedDriver)} Setup'),
         const SizedBox(height: 8),
         _HintCard(
-          title: scaffolded ? 'Advanced configuration' : 'Generic configuration',
+          title:
+              scaffolded ? 'Advanced configuration' : 'Generic configuration',
           body: scaffolded
               ? '${_titleForDriver(selectedDriver)} is registered in Coqui today, but its runtime is still scaffolded. You can save configuration and monitor placeholder health, but this does not yet provide end-to-end transport behavior.'
               : 'This driver uses the generic advanced editor. Enter the settings and security objects exactly as the backend expects.',

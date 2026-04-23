@@ -17,6 +17,7 @@ void main() {
         'display_name': 'Signal Primary',
         'enabled': true,
         'default_profile': 'caelum',
+        'bound_session_id': 'session-123',
         'settings': {
           'account': '+15551234567',
           'binary': 'signal-cli',
@@ -42,6 +43,8 @@ void main() {
       expect(channel.isHealthy, isTrue);
       expect(channel.hasIssues, isFalse);
       expect(channel.allowedScopes, ['group-1']);
+      expect(channel.boundSessionId, 'session-123');
+      expect(channel.isSessionBound, isTrue);
       expect(channel.inboundBacklog, 1);
       expect(channel.outboundBacklog, 2);
       expect(channel.statusLabel, 'Healthy');

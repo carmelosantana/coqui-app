@@ -5,6 +5,7 @@ class CoquiChannel {
   final String displayName;
   final bool enabled;
   final String? defaultProfile;
+  final String? boundSessionId;
   final Map<String, dynamic> settings;
   final List<String> allowedScopes;
   final Map<String, dynamic> security;
@@ -29,6 +30,7 @@ class CoquiChannel {
     required this.displayName,
     required this.enabled,
     required this.defaultProfile,
+    required this.boundSessionId,
     required this.settings,
     required this.allowedScopes,
     required this.security,
@@ -52,11 +54,18 @@ class CoquiChannel {
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       driver: json['driver'] as String? ?? '',
-      displayName: json['display_name'] as String? ?? json['displayName'] as String? ?? json['name'] as String? ?? '',
+      displayName: json['display_name'] as String? ??
+          json['displayName'] as String? ??
+          json['name'] as String? ??
+          '',
       enabled: json['enabled'] as bool? ?? true,
-      defaultProfile: json['default_profile'] as String? ?? json['defaultProfile'] as String?,
+      defaultProfile: json['default_profile'] as String? ??
+          json['defaultProfile'] as String?,
+      boundSessionId: json['bound_session_id'] as String? ??
+          json['boundSessionId'] as String?,
       settings: _coerceMap(json['settings']),
-      allowedScopes: _coerceStringList(json['allowed_scopes'] ?? json['allowedScopes']),
+      allowedScopes:
+          _coerceStringList(json['allowed_scopes'] ?? json['allowedScopes']),
       security: _coerceMap(json['security']),
       capabilities: _coerceMap(json['capabilities']),
       workerStatus: json['worker_status'] as String? ?? 'missing',
@@ -107,6 +116,7 @@ class CoquiChannel {
     String? displayName,
     bool? enabled,
     String? defaultProfile,
+    String? boundSessionId,
     Map<String, dynamic>? settings,
     List<String>? allowedScopes,
     Map<String, dynamic>? security,
@@ -131,6 +141,7 @@ class CoquiChannel {
       displayName: displayName ?? this.displayName,
       enabled: enabled ?? this.enabled,
       defaultProfile: defaultProfile ?? this.defaultProfile,
+      boundSessionId: boundSessionId ?? this.boundSessionId,
       settings: settings ?? this.settings,
       allowedScopes: allowedScopes ?? this.allowedScopes,
       security: security ?? this.security,
@@ -149,6 +160,8 @@ class CoquiChannel {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  bool get isSessionBound => boundSessionId?.isNotEmpty == true;
 }
 
 Map<String, dynamic> _coerceMap(Object? value) {

@@ -74,6 +74,19 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
               ],
+              if (currentSession.channelSummaryLabel != null) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.satellite_alt_outlined, size: 16),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(
+                      currentSession.channelSummaryLabel!,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 6),
               _HeaderActionChip(
                 avatar: Icon(

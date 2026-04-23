@@ -333,7 +333,7 @@ class ChatNavigationDrawer extends StatelessWidget {
   NavigationDrawerDestination _buildSessionDestination(
     BuildContext context,
     ChatProvider chatProvider,
-    dynamic session,
+    session,
   ) {
     final theme = Theme.of(context);
     final isLiveSession = !session.isReadOnly;
@@ -368,9 +368,6 @@ class ChatNavigationDrawer extends StatelessWidget {
               )
             : null;
 
-    final title = session.title?.isNotEmpty == true
-        ? session.title!
-        : _sessionFallbackTitle(session.createdAt);
     final subtitleParts = <String>[
       if (session.isGroupSession || session.profileLabel != null)
         session.compactParticipantSummary,
@@ -382,6 +379,9 @@ class ChatNavigationDrawer extends StatelessWidget {
             session.activeProjectId!,
       if (session.isArchived) 'Archived' else if (session.isClosed) 'Closed',
     ];
+    final title = _sessionNavigationTitle(session);
+    final channelLabel = session.channelSummaryLabel;
+    final subtitle = subtitleParts.join(' • ');
 
     return NavigationDrawerDestination(
       icon: Stack(
@@ -415,6 +415,7 @@ class ChatNavigationDrawer extends StatelessWidget {
                   fit: FlexFit.loose,
                   child: Text(
                     title,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -424,15 +425,31 @@ class ChatNavigationDrawer extends StatelessWidget {
                 ],
               ],
             ),
-            if (subtitleParts.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                subtitleParts.join(' • '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+            if (channelLabel != null || subtitleParts.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  if (channelLabel != null)
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _SessionChannelBadge(label: channelLabel),
+                      ),
+                    ),
+                  if (channelLabel != null && subtitleParts.isNotEmpty)
+                    const SizedBox(width: 6),
+                  if (subtitleParts.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ],
@@ -458,6 +475,57 @@ class ChatNavigationDrawer extends StatelessWidget {
 
   static String _sessionFallbackTitle(DateTime createdAt) {
     return 'Chat · ${_months[createdAt.month - 1]} ${createdAt.day}';
+  }
+
+  static String _sessionNavigationTitle(session) {
+    final title = session.title?.isNotEmpty == true
+        ? session.title!
+        : _sessionFallbackTitle(session.createdAt);
+
+    if (session.isChannelBound && title.startsWith('Channel · ')) {
+      return title.substring('Channel · '.length);
+    }
+
+    return title;
+  }
+}
+
+class _SessionChannelBadge extends StatelessWidget {
+  final String label;
+
+  const _SessionChannelBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.satellite_alt_outlined,
+            size: 12,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
