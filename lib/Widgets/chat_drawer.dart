@@ -7,9 +7,7 @@ import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
-import 'package:coqui_app/Theme/coqui_color_scheme.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -261,8 +259,6 @@ class ChatNavigationDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final logoColor = theme.extension<CoquiBrandColors>()?.sidebarPrimary ??
-        theme.colorScheme.primary;
 
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
@@ -277,23 +273,7 @@ class ChatNavigationDrawer extends StatelessWidget {
             }
           },
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 18, 16, 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  height: 26,
-                  child: SvgPicture.asset(
-                    'assets/images/logo/coqui-logo.svg',
-                    fit: BoxFit.contain,
-                    colorFilter: ColorFilter.mode(
-                      logoColor,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: 12),
             NavigationDrawerDestination(
               icon: const Icon(Icons.add_circle_outline),
               selectedIcon: const Icon(Icons.add_circle),

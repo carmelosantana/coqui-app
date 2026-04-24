@@ -129,7 +129,8 @@ void main() {
     expect(find.text('trinity'), findsOneWidget);
   });
 
-  testWidgets('uses session_origin to label channel sessions without channel metadata',
+  testWidgets(
+      'uses session_origin to label channel sessions without channel metadata',
       (tester) async {
     final chatProvider = ChatProvider(
       apiService: _FakeApiService(
