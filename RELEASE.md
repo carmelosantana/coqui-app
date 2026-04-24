@@ -121,14 +121,15 @@ The setup wizard (`scripts/release-setup.sh github`) pushes all of these automat
 
 | Secret | Source | Purpose |
 |--------|--------|---------|
-| `APPLE_CERTIFICATE_P12` | `.p12` export from Keychain | Code signing (iOS + macOS) |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` | Unlock cert in CI |
+| `APPLE_CERTIFICATE_P12` | Apple Distribution `.p12` export from Keychain | iOS code signing in CI |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the Apple Distribution `.p12` | Unlock iOS cert in CI |
+| `MACOS_CERTIFICATE_P12` | Developer ID Application `.p12` export from Keychain | macOS DMG signing in CI |
+| `MACOS_CERTIFICATE_PASSWORD` | Password for the Developer ID `.p12` | Unlock macOS cert in CI |
 | `APPLE_TEAM_ID` | Apple Developer account | Certificate identity |
 | `APPLE_ID` | Your Apple ID email | Notarization + TestFlight |
 | `APPLE_APP_SPECIFIC_PASSWORD` | appleid.apple.com | Notarization + TestFlight |
 | `KEYCHAIN_PASSWORD` | Auto-generated random | CI temp keychain |
 | `IOS_PROVISIONING_PROFILE` | Apple Developer portal | iOS app signing |
-| `MACOS_PROVISIONING_PROFILE` | Apple Developer portal | macOS DMG signing |
 | `ANDROID_KEYSTORE_BASE64` | Generated `.jks` | Android APK signing |
 | `ANDROID_KEYSTORE_PASSWORD` | Chosen during setup | Unlock keystore |
 | `ANDROID_KEY_ALIAS` | `coqui` (default) | Key within keystore |

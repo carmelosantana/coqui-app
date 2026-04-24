@@ -49,6 +49,49 @@ config_get() {
     fi
 }
 
+has_valid_ios_distribution_profile() {
+    local profile_path
+    profile_path=$(config_get "IOS_PROVISIONING_PROFILE_PATH")
+
+    if [[ -z "$profile_path" || ! -f "$profile_path" ]]; then
+        return 1
+    fi
+
+    local profile_plist
+    profile_plist=$(mktemp "${TMPDIR:-/tmp}/coqui-ios-profile.XXXXXX.plist")
+    if ! security cms -D -i "$profile_path" > "$profile_plist" 2>/dev/null; then
+        rm -f "$profile_plist"
+        return 1
+    fi
+
+    local app_identifier
+    app_identifier=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$profile_plist" 2>/dev/null || true)
+    local get_task_allow
+    get_task_allow=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" "$profile_plist" 2>/dev/null || true)
+    local first_device
+    first_device=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices:0" "$profile_plist" 2>/dev/null || true)
+    rm -f "$profile_plist"
+
+    [[ "$app_identifier" == *."${BUNDLE_ID}" && "$get_task_allow" == "false" && -z "$first_device" ]]
+}
+
+resolve_macos_signing_identity() {
+    local configured
+    configured=$(config_get "MACOS_SIGNING_IDENTITY")
+    if [[ -n "$configured" ]]; then
+        echo "$configured"
+        return 0
+    fi
+
+    configured=$(security find-identity -v -p codesigning 2>/dev/null | grep -i "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/' || true)
+    if [[ -n "$configured" ]]; then
+        echo "$configured"
+        return 0
+    fi
+
+    config_get "APPLE_SIGNING_IDENTITY"
+}
+
 # ── Version Helpers ───────────────────────────────────────────────────
 
 get_current_version() {
@@ -137,24 +180,26 @@ cmd_status() {
     echo ""
     echo -e "  ${BOLD}Signing:${NC}"
 
-    local identity
-    identity=$(config_get "APPLE_SIGNING_IDENTITY")
-    if [[ -n "$identity" ]]; then
-        echo -e "    Apple cert:   ${GREEN}✓${NC} $identity"
+    local ios_identity
+    ios_identity=$(config_get "APPLE_SIGNING_IDENTITY")
+    if [[ -n "$ios_identity" ]]; then
+        echo -e "    iOS cert:     ${GREEN}✓${NC} $ios_identity"
     else
-        echo -e "    Apple cert:   ${RED}✗${NC} not configured"
+        echo -e "    iOS cert:     ${RED}✗${NC} not configured"
     fi
 
-    if [[ -n "$(config_get IOS_PROVISIONING_PROFILE_B64)" ]]; then
+    local macos_identity
+    macos_identity=$(resolve_macos_signing_identity)
+    if [[ -n "$macos_identity" ]]; then
+        echo -e "    macOS cert:   ${GREEN}✓${NC} $macos_identity"
+    else
+        echo -e "    macOS cert:   ${RED}✗${NC} not configured"
+    fi
+
+    if has_valid_ios_distribution_profile; then
         echo -e "    iOS profile:  ${GREEN}✓${NC} configured"
     else
         echo -e "    iOS profile:  ${RED}✗${NC} not configured"
-    fi
-
-    if [[ -n "$(config_get MACOS_PROVISIONING_PROFILE_B64)" ]]; then
-        echo -e "    macOS profile: ${GREEN}✓${NC} configured"
-    else
-        echo -e "    macOS profile: ${RED}✗${NC} not configured"
     fi
 
     if [[ -f "${PROJECT_ROOT}/android/key.properties" ]]; then
@@ -259,37 +304,58 @@ cmd_build() {
 _validate_signing() {
     local platform="$1"
 
-    local needs_apple=false
     local needs_android=false
 
     case "$platform" in
-        macos|ios)  needs_apple=true ;;
         android)    needs_android=true ;;
-        all)        needs_apple=true; needs_android=true ;;
+        all)        needs_android=true ;;
     esac
 
-    if [[ "$needs_apple" == "true" && "$(uname -s)" == "Darwin" ]]; then
-        local identity
-        identity=$(config_get "APPLE_SIGNING_IDENTITY")
-        if [[ -z "$identity" ]]; then
-            fail "No Apple signing identity configured."
-            echo ""
-            echo "  Run: scripts/release-setup.sh apple"
-            echo "  This will help you create or select a signing certificate."
-            echo ""
-            return 1
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        if [[ "$platform" == "ios" || "$platform" == "all" ]]; then
+            local ios_identity
+            ios_identity=$(config_get "APPLE_SIGNING_IDENTITY")
+            if [[ -z "$ios_identity" ]]; then
+                fail "No iOS signing identity configured."
+                echo ""
+                echo "  Run: scripts/release-setup.sh apple"
+                echo "  Select an Apple Distribution or Apple Development certificate for local iOS builds."
+                echo ""
+                return 1
+            fi
+
+            if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$ios_identity"; then
+                fail "iOS signing certificate '$ios_identity' not found in Keychain."
+                echo ""
+                echo "  The certificate may have expired or been removed."
+                echo "  Run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+            success "iOS signing identity: $ios_identity"
         fi
 
-        # Verify cert is still in Keychain
-        if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$identity"; then
-            fail "Apple signing certificate '$identity' not found in Keychain."
-            echo ""
-            echo "  The certificate may have expired or been removed."
-            echo "  Run: scripts/release-setup.sh apple"
-            echo ""
-            return 1
+        if [[ "$platform" == "macos" || "$platform" == "all" ]]; then
+            local macos_identity
+            macos_identity=$(resolve_macos_signing_identity)
+            if [[ -z "$macos_identity" ]]; then
+                fail "No macOS signing identity configured."
+                echo ""
+                echo "  Install or export a Developer ID Application certificate and re-run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+
+            if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$macos_identity"; then
+                fail "macOS signing certificate '$macos_identity' not found in Keychain."
+                echo ""
+                echo "  The certificate may have expired or been removed."
+                echo "  Run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+            success "macOS signing identity: $macos_identity"
         fi
-        success "Apple signing identity: $identity"
     fi
 
     if [[ "$needs_android" == "true" ]]; then
@@ -344,7 +410,7 @@ _build_target() {
 _build_macos() {
     local version="$1"
     local identity
-    identity=$(config_get "APPLE_SIGNING_IDENTITY")
+    identity=$(resolve_macos_signing_identity)
 
     info "Building macOS release..."
     (cd "$PROJECT_ROOT" && flutter build macos --release)
@@ -381,7 +447,7 @@ _build_ios() {
 
     info "Building iOS IPA..."
 
-    if [[ -f "$export_plist" && -n "$(config_get IOS_PROVISIONING_PROFILE_B64)" ]]; then
+    if [[ -f "$export_plist" ]] && has_valid_ios_distribution_profile; then
         info "Using manual export options from ios/ExportOptions.plist"
         build_cmd+=(--export-options-plist=ios/ExportOptions.plist)
     else
