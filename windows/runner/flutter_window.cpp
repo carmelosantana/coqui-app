@@ -1,6 +1,7 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <shellapi.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -8,6 +9,19 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
 FlutterWindow::~FlutterWindow() {}
+
+bool FlutterWindow::RestartApplication() {
+  wchar_t executable_path[MAX_PATH];
+  const DWORD length = GetModuleFileNameW(nullptr, executable_path, MAX_PATH);
+  if (length == 0 || length == MAX_PATH) {
+    return false;
+  }
+
+  const auto instance = reinterpret_cast<intptr_t>(
+      ShellExecuteW(nullptr, L"open", executable_path, nullptr, nullptr,
+                    SW_SHOWNORMAL));
+  return instance > 32;
+}
 
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
@@ -26,6 +40,33 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+
+  app_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "coqui/app",
+          &flutter::StandardMethodCodec::GetInstance());
+  app_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "isRestartSupported") {
+          result->Success(flutter::EncodableValue(true));
+          return;
+        }
+
+        if (call.method_name() == "restartApplication") {
+          const bool restarted = RestartApplication();
+          result->Success(flutter::EncodableValue(restarted));
+
+          if (restarted) {
+            PostMessage(GetHandle(), WM_CLOSE, 0, 0);
+          }
+
+          return;
+        }
+
+        result->NotImplemented();
+      });
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();

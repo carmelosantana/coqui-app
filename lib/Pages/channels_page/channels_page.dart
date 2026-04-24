@@ -444,7 +444,7 @@ class _TestingHintCard extends StatelessWidget {
             if (hasScaffolded) ...[
               const SizedBox(height: 10),
               Text(
-                'Telegram and Discord are currently scaffolded runtimes. The app lets you configure them, but the backend reports them as placeholder channels until their transport runtimes ship.',
+                'Telegram and Discord are currently scaffolded runtimes. They may appear here for visibility if they already exist on the server, but new setup is disabled until their transport runtimes ship.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -781,7 +781,7 @@ class _ChannelsEmptyView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Create a Signal channel for the full end-to-end path, or add another driver in advanced mode and monitor it from this dashboard.',
+              'Create a Signal channel for the supported end-to-end path, or add another backend-ready driver and monitor it from this dashboard.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

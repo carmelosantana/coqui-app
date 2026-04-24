@@ -111,6 +111,42 @@ class InstanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reload all configured instances from local storage.
+  Future<void> reloadFromStorage({bool ensureDefaultInstance = false}) async {
+    if (ensureDefaultInstance) {
+      await _instanceService.ensureDefaultInstance();
+    }
+
+    _instances = _instanceService.getInstances();
+    _activeInstance = _instanceService.getActiveInstance();
+
+    if (_activeInstance != null) {
+      _configureApiService();
+    } else {
+      _apiService.configure(
+        baseUrl: InstanceService.defaultInstanceUrl,
+        apiKey: '',
+        apiVersion: 'v1',
+      );
+      _isOnline = null;
+      _restartState = CoquiRestartState.empty;
+    }
+
+    notifyListeners();
+  }
+
+  /// Remove all locally stored instances and refresh provider state.
+  Future<void> clearStoredInstances({bool ensureDefaultInstance = false}) async {
+    await _instanceService.clearAllInstances();
+    await reloadFromStorage(ensureDefaultInstance: ensureDefaultInstance);
+  }
+
+  void pauseForDestructiveReset() {
+    _healthTimer?.cancel();
+    _healthTimer = null;
+    _isCheckingHealth = false;
+  }
+
   /// Switch the active instance.
   Future<void> setActiveInstance(String id) async {
     await _instanceService.setActiveInstance(id);

@@ -359,25 +359,67 @@ class _ChannelEditorSheetState extends State<ChannelEditorSheet> {
                           decoration: const InputDecoration(
                             labelText: 'Driver',
                           ),
-                          child: DropdownButton<String>(
-                            value: selected,
-                            isExpanded: true,
-                            underline: const SizedBox.shrink(),
-                            items: drivers
-                                .map(
-                                  (driver) => DropdownMenuItem<String>(
-                                    value: driver.name,
-                                    child: Text(driver.displayName),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _isEditing
-                                ? null
-                                : (value) {
-                                    if (value != null) {
-                                      setState(() => _selectedDriver = value);
-                                    }
-                                  },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DropdownButton<String>(
+                                value: selected,
+                                isExpanded: true,
+                                underline: const SizedBox.shrink(),
+                                items: drivers
+                                    .map(
+                                      (driver) => DropdownMenuItem<String>(
+                                        value: driver.name,
+                                        enabled: !driver.isScaffolded,
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(driver.displayName),
+                                            ),
+                                            if (driver.isScaffolded)
+                                              Text(
+                                                'Coming soon',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: _isEditing
+                                    ? null
+                                    : (value) {
+                                        if (value != null) {
+                                          setState(
+                                            () => _selectedDriver = value,
+                                          );
+                                        }
+                                      },
+                              ),
+                              if (!_isEditing &&
+                                  drivers.any(
+                                      (driver) => driver.isScaffolded)) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Telegram and Discord are visible for roadmap clarity, but setup is disabled until their transport runtimes ship.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ],
                           ),
                         );
                       },
@@ -583,7 +625,7 @@ class _DriverSpecificForm extends StatelessWidget {
           title:
               scaffolded ? 'Advanced configuration' : 'Generic configuration',
           body: scaffolded
-              ? '${_titleForDriver(selectedDriver)} is registered in Coqui today, but its runtime is still scaffolded. You can save configuration and monitor placeholder health, but this does not yet provide end-to-end transport behavior.'
+              ? '${_titleForDriver(selectedDriver)} is registered in Coqui today, but new setup is disabled in the app until its transport runtime is ready. Existing scaffolded channels can still be reviewed here.'
               : 'This driver uses the generic advanced editor. Enter the settings and security objects exactly as the backend expects.',
         ),
         const SizedBox(height: 12),

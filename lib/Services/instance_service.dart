@@ -10,6 +10,8 @@ class InstanceService {
   static const String _boxName = 'instances';
   static const String defaultInstanceName = 'Local Coqui';
   static const String defaultInstanceUrl = 'http://localhost:3300';
+  static const Duration _lockRetryDelay = Duration(milliseconds: 250);
+  static const int _lockRetryAttempts = 20;
 
   late Box _box;
   bool _initialized = false;
@@ -20,8 +22,7 @@ class InstanceService {
       _box = await Hive.openBox(_boxName);
     } catch (error) {
       if (_isBoxLockError(error)) {
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        _box = await Hive.openBox(_boxName);
+        _box = await _openBoxWithLockRetry();
       } else if (_isRecoverableBoxSchemaError(error)) {
         await Hive.deleteBoxFromDisk(_boxName);
         _box = await Hive.openBox(_boxName);
@@ -30,6 +31,28 @@ class InstanceService {
       }
     }
     _initialized = true;
+  }
+
+  Future<Box> _openBoxWithLockRetry() async {
+    Object? lastError;
+
+    for (var attempt = 0; attempt < _lockRetryAttempts; attempt += 1) {
+      if (attempt > 0) {
+        await Future<void>.delayed(_lockRetryDelay);
+      }
+
+      try {
+        return await Hive.openBox(_boxName);
+      } catch (error) {
+        if (!_isBoxLockError(error)) {
+          rethrow;
+        }
+        lastError = error;
+      }
+    }
+
+    throw lastError ??
+        HiveError('Failed to open $_boxName after lock retry attempts.');
   }
 
   /// Seed a localhost default instance when the user has none configured yet.
@@ -83,6 +106,28 @@ class InstanceService {
   /// Delete an instance.
   Future<void> deleteInstance(String id) async {
     await _box.delete(id);
+  }
+
+  /// Remove all stored instances from local storage.
+  Future<void> clearAllInstances() async {
+    await _box.clear();
+  }
+
+  Future<void> close() async {
+    if (!_initialized) {
+      return;
+    }
+
+    if (_box.isOpen) {
+      await _box.close();
+    }
+
+    _initialized = false;
+  }
+
+  Future<void> deleteStorageFromDisk() async {
+    await close();
+    await Hive.deleteBoxFromDisk(_boxName);
   }
 
   /// Set the active instance (deactivates all others).

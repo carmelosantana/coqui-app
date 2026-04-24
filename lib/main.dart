@@ -34,6 +34,9 @@ import 'package:responsive_framework/responsive_framework.dart';
 import 'package:app_links/app_links.dart';
 import 'package:coqui_app/Utils/material_color_adapter.dart';
 
+const Duration _hiveLockRetryDelay = Duration(milliseconds: 250);
+const int _hiveLockRetryAttempts = 20;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -65,8 +68,13 @@ Future<void> _initializeApp() async {
 
   // Create services
   final apiService = CoquiApiService();
+  final appRestartService = AppRestartService();
   final databaseService = DatabaseService();
   final instanceService = InstanceService();
+  final localDataResetService = LocalDataResetService(
+    databaseService: databaseService,
+    instanceService: instanceService,
+  );
 
   await instanceService.initialize();
   await instanceService.ensureDefaultInstance();
@@ -75,8 +83,10 @@ Future<void> _initializeApp() async {
     MultiProvider(
       providers: [
         Provider.value(value: apiService),
+        Provider.value(value: appRestartService),
         Provider.value(value: databaseService),
         Provider.value(value: instanceService),
+        Provider.value(value: localDataResetService),
         ChangeNotifierProvider(
           create: (_) => InstanceProvider(
             instanceService: instanceService,
@@ -156,8 +166,7 @@ Future<void> _openSettingsBoxWithRecovery() async {
     return;
   } catch (error) {
     if (_isSettingsLockError(error)) {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      await Hive.openBox('settings');
+      await _openSettingsBoxWithLockRetry();
       return;
     }
 
@@ -169,6 +178,28 @@ Future<void> _openSettingsBoxWithRecovery() async {
 
     rethrow;
   }
+}
+
+Future<void> _openSettingsBoxWithLockRetry() async {
+  Object? lastError;
+
+  for (var attempt = 0; attempt < _hiveLockRetryAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await Future<void>.delayed(_hiveLockRetryDelay);
+    }
+
+    try {
+      await Hive.openBox('settings');
+      return;
+    } catch (error) {
+      if (!_isSettingsLockError(error)) {
+        rethrow;
+      }
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? HiveError('Failed to open settings after lock retry attempts.');
 }
 
 bool _isSettingsLockError(Object error) {

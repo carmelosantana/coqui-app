@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
+import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Platform/database_factory.dart' as db_factory;
 import 'package:coqui_app/Services/database_service.dart';
 import 'package:sqflite_common/sqlite_api.dart';
@@ -87,6 +89,67 @@ created_at INTEGER NOT NULL
       if (seededDatabase != null && seededDatabase.isOpen) {
         await seededDatabase.close();
       }
+      await service.close().catchError((_) {});
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    }
+  });
+
+  test('clears cached sessions and messages together', () async {
+    final tempDir = await Directory.systemTemp.createTemp('coqui-app-db-clear-');
+    final service = _TestDatabaseService(tempDir.path);
+
+    try {
+      await service.open('coqui_app.db');
+
+      final session = CoquiSession(
+        id: 'session-1',
+        modelRole: 'orchestrator',
+        model: 'gpt-test',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(1700000001000),
+      );
+
+      await service.upsertSession(session);
+      await service.upsertMessage(
+        CoquiMessage(
+          id: 'message-1',
+          content: 'hello',
+          role: CoquiMessageRole.user,
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1700000002000),
+        ),
+        sessionId: session.id,
+      );
+
+      expect(await service.getSessions(), hasLength(1));
+      expect(await service.getMessages(session.id), hasLength(1));
+
+      await service.clearSessionCache();
+
+      expect(await service.getSessions(), isEmpty);
+      expect(await service.getMessages(session.id), isEmpty);
+    } finally {
+      await service.close().catchError((_) {});
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    }
+  });
+
+  test('deletes the backing database file for restart resets', () async {
+    final tempDir = await Directory.systemTemp.createTemp('coqui-app-db-delete-');
+    final service = _TestDatabaseService(tempDir.path);
+    final databasePath = path.join(tempDir.path, 'coqui_app.db');
+
+    try {
+      await service.open('coqui_app.db');
+      expect(await File(databasePath).exists(), isTrue);
+
+      await service.deleteDatabaseFile();
+
+      expect(await File(databasePath).exists(), isFalse);
+    } finally {
       await service.close().catchError((_) {});
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);

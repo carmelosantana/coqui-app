@@ -15,6 +15,8 @@ import 'package:path/path.dart' as path;
 /// On native, uses sqflite (mobile) or FFI (desktop).
 class DatabaseService {
   late Database _db;
+  bool _isOpen = false;
+  String? _databaseFile;
 
   Future<String> getDatabasesPathForPlatform() async {
     if (PlatformInfo.isWeb) {
@@ -27,11 +29,17 @@ class DatabaseService {
     return await db_factory.getDatabaseFactory().getDatabasesPath();
   }
 
+  Future<String> resolveDatabasePath(String databaseFile) async {
+    if (PlatformInfo.isWeb) {
+      return databaseFile;
+    }
+
+    return path.join(await getDatabasesPathForPlatform(), databaseFile);
+  }
+
   Future<void> open(String databaseFile) async {
     final factory = db_factory.getDatabaseFactory();
-    final dbPath = PlatformInfo.isWeb
-        ? databaseFile
-        : path.join(await getDatabasesPathForPlatform(), databaseFile);
+    final dbPath = await resolveDatabasePath(databaseFile);
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
@@ -169,6 +177,8 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         },
       ),
     );
+    _databaseFile = databaseFile;
+    _isOpen = true;
   }
 
   Future<void> _ensureSessionSchema(Database db) async {
@@ -242,7 +252,28 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     return rows.any((row) => row['name'] == column);
   }
 
-  Future<void> close() async => _db.close();
+  Future<void> close() async {
+    if (!_isOpen) {
+      return;
+    }
+
+    if (_db.isOpen) {
+      await _db.close();
+    }
+
+    _isOpen = false;
+  }
+
+  Future<void> deleteDatabaseFile({String? databaseFile}) async {
+    final targetFile = databaseFile ?? _databaseFile;
+    if (targetFile == null || targetFile.isEmpty) {
+      return;
+    }
+
+    final dbPath = await resolveDatabasePath(targetFile);
+    await close();
+    await db_factory.getDatabaseFactory().deleteDatabase(dbPath);
+  }
 
   // ── Session Operations ──────────────────────────────────────────────
 
@@ -305,6 +336,14 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     for (final session in sessions) {
       await deleteSession(session.id);
     }
+  }
+
+  /// Clear the entire local conversation cache.
+  Future<void> clearSessionCache() async {
+    await _db.transaction((txn) async {
+      await txn.delete('messages');
+      await txn.delete('sessions');
+    });
   }
 
   // ── Message Operations ──────────────────────────────────────────────

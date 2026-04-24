@@ -194,6 +194,40 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearAllLocalSessionState({bool notify = true}) {
+    _currentSessionIndex = -1;
+    _sessions.clear();
+    _messages.clear();
+    _updateDisplayMessages();
+    _pendingFiles.clear();
+    _sessionProjectLabels.clear();
+    _sessionErrors.clear();
+    _sessionActivity.clear();
+    _sessionIteration.clear();
+    _sessionSummary.clear();
+    _sessionLastTurn.clear();
+    _sessionTurnProcessIds.clear();
+    _activeStreams.clear();
+    _streamingContent.clear();
+    _cancelledStreams.clear();
+    _unreadSessions.clear();
+
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  /// Clear in-memory and persisted local session cache.
+  Future<void> clearSessionCache() async {
+    await _databaseService.clearSessionCache();
+    _clearAllLocalSessionState();
+  }
+
+  /// Clear only the in-memory session state after an external storage reset.
+  void clearLocalSessionState() {
+    _clearAllLocalSessionState();
+  }
+
   // ── Session management ────────────────────────────────────────────
 
   /// Load sessions from the server and sync to local cache.
@@ -1191,16 +1225,7 @@ class ChatProvider extends ChangeNotifier {
 
   /// Called when the active instance changes.
   Future<void> onInstanceChanged() async {
-    _resetChat();
-    _sessions.clear();
-    _sessionProjectLabels.clear();
-    _sessionErrors.clear();
-    _sessionActivity.clear();
-    _sessionIteration.clear();
-    _sessionSummary.clear();
-    _sessionLastTurn.clear();
-    _sessionTurnProcessIds.clear();
-    notifyListeners();
+    _clearAllLocalSessionState();
 
     await refreshSessions();
   }
