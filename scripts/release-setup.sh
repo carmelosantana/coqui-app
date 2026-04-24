@@ -109,6 +109,47 @@ check_command() {
     return 0
 }
 
+detect_github_repo() {
+    if [[ -n "${GITHUB_REPO:-}" ]]; then
+        echo "$GITHUB_REPO"
+        return 0
+    fi
+
+    local configured_repo
+    configured_repo=$(config_get "GITHUB_REPO")
+    if [[ -n "$configured_repo" ]]; then
+        echo "$configured_repo"
+        return 0
+    fi
+
+    local remote_url
+    remote_url=$(cd "$PROJECT_ROOT" && git remote get-url origin 2>/dev/null || true)
+
+    if [[ -n "$remote_url" ]]; then
+        case "$remote_url" in
+            git@github.com:*/*.git)
+                echo "${remote_url#git@github.com:}" | sed 's/\.git$//'
+                return 0
+                ;;
+            git@github.com:*/*)
+                echo "${remote_url#git@github.com:}"
+                return 0
+                ;;
+            https://github.com/*/*.git)
+                echo "${remote_url#https://github.com/}" | sed 's/\.git$//'
+                return 0
+                ;;
+            https://github.com/*/*)
+                echo "${remote_url#https://github.com/}"
+                return 0
+                ;;
+        esac
+    fi
+
+    GH_PAGER=cat GH_NO_UPDATE_NOTIFIER=1 \
+        gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true
+}
+
 # ── Prerequisites ─────────────────────────────────────────────────────
 
 check_prerequisites() {
@@ -706,7 +747,7 @@ setup_github() {
 
     # Detect repo
     local repo
-    repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+    repo=$(detect_github_repo)
 
     if [[ -z "$repo" ]]; then
         warn "Could not detect GitHub repo from current directory."
@@ -732,15 +773,15 @@ setup_github() {
         if [[ -n "$value" ]]; then
             if echo "$value" | gh secret set "$name" -R "$repo" 2>/dev/null; then
                 success "$name"
-                ((secrets_set++))
+                ((secrets_set += 1))
             else
                 fail "$name — failed to set"
-                ((secrets_failed++))
+                ((secrets_failed += 1))
             fi
         else
             warn "$name — no value found in config (key: $config_key)"
             echo -e "  ${DIM}Run the relevant setup step first, then re-run: scripts/release-setup.sh github${NC}"
-            ((secrets_failed++))
+            ((secrets_failed += 1))
         fi
     }
 
@@ -797,7 +838,7 @@ setup_vercel() {
     fi
 
     local repo
-    repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+    repo=$(detect_github_repo)
 
     echo -e "${BOLD}Step 1: Get your Vercel token${NC}"
     echo ""
@@ -866,10 +907,10 @@ verify() {
     _check() {
         local label="$1"
         local ok="$2"
-        ((total++))
+        ((total += 1))
         if [[ "$ok" == "true" ]]; then
             success "$label"
-            ((passed++))
+            ((passed += 1))
         else
             fail "$label"
         fi
@@ -920,7 +961,7 @@ verify() {
 
     if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
         local repo
-        repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+        repo=$(detect_github_repo)
         if [[ -n "$repo" ]]; then
             local secret_list
             secret_list=$(gh secret list -R "$repo" 2>/dev/null || true)

@@ -24,7 +24,7 @@ deps: ## Install Flutter dependencies
 	flutter pub get
 
 icons: ## Regenerate app icons for all platforms (pads macOS icon automatically)
-	./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 83% --output assets/images/coqui-icon-macos.png
+	./scripts/pad-icon.sh --image assets/images/coqui-icon.png --inner-size 82% --output assets/images/coqui-icon-macos.png
 	dart run flutter_launcher_icons
 
 splash: ## Regenerate splash screens

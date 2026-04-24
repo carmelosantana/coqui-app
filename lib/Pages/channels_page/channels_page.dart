@@ -306,9 +306,22 @@ class _DriverFilterRow extends StatelessWidget {
             (driver) => Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
-                label: Text(driver.displayName),
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(driver.displayName),
+                    if (driver.isScaffolded) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        'Soon',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ],
+                ),
                 selected: selectedDriver == driver.name,
-                onSelected: (_) => onSelected(driver.name),
+                onSelected:
+                    driver.isScaffolded ? null : (_) => onSelected(driver.name),
               ),
             ),
           ),

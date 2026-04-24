@@ -113,6 +113,8 @@ scripts/release.sh build --platform all      # All supported on this OS
 
 The build command validates signing prerequisites before building and provides clear remediation steps if anything is missing.
 
+For local iOS builds, the script uses `ios/ExportOptions.plist` when an iOS provisioning profile is configured. If no local profile is configured, it falls back to automatic App Store export using your configured Apple team ID. CI still expects the provisioning profile secrets documented below.
+
 ## Required GitHub Secrets
 
 The setup wizard (`scripts/release-setup.sh github`) pushes all of these automatically:

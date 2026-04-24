@@ -374,15 +374,54 @@ _build_macos() {
 
 _build_ios() {
     local version="$1"
+    local export_plist="${PROJECT_ROOT}/ios/ExportOptions.plist"
+    local generated_export_plist=""
+    local team_id=""
+    local -a build_cmd=(flutter build ipa --release)
 
     info "Building iOS IPA..."
-    if [[ ! -f "${PROJECT_ROOT}/ios/ExportOptions.plist" ]]; then
-        fail "ios/ExportOptions.plist not found."
-        echo "  This file defines how the IPA is signed and packaged."
+
+    if [[ -f "$export_plist" && -n "$(config_get IOS_PROVISIONING_PROFILE_B64)" ]]; then
+        info "Using manual export options from ios/ExportOptions.plist"
+        build_cmd+=(--export-options-plist=ios/ExportOptions.plist)
+    else
+        team_id=$(config_get "APPLE_TEAM_ID")
+        if [[ -z "$team_id" ]]; then
+            fail "APPLE_TEAM_ID is not configured."
+            echo "  Run: scripts/release-setup.sh apple"
+            return 1
+        fi
+
+        generated_export_plist=$(mktemp "${TMPDIR:-/tmp}/coqui-ios-export.XXXXXX.plist")
+        cat > "$generated_export_plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>app-store</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <key>uploadBitcode</key>
+  <false/>
+  <key>uploadSymbols</key>
+  <true/>
+  <key>teamID</key>
+  <string>${team_id}</string>
+</dict>
+</plist>
+EOF
+
+        info "No local iOS provisioning profile configured; using automatic App Store export for team ${team_id}"
+        build_cmd+=(--export-options-plist="$generated_export_plist")
+    fi
+
+    if ! (cd "$PROJECT_ROOT" && "${build_cmd[@]}"); then
+        [[ -n "$generated_export_plist" ]] && rm -f "$generated_export_plist"
         return 1
     fi
 
-    (cd "$PROJECT_ROOT" && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist)
+    [[ -n "$generated_export_plist" ]] && rm -f "$generated_export_plist"
 
     local ipa_file
     ipa_file=$(find "${PROJECT_ROOT}/build/ios/ipa" -name "*.ipa" -type f 2>/dev/null | head -1)
