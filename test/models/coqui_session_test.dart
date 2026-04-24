@@ -41,6 +41,8 @@ void main() {
       expect(session.closedAt, DateTime.parse('2026-04-21T12:00:00Z'));
       expect(session.archivedAt, DateTime.parse('2026-04-21T12:05:00Z'));
       expect(session.isChannelBound, isTrue);
+      expect(session.sessionOrigin, 'channel');
+      expect(session.sessionOriginBadgeLabel, 'Channel');
       expect(session.channel?.instanceId, 'channel-1');
       expect(session.displayTitle, 'Session Title');
       expect(session.shortId, 'session-');
@@ -54,6 +56,7 @@ void main() {
         id: 'session-2',
         modelRole: 'coder',
         model: 'gpt-test',
+        sessionOrigin: 'channel',
         profile: 'trinity',
         activeProjectId: 'project-456',
         createdAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
@@ -81,6 +84,7 @@ void main() {
       expect(restored.activeProjectId, session.activeProjectId);
       expect(restored.isClosed, isTrue);
       expect(restored.isArchived, isFalse);
+      expect(restored.sessionOrigin, 'channel');
       expect(restored.status, 'closed');
       expect(restored.closedAt, session.closedAt);
       expect(restored.closureReason, 'manual_close');
@@ -101,6 +105,26 @@ void main() {
 
       expect(session.shortId, 'abcdef12');
       expect(session.displayTitle, 'Session abcdef12');
+    });
+
+    test('derives channel origin from channel metadata when api omits it', () {
+      final session = CoquiSession.fromJson({
+        'id': 'session-implicit-channel',
+        'model_role': 'orchestrator',
+        'model': 'gpt-test',
+        'created_at': '2026-04-21T10:00:00Z',
+        'updated_at': '2026-04-21T11:00:00Z',
+        'channel_bound': true,
+        'channel': {
+          'instance_id': 'signal-primary',
+          'name': 'signal-primary',
+          'driver': 'signal',
+          'display_name': 'Signal Primary',
+        },
+      });
+
+      expect(session.sessionOrigin, 'channel');
+      expect(session.sessionOriginBadgeLabel, 'Channel');
     });
 
     test('parses group session fields from API payloads', () {

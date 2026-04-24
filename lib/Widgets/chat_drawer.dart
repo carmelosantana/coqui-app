@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
@@ -333,7 +334,7 @@ class ChatNavigationDrawer extends StatelessWidget {
   NavigationDrawerDestination _buildSessionDestination(
     BuildContext context,
     ChatProvider chatProvider,
-    session,
+    CoquiSession session,
   ) {
     final theme = Theme.of(context);
     final isLiveSession = !session.isReadOnly;
@@ -380,7 +381,14 @@ class ChatNavigationDrawer extends StatelessWidget {
       if (session.isArchived) 'Archived' else if (session.isClosed) 'Closed',
     ];
     final title = _sessionNavigationTitle(session);
+    final originLabel = session.sessionOriginBadgeLabel;
     final channelLabel = session.channelBadgeLabel;
+    final metaBadgeLabel = switch ((originLabel, channelLabel)) {
+      (String origin, String channel) => '$origin · $channel',
+      (String origin, null) => origin,
+      (null, String channel) => channel,
+      _ => null,
+    };
     final subtitle = subtitleParts.join(' • ');
 
     return NavigationDrawerDestination(
@@ -425,18 +433,18 @@ class ChatNavigationDrawer extends StatelessWidget {
                 ],
               ],
             ),
-            if (channelLabel != null || subtitleParts.isNotEmpty) ...[
+            if (metaBadgeLabel != null || subtitleParts.isNotEmpty) ...[
               const SizedBox(height: 4),
               Row(
                 children: [
-                  if (channelLabel != null)
+                  if (metaBadgeLabel != null)
                     Flexible(
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _SessionChannelBadge(label: channelLabel),
+                        child: _SessionChannelBadge(label: metaBadgeLabel),
                       ),
                     ),
-                  if (channelLabel != null && subtitleParts.isNotEmpty)
+                  if (metaBadgeLabel != null && subtitleParts.isNotEmpty)
                     const SizedBox(width: 6),
                   if (subtitleParts.isNotEmpty)
                     Expanded(
@@ -477,12 +485,12 @@ class ChatNavigationDrawer extends StatelessWidget {
     return 'Chat · ${_months[createdAt.month - 1]} ${createdAt.day}';
   }
 
-  static String _sessionNavigationTitle(session) {
+  static String _sessionNavigationTitle(CoquiSession session) {
     final title = session.title?.isNotEmpty == true
         ? session.title!
         : _sessionFallbackTitle(session.createdAt);
 
-    if (session.isChannelBound && title.startsWith('Channel · ')) {
+    if (session.isChannelOrigin && title.startsWith('Channel · ')) {
       return title.substring('Channel · '.length);
     }
 

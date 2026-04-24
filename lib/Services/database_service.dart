@@ -35,13 +35,14 @@ class DatabaseService {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (Database db, int version) async {
           await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
 instance_id TEXT,
 model_role TEXT NOT NULL,
 model TEXT,
+session_origin TEXT NOT NULL DEFAULT 'user',
 profile TEXT,
 group_enabled INTEGER NOT NULL DEFAULT 0,
 group_max_rounds INTEGER NOT NULL DEFAULT 3,
@@ -154,6 +155,14 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
               'TEXT',
             );
           }
+          if (oldVersion < 6) {
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'session_origin',
+              "TEXT NOT NULL DEFAULT 'user'",
+            );
+          }
         },
         onOpen: (Database db) async {
           await _ensureSessionSchema(db);
@@ -163,6 +172,12 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   }
 
   Future<void> _ensureSessionSchema(Database db) async {
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'session_origin',
+      "TEXT NOT NULL DEFAULT 'user'",
+    );
     await _addColumnIfMissing(db, 'sessions', 'profile', 'TEXT');
     await _addColumnIfMissing(db, 'sessions', 'active_project_id', 'TEXT');
     await _addColumnIfMissing(

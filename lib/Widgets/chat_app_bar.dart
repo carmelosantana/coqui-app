@@ -74,6 +74,13 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
               ],
+              if (currentSession.sessionOriginBadgeLabel != null) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.alt_route, size: 16),
+                  label: Text(currentSession.sessionOriginBadgeLabel!),
+                ),
+              ],
               if (currentSession.channelSummaryLabel != null) ...[
                 const SizedBox(width: 6),
                 _HeaderInfoChip(

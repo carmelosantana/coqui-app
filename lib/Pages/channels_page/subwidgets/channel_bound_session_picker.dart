@@ -357,6 +357,8 @@ class _ChannelBoundSessionOptionCard extends StatelessWidget {
                 children: [
                   _SessionMetaChip(label: session.profileLabel ?? 'Unprofiled'),
                   _SessionMetaChip(label: session.modelRole),
+                  if (session.sessionOriginBadgeLabel != null)
+                    _SessionMetaChip(label: session.sessionOriginBadgeLabel!),
                   _SessionMetaChip(
                     label:
                         'Last active ${formatSessionRelativeTime(session.updatedAt)}',
@@ -453,6 +455,8 @@ class SessionSummaryCard extends StatelessWidget {
               children: [
                 _SessionMetaChip(label: session!.profileLabel ?? 'Unprofiled'),
                 _SessionMetaChip(label: session!.modelRole),
+                if (session!.sessionOriginBadgeLabel != null)
+                  _SessionMetaChip(label: session!.sessionOriginBadgeLabel!),
                 _SessionMetaChip(
                   label:
                       'Last active ${formatSessionRelativeTime(session!.updatedAt)}',

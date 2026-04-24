@@ -13,6 +13,7 @@ class CoquiSession {
   final String id;
   final String modelRole;
   final String model;
+  final String sessionOrigin;
   final String? profile;
   final bool groupEnabled;
   final int groupMaxRounds;
@@ -37,6 +38,7 @@ class CoquiSession {
     required this.id,
     required this.modelRole,
     required this.model,
+    this.sessionOrigin = 'user',
     this.profile,
     this.groupEnabled = false,
     this.groupMaxRounds = 3,
@@ -107,12 +109,37 @@ class CoquiSession {
       );
     }
 
+    String normalizeSessionOrigin(
+      dynamic value, {
+      required bool channelBound,
+      required CoquiSessionChannel? channel,
+    }) {
+      final normalized = (value as String?)?.trim().toLowerCase();
+      if (normalized == 'user' ||
+          normalized == 'channel' ||
+          normalized == 'background') {
+        return normalized!;
+      }
+
+      if (channelBound || channel != null) {
+        return 'channel';
+      }
+
+      return 'user';
+    }
+
     final channel = parseChannel(json['channel']);
+    final channelBound = parseFlag(json['channel_bound']) || channel != null;
 
     return CoquiSession(
       id: json['id'] as String,
       modelRole: json['model_role'] as String? ?? 'orchestrator',
       model: json['model'] as String? ?? '',
+      sessionOrigin: normalizeSessionOrigin(
+        json['session_origin'],
+        channelBound: channelBound,
+        channel: channel,
+      ),
       profile: json['profile'] as String?,
       groupEnabled: parseFlag(json['group_enabled']),
       groupMaxRounds: parseInt(json['group_max_rounds'], fallback: 3),
@@ -131,7 +158,7 @@ class CoquiSession {
       closedAt: parseDate(json['closed_at']),
       archivedAt: parseDate(json['archived_at']),
       closureReason: json['closure_reason'] as String?,
-      channelBound: parseFlag(json['channel_bound']) || channel != null,
+      channelBound: channelBound,
       channel: channel,
       title: json['title'] as String?,
     );
@@ -161,6 +188,13 @@ class CoquiSession {
               (key, value) => MapEntry(key.toString(), value),
             ),
           );
+    final channelBound = (map['channel_bound'] as int? ?? 0) != 0 || channel != null;
+    final cachedOrigin = (map['session_origin'] as String?)?.trim().toLowerCase();
+    final sessionOrigin = cachedOrigin == 'user' ||
+            cachedOrigin == 'channel' ||
+            cachedOrigin == 'background'
+        ? cachedOrigin!
+        : (channelBound ? 'channel' : 'user');
 
     groupMembers.sort((left, right) => left.position.compareTo(right.position));
 
@@ -168,6 +202,7 @@ class CoquiSession {
       id: map['id'] as String,
       modelRole: map['model_role'] as String,
       model: map['model'] as String? ?? '',
+      sessionOrigin: sessionOrigin,
       profile: map['profile'] as String?,
       groupEnabled: (map['group_enabled'] as int? ?? 0) != 0,
       groupMaxRounds: map['group_max_rounds'] as int? ?? 3,
@@ -186,7 +221,7 @@ class CoquiSession {
           ? DateTime.fromMillisecondsSinceEpoch(archivedAtMillis)
           : null,
       closureReason: map['closure_reason'] as String?,
-      channelBound: (map['channel_bound'] as int? ?? 0) != 0 || channel != null,
+      channelBound: channelBound,
       channel: channel,
       title: map['title'] as String?,
     );
@@ -197,6 +232,7 @@ class CoquiSession {
       'id': id,
       'model_role': modelRole,
       'model': model,
+      'session_origin': sessionOrigin,
       'profile': profile,
       'group_enabled': groupEnabled ? 1 : 0,
       'group_max_rounds': groupMaxRounds,
@@ -223,6 +259,7 @@ class CoquiSession {
   CoquiSession copyWith({
     String? modelRole,
     String? model,
+    String? sessionOrigin,
     String? profile,
     bool? groupEnabled,
     int? groupMaxRounds,
@@ -244,6 +281,7 @@ class CoquiSession {
       id: id,
       modelRole: modelRole ?? this.modelRole,
       model: model ?? this.model,
+      sessionOrigin: sessionOrigin ?? this.sessionOrigin,
       profile: profile ?? this.profile,
       groupEnabled: groupEnabled ?? this.groupEnabled,
       groupMaxRounds: groupMaxRounds ?? this.groupMaxRounds,
@@ -267,6 +305,10 @@ class CoquiSession {
   bool get isReadOnly => isClosed || isArchived;
 
   bool get isChannelBound => channelBound || channel != null;
+
+  bool get isChannelOrigin => sessionOrigin == 'channel' || isChannelBound;
+
+  bool get isBackgroundOrigin => sessionOrigin == 'background';
 
   bool get isActive => !isClosed;
 
@@ -334,14 +376,20 @@ class CoquiSession {
     return 'Session $shortId';
   }
 
+  String? get sessionOriginBadgeLabel {
+    if (isChannelOrigin) return 'Channel';
+    if (isBackgroundOrigin) return 'Background';
+    return null;
+  }
+
   String? get channelSummaryLabel {
-    if (!isChannelBound) return null;
-    return channel?.summaryLabel ?? 'Channel linked';
+    if (!isChannelOrigin) return null;
+    return channel?.summaryLabel;
   }
 
   String? get channelBadgeLabel {
-    if (!isChannelBound) return null;
-    return channel?.compactLabel ?? 'Channel linked';
+    if (!isChannelOrigin) return null;
+    return channel?.compactLabel;
   }
 
   @override
