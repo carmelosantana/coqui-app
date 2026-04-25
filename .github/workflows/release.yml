@@ -132,7 +132,12 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+
+          if ! openssl pkcs12 -legacy -in "$CERT_PATH" -info -noout -passin "pass:$CERTIFICATE_PASSWORD" >/dev/null 2>&1; then
+            echo "Decoded MACOS_CERTIFICATE_P12 is not a valid PKCS#12 bundle or the password is incorrect." >&2
+            exit 1
+          fi
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
@@ -212,7 +217,12 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+
+          if ! openssl pkcs12 -legacy -in "$CERT_PATH" -info -noout -passin "pass:$CERTIFICATE_PASSWORD" >/dev/null 2>&1; then
+            echo "Decoded APPLE_CERTIFICATE_P12 is not a valid PKCS#12 bundle or the password is incorrect." >&2
+            exit 1
+          fi
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"

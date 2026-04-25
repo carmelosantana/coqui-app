@@ -82,6 +82,22 @@ config_get() {
     fi
 }
 
+base64_single_line() {
+    local file_path="$1"
+    base64 -i "$file_path" | tr -d '\n'
+}
+
+refresh_base64_config_value() {
+    local path_key="$1"
+    local base64_key="$2"
+    local file_path
+    file_path=$(config_get "$path_key")
+
+    if [[ -n "$file_path" && -f "$file_path" ]]; then
+        config_set "$base64_key" "$(base64_single_line "$file_path")"
+    fi
+}
+
 config_set() {
     local key="$1"
     local value="$2"
@@ -536,7 +552,7 @@ _export_p12() {
 
             # Base64 encode for GitHub secrets
             local p12_b64
-            p12_b64=$(base64 -i "$p12_path")
+            p12_b64=$(base64_single_line "$p12_path")
             config_set "${prefix}_P12_B64" "$p12_b64"
 
             chmod 600 "$p12_path"
@@ -677,7 +693,7 @@ setup_profiles() {
 
         # Base64 encode for CI
         local ios_b64
-        ios_b64=$(base64 -i "$ios_profile_path")
+        ios_b64=$(base64_single_line "$ios_profile_path")
         config_set "IOS_PROVISIONING_PROFILE_B64" "$ios_b64"
         config_set "IOS_PROVISIONING_PROFILE_PATH" "$installed_profile_path"
 
@@ -761,7 +777,7 @@ setup_android() {
 
     # Base64 encode for CI
     local ks_b64
-    ks_b64=$(base64 -i "$keystore_path")
+    ks_b64=$(base64_single_line "$keystore_path")
     config_set "ANDROID_KEYSTORE_B64" "$ks_b64"
 
     success "Android keystore created at: $keystore_path"
@@ -841,6 +857,11 @@ setup_github() {
 
     info "Pushing secrets to: $repo"
     echo ""
+
+    refresh_base64_config_value "APPLE_CERTIFICATE_P12_PATH" "APPLE_CERTIFICATE_P12_B64"
+    refresh_base64_config_value "MACOS_CERTIFICATE_P12_PATH" "MACOS_CERTIFICATE_P12_B64"
+    refresh_base64_config_value "IOS_PROVISIONING_PROFILE_PATH" "IOS_PROVISIONING_PROFILE_B64"
+    refresh_base64_config_value "ANDROID_KEYSTORE_PATH" "ANDROID_KEYSTORE_B64"
 
     local secrets_set=0
     local secrets_failed=0
