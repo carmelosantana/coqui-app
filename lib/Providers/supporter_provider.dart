@@ -54,7 +54,7 @@ class SupporterProvider extends ChangeNotifier {
 
   // ── Icon selection (iOS only) ──────────────────────────────────────────
 
-  static const _iconChannel = MethodChannel('ai.coquibot.app/icon');
+  static const _iconChannel = MethodChannel('bot.coqui/icon');
 
   /// The currently selected alternate icon name, or `null` for default.
   String? get selectedIcon {

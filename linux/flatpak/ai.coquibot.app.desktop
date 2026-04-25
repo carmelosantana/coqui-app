@@ -6,7 +6,7 @@ Comment=AI agent chat client
 Categories=Utility;Development;Chat;
 Keywords=ai;chat;agent;coqui;llm
 
-Icon=ai.coquibot.app
+Icon=bot.coqui
 Exec=coqui
 Terminal=false
 StartupNotify=true

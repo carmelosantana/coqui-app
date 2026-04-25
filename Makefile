@@ -81,7 +81,7 @@ android-install: ## Install debug APK to connected Android device/emulator
 	~/Library/Android/sdk/platform-tools/adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 android-launch: ## Launch app on connected Android device/emulator
-	~/Library/Android/sdk/platform-tools/adb shell monkey -p ai.coquibot.app.debug -c android.intent.category.LAUNCHER 1
+	~/Library/Android/sdk/platform-tools/adb shell monkey -p bot.coqui.debug -c android.intent.category.LAUNCHER 1
 
 android-avds: ## List available Android emulators (AVDs)
 	~/Library/Android/sdk/emulator/emulator -list-avds

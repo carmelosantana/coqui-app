@@ -1,4 +1,4 @@
-package dev.ibrahimcetin.reins
+package bot.coqui
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

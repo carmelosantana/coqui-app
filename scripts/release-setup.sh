@@ -21,7 +21,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Local config directory — outside repo, survives clones
 CONFIG_DIR="${HOME}/.coqui-release"
 CONFIG_FILE="${CONFIG_DIR}/config"
-BUNDLE_ID="ai.coquibot.app"
+BUNDLE_ID="bot.coqui"
 
 # ── Colors ────────────────────────────────────────────────────────────
 
@@ -927,7 +927,7 @@ setup_github() {
 setup_vercel() {
     step "Vercel Deployment Setup"
 
-    echo "Vercel deploys the web WASM build to app.coquibot.ai."
+    echo "Vercel deploys the web WASM build to coqui.bot."
     echo "You need a Vercel account and a project linked to this repo."
     echo ""
 
