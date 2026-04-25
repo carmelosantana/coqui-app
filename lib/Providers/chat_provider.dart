@@ -7,8 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/agent_activity_event.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 import 'package:coqui_app/Models/uploaded_file.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
@@ -26,13 +28,41 @@ class ChatProvider extends ChangeNotifier {
   // ── Session state ───────────────────────────────────────────────────
 
   List<CoquiSession> _sessions = [];
-  List<CoquiSession> get sessions => _sessions;
+  List<CoquiSession> get sessions =>
+      _sessions.where((session) => !session.isArchived).toList();
+
+  List<CoquiSession> get archivedSessions =>
+      _sessions.where((session) => session.isArchived).toList();
+
+  List<CoquiSession> get _navigableSessions => [
+        ...sessions,
+        ...archivedSessions,
+      ];
 
   int _currentSessionIndex = -1;
-  int get selectedDestination => _currentSessionIndex + 1;
+  int get selectedDestination {
+    final session = currentSession;
+    if (session == null) return 0;
+
+    final visibleIndex = _navigableSessions
+        .indexWhere((candidate) => candidate.id == session.id);
+    return visibleIndex == -1 ? 0 : visibleIndex + 1;
+  }
 
   CoquiSession? get currentSession =>
-      _currentSessionIndex == -1 ? null : _sessions[_currentSessionIndex];
+      _currentSessionIndex < 0 || _currentSessionIndex >= _sessions.length
+          ? null
+          : _sessions[_currentSessionIndex];
+
+  bool get isCurrentSessionReadOnly => currentSession?.isReadOnly ?? false;
+
+  final Map<String, String?> _sessionProjectLabels = {};
+
+  String? get currentSessionProjectLabel =>
+      currentSession == null ? null : _sessionProjectLabels[currentSession!.id];
+
+  String? projectLabelForSession(String sessionId) =>
+      _sessionProjectLabels[sessionId];
 
   // ── Message state ───────────────────────────────────────────────────
 
@@ -73,15 +103,19 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, List<AgentActivityEvent>> _sessionActivity = {};
   final Map<String, int> _sessionIteration = {};
   final Map<String, String?> _sessionSummary = {};
+  final Map<String, CoquiTurn?> _sessionLastTurn = {};
+  final Map<String, String?> _sessionTurnProcessIds = {};
 
   List<AgentActivityEvent> get currentTurnActivity =>
       _sessionActivity[currentSession?.id] ?? const [];
 
-  int get currentIteration =>
-      _sessionIteration[currentSession?.id] ?? 0;
+  int get currentIteration => _sessionIteration[currentSession?.id] ?? 0;
 
   /// Summary from the last completed turn.
   String? get lastTurnSummary => _sessionSummary[currentSession?.id];
+
+  /// Full typed turn payload from the most recent completed turn.
+  CoquiTurn? get lastCompletedTurn => _sessionLastTurn[currentSession?.id];
 
   // ── Error state ────────────────────────────────────────────────────
 
@@ -119,20 +153,36 @@ class ChatProvider extends ChangeNotifier {
   // ── Navigation ────────────────────────────────────────────────────
 
   void destinationSelected(int destination) {
-    _currentSessionIndex = destination - 1;
-
     if (destination == 0) {
       _resetChat();
-    } else {
-      // Clear previous session data immediately to prevent ghosting/stacking
-      // while the new session loads.
-      _messages = [];
-      _updateDisplayMessages();
-      _pendingFiles.clear();
-
-      _loadCurrentSession();
+      return;
     }
 
+    final visibleIndex = destination - 1;
+    if (visibleIndex < 0 || visibleIndex >= _navigableSessions.length) {
+      _resetChat();
+      return;
+    }
+
+    final sessionId = _navigableSessions[visibleIndex].id;
+    openSession(sessionId);
+  }
+
+  void openSession(String sessionId) {
+    _currentSessionIndex =
+        _sessions.indexWhere((session) => session.id == sessionId);
+    if (_currentSessionIndex == -1) {
+      _resetChat();
+      return;
+    }
+
+    // Clear previous session data immediately to prevent ghosting/stacking
+    // while the new session loads.
+    _messages = [];
+    _updateDisplayMessages();
+    _pendingFiles.clear();
+
+    _loadCurrentSession();
     notifyListeners();
   }
 
@@ -144,16 +194,53 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearAllLocalSessionState({bool notify = true}) {
+    _currentSessionIndex = -1;
+    _sessions.clear();
+    _messages.clear();
+    _updateDisplayMessages();
+    _pendingFiles.clear();
+    _sessionProjectLabels.clear();
+    _sessionErrors.clear();
+    _sessionActivity.clear();
+    _sessionIteration.clear();
+    _sessionSummary.clear();
+    _sessionLastTurn.clear();
+    _sessionTurnProcessIds.clear();
+    _activeStreams.clear();
+    _streamingContent.clear();
+    _cancelledStreams.clear();
+    _unreadSessions.clear();
+
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  /// Clear in-memory and persisted local session cache.
+  Future<void> clearSessionCache() async {
+    await _databaseService.clearSessionCache();
+    _clearAllLocalSessionState();
+  }
+
+  /// Clear only the in-memory session state after an external storage reset.
+  void clearLocalSessionState() {
+    _clearAllLocalSessionState();
+  }
+
   // ── Session management ────────────────────────────────────────────
 
   /// Load sessions from the server and sync to local cache.
   Future<void> refreshSessions() async {
     try {
-      final serverSessions = await _apiService.listSessions(limit: 100);
+      final selectedSessionId = currentSession?.id;
+      final serverSessions =
+          await _apiService.listSessions(limit: 100, status: 'all');
+      final hydratedSessions = await _hydrateGroupSessions(serverSessions);
 
       // Prefer server-provided titles; fall back to cached title for
       // older sessions created before server-side title generation.
-      for (final session in serverSessions) {
+      for (final session in hydratedSessions) {
         if (session.title == null || session.title!.isEmpty) {
           final cached = await _databaseService.getSession(session.id);
           if (cached?.title != null) {
@@ -162,11 +249,24 @@ class ChatProvider extends ChangeNotifier {
         }
       }
 
-      _sessions = serverSessions;
+      _sessions = hydratedSessions;
+      _retainProjectLabelsForCurrentSessions();
+
+      if (selectedSessionId != null) {
+        _currentSessionIndex = _sessions.indexWhere(
+          (session) => session.id == selectedSessionId,
+        );
+      }
 
       // Cache all sessions
-      for (final session in serverSessions) {
+      for (final session in hydratedSessions) {
         await _databaseService.upsertSession(session);
+      }
+
+      for (final session in hydratedSessions) {
+        if (session.activeProjectId?.isNotEmpty == true) {
+          unawaited(_refreshProjectLabelForSession(session));
+        }
       }
 
       notifyListeners();
@@ -179,8 +279,25 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Create a new session with the given role.
-  Future<void> createNewSession(CoquiRole role) async {
-    final session = await _apiService.createSession(modelRole: role.name);
+  Future<void> createNewSession(
+    CoquiRole role, {
+    String? profile,
+    List<String> groupProfiles = const [],
+    int groupMaxRounds = 3,
+    bool confirmCloseActiveProfileSession = false,
+    bool confirmCloseActiveGroupSession = false,
+  }) async {
+    final normalizedGroupProfiles = _normalizeGroupProfiles(groupProfiles);
+    final isGroupSession = normalizedGroupProfiles.length >= 2;
+    final session = await _apiService.createSession(
+      modelRole: isGroupSession ? 'orchestrator' : role.name,
+      profile: isGroupSession ? null : profile,
+      groupEnabled: isGroupSession,
+      members: normalizedGroupProfiles,
+      groupMaxRounds: groupMaxRounds,
+      confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
+      confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
+    );
 
     _sessions.insert(0, session);
     _currentSessionIndex = 0;
@@ -190,9 +307,45 @@ class ChatProvider extends ChangeNotifier {
     _messages.clear();
     _updateDisplayMessages();
 
-    AnalyticsService.trackEvent('session_created', {'role': role.name});
+    unawaited(_refreshProjectLabelForSession(session));
+
+    AnalyticsService.trackEvent('session_created', {
+      'role': isGroupSession ? 'orchestrator' : role.name,
+      if (profile != null && profile.isNotEmpty) 'profile': profile,
+      if (isGroupSession) 'group_member_count': normalizedGroupProfiles.length,
+      if (isGroupSession) 'group_max_rounds': groupMaxRounds,
+      if (confirmCloseActiveProfileSession) 'replaced_existing_profile': true,
+      if (confirmCloseActiveGroupSession) 'replaced_existing_group': true,
+    });
 
     notifyListeners();
+  }
+
+  /// Resolve or create the latest interactive session for the given scope.
+  Future<void> resolveSessionScope(CoquiRole role, {String? profile}) async {
+    final resolved = await _apiService.resolveSession(
+      modelRole: role.name,
+      profile: profile,
+    );
+
+    final session = resolved.session;
+    _upsertSessionAtTop(session);
+    _currentSessionIndex = 0;
+
+    await _databaseService.upsertSession(session);
+
+    _messages.clear();
+    _updateDisplayMessages();
+    unawaited(_refreshProjectLabelForSession(session));
+    notifyListeners();
+
+    await _loadCurrentSession();
+
+    AnalyticsService.trackEvent('session_resolved', {
+      'role': role.name,
+      'created': resolved.created,
+      if (profile != null && profile.isNotEmpty) 'profile': profile,
+    });
   }
 
   /// Delete the current session.
@@ -203,11 +356,14 @@ class ChatProvider extends ChangeNotifier {
     final sessionId = session.id;
     _resetChat();
     _sessions.remove(session);
+    _sessionProjectLabels.remove(sessionId);
 
     // Clean up per-session activity state
     _sessionActivity.remove(sessionId);
     _sessionIteration.remove(sessionId);
     _sessionSummary.remove(sessionId);
+    _sessionLastTurn.remove(sessionId);
+    _sessionTurnProcessIds.remove(sessionId);
 
     try {
       await _apiService.deleteSession(sessionId);
@@ -221,38 +377,42 @@ class ChatProvider extends ChangeNotifier {
   // ── Message loading ───────────────────────────────────────────────
 
   Future<void> _loadCurrentSession() async {
-    if (currentSession == null) return;
+    final session = currentSession;
+    if (session == null) return;
+
+    await _hydrateCurrentSessionIfNeeded(session);
+
+    unawaited(_refreshProjectLabelForSession(session));
 
     // Clear unread indicator
-    _markSessionAsRead(currentSession!.id);
+    _markSessionAsRead(session.id);
     // Clear any sticky error badge once user opens the session
-    _sessionErrors.remove(currentSession!.id);
+    _sessionErrors.remove(session.id);
 
     // Load from cache FIRST for instant navigation
-    _messages = await _databaseService.getMessages(currentSession!.id);
+    _messages = await _databaseService.getMessages(session.id);
     _updateDisplayMessages();
     notifyListeners();
 
-    final sessionIsStreaming = _activeStreams.contains(currentSession!.id);
+    final sessionIsStreaming = _activeStreams.contains(session.id);
 
     // Skip server sync while the session is actively streaming —
     // the stream handler manages _messages in real time.
     if (!sessionIsStreaming) {
       try {
         // Then sync with server in background
-        final serverMessages =
-            await _apiService.listMessages(currentSession!.id);
+        final serverMessages = await _apiService.listMessages(session.id);
 
         // Only update if still on the same session
-        if (currentSession != null) {
+        if (currentSession?.id == session.id) {
           _messages = serverMessages;
           _updateDisplayMessages();
 
           // Cache locally
-          await _databaseService.deleteMessages(currentSession!.id);
+          await _databaseService.deleteMessages(session.id);
           await _databaseService.upsertMessages(
             serverMessages,
-            sessionId: currentSession!.id,
+            sessionId: session.id,
           );
         }
       } catch (_) {
@@ -299,6 +459,23 @@ class ChatProvider extends ChangeNotifier {
   Future<void> sendPrompt(String text) async {
     final session = currentSession;
     if (session == null) return;
+
+    if (session.isReadOnly) {
+      _sessionErrors[session.id] = CoquiException(
+        session.isArchived
+            ? 'This conversation is archived and cannot be modified.'
+            : 'This conversation is closed and cannot be modified.',
+        code: 'session_closed',
+        statusCode: 409,
+        details: {
+          'session_id': session.id,
+          'status': session.status,
+          'closure_reason': session.closureReason,
+        },
+      );
+      notifyListeners();
+      return;
+    }
 
     AnalyticsService.trackEvent('message_sent');
 
@@ -382,6 +559,8 @@ class ChatProvider extends ChangeNotifier {
     _sessionActivity[session.id] = [];
     _sessionIteration[session.id] = 0;
     _sessionSummary[session.id] = null;
+    _sessionLastTurn[session.id] = null;
+    _sessionTurnProcessIds[session.id] = null;
     notifyListeners();
 
     try {
@@ -504,6 +683,26 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) stateChanged = true;
             break;
 
+          case SseEventType.batchStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.batchEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.reviewStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.reviewEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
           case SseEventType.textDelta:
             // Incremental text streaming — append delta to the running content
             // and update the assistant message bubble in real time.
@@ -520,6 +719,11 @@ class ChatProvider extends ChangeNotifier {
               }
             }
             // Don't set stateChanged — throttled notify handles it
+            break;
+
+          case SseEventType.reasoning:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.done:
@@ -550,31 +754,48 @@ class ChatProvider extends ChangeNotifier {
             break;
 
           case SseEventType.complete:
-            // Build turn summary
-            final parts = <String>[];
             final iterations = event.data['iterations'] as int? ?? 0;
             final tools = event.toolsUsed;
             final childCount = event.data['child_agent_count'] as int? ?? 0;
             final tokens = event.totalTokens;
             final duration = event.durationMs;
-            final completeContent = (event.data['content'] as String?) ?? '';
+            final completeContent =
+                (event.data['content'] as String?) ?? accumulatedContent;
             final completeError = event.data['error'];
-
-            if (iterations > 0) {
-              parts.add('$iterations iteration${iterations > 1 ? 's' : ''}');
-            }
-            if (tools.isNotEmpty) {
-              parts.add('${tools.length} tool${tools.length > 1 ? 's' : ''}');
-            }
-            if (childCount > 0) {
-              parts.add('$childCount child${childCount > 1 ? 'ren' : ''}');
-            }
-            if (tokens > 0) parts.add('$tokens tokens');
-            if (duration > 0) {
-              final secs = (duration / 1000).toStringAsFixed(1);
-              parts.add('${secs}s');
-            }
-            _sessionSummary[session.id] = parts.join(' · ');
+            final timestamp = DateTime.now().toIso8601String();
+            final turn = CoquiTurn.fromJson({
+              'id': '',
+              'session_id': session.id,
+              'turn_number': 0,
+              'user_prompt': prompt,
+              'response_text': completeContent,
+              'content': completeContent,
+              'model': session.model,
+              'prompt_tokens': event.data['prompt_tokens'] as int? ?? 0,
+              'completion_tokens': event.data['completion_tokens'] as int? ?? 0,
+              'total_tokens': tokens,
+              'iterations': iterations,
+              'duration_ms': duration,
+              'tools_used': tools,
+              'child_agent_count': childCount,
+              'turn_process_id': _sessionTurnProcessIds[session.id],
+              'restart_requested':
+                  event.data['restart_requested'] as bool? ?? false,
+              'iteration_limit_reached':
+                  event.data['iteration_limit_reached'] as bool? ?? false,
+              'budget_exhausted':
+                  event.data['budget_exhausted'] as bool? ?? false,
+              'context_usage': event.data['context_usage'],
+              'file_edits': event.data['file_edits'],
+              'review_feedback': event.data['review_feedback'],
+              'review_approved': event.data['review_approved'],
+              'background_tasks': event.data['background_tasks'],
+              'error': completeError,
+              'created_at': timestamp,
+              'completed_at': timestamp,
+            });
+            _sessionLastTurn[session.id] = turn;
+            _sessionSummary[session.id] = turn.summary;
             if (isViewing) {
               stateChanged = true;
             } else {
@@ -613,8 +834,58 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) stateChanged = true;
             break;
 
+          case SseEventType.budgetWarning:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.summary:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.memoryExtraction:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.notification:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopIterationStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStageStart:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopStageEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopIterationEnd:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
+          case SseEventType.loopComplete:
+            addActivity(event);
+            if (isViewing) stateChanged = true;
+            break;
+
           case SseEventType.connected:
-            // No-op — server signals stream is ready; turn_process_id is informational
+            _sessionTurnProcessIds[session.id] = event.turnProcessId;
             break;
 
           case SseEventType.unknown:
@@ -770,6 +1041,80 @@ class ChatProvider extends ChangeNotifier {
     _currentSessionIndex = 0;
   }
 
+  Future<void> _refreshProjectLabelForSession(CoquiSession session) async {
+    final activeProjectId = session.activeProjectId;
+    if (activeProjectId == null || activeProjectId.isEmpty) {
+      final removed = _sessionProjectLabels.remove(session.id);
+      if (removed != null && currentSession?.id == session.id) {
+        notifyListeners();
+      }
+      return;
+    }
+
+    String? label;
+    try {
+      label = await _apiService.getSessionProjectLabel(session.id);
+    } catch (_) {
+      label = activeProjectId;
+    }
+
+    final resolvedLabel =
+        label != null && label.isNotEmpty ? label : activeProjectId;
+
+    if (_sessionProjectLabels[session.id] == resolvedLabel) {
+      return;
+    }
+
+    _sessionProjectLabels[session.id] = resolvedLabel;
+    notifyListeners();
+  }
+
+  void _retainProjectLabelsForCurrentSessions() {
+    final currentIds = _sessions.map((session) => session.id).toSet();
+    _sessionProjectLabels.removeWhere(
+      (sessionId, _) => !currentIds.contains(sessionId),
+    );
+  }
+
+  CoquiSession? latestActiveSessionForProfile(
+    String? profile, {
+    String? excludingSessionId,
+  }) {
+    if (profile == null || profile.isEmpty) return null;
+
+    for (final session in _sessions) {
+      if (session.profile == profile &&
+          !session.isClosed &&
+          session.id != excludingSessionId) {
+        return session;
+      }
+    }
+
+    return null;
+  }
+
+  CoquiSession? latestActiveSessionForGroupMembers(
+    List<String> members, {
+    String? excludingSessionId,
+  }) {
+    final normalizedKey = _normalizeGroupCompositionKey(members);
+    if (normalizedKey == null) return null;
+
+    for (final session in _sessions) {
+      if (!session.isGroupSession || session.isClosed) {
+        continue;
+      }
+
+      final sessionKey = session.groupCompositionKey ??
+          _normalizeGroupCompositionKey(session.groupProfileNames);
+      if (sessionKey == normalizedKey && session.id != excludingSessionId) {
+        return session;
+      }
+    }
+
+    return null;
+  }
+
   // ── File attachments ──────────────────────────────────────────────
 
   /// Pick and upload files, showing upload progress via [pendingFiles].
@@ -842,6 +1187,11 @@ class ChatProvider extends ChangeNotifier {
     return await _apiService.getRoles();
   }
 
+  /// Fetch available profiles from the server.
+  Future<List<CoquiProfile>> fetchAvailableProfiles() async {
+    return await _apiService.getProfiles();
+  }
+
   // ── Instance switching ────────────────────────────────────────────
 
   /// Track the last active instance ID to detect changes.
@@ -860,7 +1210,8 @@ class ChatProvider extends ChangeNotifier {
     }
 
     final newOnline = instanceProvider.isOnline;
-    bool justCameOnline = newOnline == true && _lastActiveInstanceOnline != true;
+    bool justCameOnline =
+        newOnline == true && _lastActiveInstanceOnline != true;
     _lastActiveInstanceOnline = newOnline;
 
     if (changedId && newId != null) {
@@ -874,13 +1225,7 @@ class ChatProvider extends ChangeNotifier {
 
   /// Called when the active instance changes.
   Future<void> onInstanceChanged() async {
-    _resetChat();
-    _sessions.clear();
-    _sessionErrors.clear();
-    _sessionActivity.clear();
-    _sessionIteration.clear();
-    _sessionSummary.clear();
-    notifyListeners();
+    _clearAllLocalSessionState();
 
     await refreshSessions();
   }
@@ -890,19 +1235,135 @@ class ChatProvider extends ChangeNotifier {
   /// Rename a session via the API and update local state.
   Future<void> renameSession(String sessionId, String newTitle) async {
     try {
-      await _apiService.updateSession(sessionId, title: newTitle);
-
-      // Update local state
-      final index = _sessions.indexWhere((s) => s.id == sessionId);
-      if (index >= 0) {
-        _sessions[index].title = newTitle;
-      }
-
-      await _databaseService.updateSessionTitle(sessionId, newTitle);
+      final updated =
+          await _apiService.updateSession(sessionId, title: newTitle);
+      final renamed = updated.copyWith(title: newTitle);
+      _replaceSession(renamed);
+      await _databaseService.upsertSession(renamed);
       notifyListeners();
     } on CoquiException catch (e) {
       _sessionErrors[sessionId] = e;
       notifyListeners();
     }
+  }
+
+  Future<void> updateSessionRole(String sessionId, String roleName) async {
+    try {
+      final updated = await _apiService.updateSession(
+        sessionId,
+        modelRole: roleName,
+      );
+      _replaceSession(updated);
+      await _databaseService.upsertSession(updated);
+      unawaited(_refreshProjectLabelForSession(updated));
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateSessionProfile(String sessionId, String? profile) async {
+    try {
+      final updated = await _apiService.updateSession(
+        sessionId,
+        profile: profile,
+        clearProfile: profile == null || profile.isEmpty,
+      );
+      _replaceSession(updated);
+      await _databaseService.upsertSession(updated);
+      unawaited(_refreshProjectLabelForSession(updated));
+      notifyListeners();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateSessionActiveProject(
+    String sessionId, {
+    String? projectId,
+    String? projectSlug,
+    bool clear = false,
+  }) async {
+    try {
+      await _apiService.updateSessionProject(
+        sessionId,
+        projectId: projectId,
+        projectSlug: projectSlug,
+        clear: clear,
+      );
+      await refreshSessions();
+    } on CoquiException catch (e) {
+      _sessionErrors[sessionId] = e;
+      notifyListeners();
+    }
+  }
+
+  void _replaceSession(CoquiSession updatedSession) {
+    final index =
+        _sessions.indexWhere((session) => session.id == updatedSession.id);
+    if (index >= 0) {
+      _sessions[index] = updatedSession;
+    }
+  }
+
+  void _upsertSessionAtTop(CoquiSession session) {
+    _sessions.removeWhere((existing) => existing.id == session.id);
+    _sessions.insert(0, session);
+  }
+
+  Future<List<CoquiSession>> _hydrateGroupSessions(
+    List<CoquiSession> sessions,
+  ) async {
+    final hydrated = await Future.wait(
+      sessions.map((session) async {
+        if (!session.isGroupSession || session.groupMembers.isNotEmpty) {
+          return session;
+        }
+
+        return await _apiService.getSession(session.id) ?? session;
+      }),
+    );
+
+    return hydrated;
+  }
+
+  Future<void> _hydrateCurrentSessionIfNeeded(CoquiSession session) async {
+    if (!session.isGroupSession || session.groupMembers.isNotEmpty) {
+      return;
+    }
+
+    final hydrated = await _apiService.getSession(session.id);
+    if (hydrated == null) return;
+
+    _replaceSession(hydrated);
+
+    if (currentSession?.id == hydrated.id) {
+      _currentSessionIndex =
+          _sessions.indexWhere((candidate) => candidate.id == hydrated.id);
+    }
+
+    await _databaseService.upsertSession(hydrated);
+    notifyListeners();
+  }
+
+  List<String> _normalizeGroupProfiles(List<String> members) {
+    final uniqueMembers = members
+        .map((member) => member.trim())
+        .where((member) => member.isNotEmpty)
+        .toSet()
+        .toList();
+    uniqueMembers.sort();
+    return uniqueMembers;
+  }
+
+  String? _normalizeGroupCompositionKey(List<String> members) {
+    final normalized = _normalizeGroupProfiles(members);
+    if (normalized.length < 2) {
+      return null;
+    }
+
+    return normalized.join('|');
   }
 }

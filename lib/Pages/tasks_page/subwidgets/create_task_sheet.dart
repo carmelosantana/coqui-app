@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:provider/provider.dart';
 
 /// Bottom sheet for creating a new background task.
@@ -15,6 +17,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
   final _promptController = TextEditingController();
   final _titleController = TextEditingController();
   String _selectedRole = 'orchestrator';
+  String? _selectedProfile;
   int _maxIterations = 25;
 
   static const _iterationOptions = [10, 25, 50, 100];
@@ -52,6 +55,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
           prompt: prompt,
           role: _selectedRole,
           title: title.isEmpty ? null : title,
+          profile: _selectedProfile,
           maxIterations: _maxIterations,
         );
 
@@ -66,6 +70,21 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
         context.read<TaskProvider>().clearError();
       }
     }
+  }
+
+  Future<void> _pickProfile() async {
+    final api = context.read<CoquiApiService>();
+    final selectedProfile = await showProfilePickerDialog(
+      context: context,
+      title: 'Task Profile',
+      fetchProfiles: api.getProfiles,
+      initialValue: _selectedProfile,
+    );
+    if (!mounted || selectedProfile == null) return;
+
+    setState(() {
+      _selectedProfile = selectedProfile.isEmpty ? null : selectedProfile;
+    });
   }
 
   @override
@@ -114,7 +133,9 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                                   height: 16,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Theme.of(context).colorScheme.onPrimary),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary),
                                 )
                               : const Text('Start'),
                         );
@@ -157,6 +178,19 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                         hintText: 'A short label for this task',
                         border: OutlineInputBorder(),
                         isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Profile (optional)',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 6),
+                    OutlinedButton.icon(
+                      onPressed: _pickProfile,
+                      icon: const Icon(Icons.person_outline),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(_selectedProfile ?? 'No profile'),
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -7,8 +7,8 @@ class AppConstants {
   static const String githubUrl = 'https://github.com/AgentCoqui/coqui-app';
   static const String githubOrgUrl = 'https://github.com/AgentCoqui';
   static const String githubCoreUrl = 'https://github.com/AgentCoqui/coqui';
-  static const String websiteUrl = 'https://coquibot.org';
-  static const String docsUrl = 'https://coquibot.org/docs';
+  static const String websiteUrl = 'https://agentcoqui.com';
+  static const String docsUrl = 'https://docs.agentcoqui.com';
   static const String hostedUrl = 'https://coquibot.ai';
   static const String discordUrl = 'https://discord.gg/TaCpZVqbbT';
 }

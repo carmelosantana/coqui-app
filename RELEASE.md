@@ -31,7 +31,7 @@ This covers:
 4. **Provisioning profiles** — iOS Distribution + macOS Developer ID
 5. **Android keystore** — generates `.jks`, creates `key.properties`
 6. **GitHub secrets** — pushes all 15 secrets via `gh secret set`
-7. **Vercel tokens** — for web deployment to `app.coquibot.ai`
+7. **Vercel tokens** — for web deployment to `coqui.bot`
 
 All signing artifacts are stored in `~/.coqui-release/` (outside the repo, survives clones). You can re-run any step independently:
 
@@ -77,7 +77,7 @@ Tag push → Validate → Build 6 platforms (parallel) → GitHub Release → Ve
 | iOS | `Coqui-{ver}-ios.ipa` | TestFlight (uploaded separately) |
 | Linux | `Coqui-{ver}-linux-x64.tar.gz` | GitHub Release |
 | Windows | `Coqui-{ver}-windows-x64.zip` | GitHub Release |
-| Web | WASM | Vercel (`app.coquibot.ai`) |
+| Web | WASM | Vercel (`coqui.bot`) |
 
 All artifacts include SHA-256 checksums in `SHA256SUMS.txt`.
 
@@ -113,20 +113,23 @@ scripts/release.sh build --platform all      # All supported on this OS
 
 The build command validates signing prerequisites before building and provides clear remediation steps if anything is missing.
 
+For local iOS builds, the script uses `ios/ExportOptions.plist` when an iOS provisioning profile is configured. If no local profile is configured, it falls back to automatic App Store export using your configured Apple team ID. CI still expects the provisioning profile secrets documented below.
+
 ## Required GitHub Secrets
 
 The setup wizard (`scripts/release-setup.sh github`) pushes all of these automatically:
 
 | Secret | Source | Purpose |
 |--------|--------|---------|
-| `APPLE_CERTIFICATE_P12` | `.p12` export from Keychain | Code signing (iOS + macOS) |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` | Unlock cert in CI |
+| `APPLE_CERTIFICATE_P12` | Apple Distribution `.p12` export from Keychain | iOS code signing in CI |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the Apple Distribution `.p12` | Unlock iOS cert in CI |
+| `MACOS_CERTIFICATE_P12` | Developer ID Application `.p12` export from Keychain | macOS DMG signing in CI |
+| `MACOS_CERTIFICATE_PASSWORD` | Password for the Developer ID `.p12` | Unlock macOS cert in CI |
 | `APPLE_TEAM_ID` | Apple Developer account | Certificate identity |
 | `APPLE_ID` | Your Apple ID email | Notarization + TestFlight |
 | `APPLE_APP_SPECIFIC_PASSWORD` | appleid.apple.com | Notarization + TestFlight |
 | `KEYCHAIN_PASSWORD` | Auto-generated random | CI temp keychain |
 | `IOS_PROVISIONING_PROFILE` | Apple Developer portal | iOS app signing |
-| `MACOS_PROVISIONING_PROFILE` | Apple Developer portal | macOS DMG signing |
 | `ANDROID_KEYSTORE_BASE64` | Generated `.jks` | Android APK signing |
 | `ANDROID_KEYSTORE_PASSWORD` | Chosen during setup | Unlock keystore |
 | `ANDROID_KEY_ALIAS` | `coqui` (default) | Key within keystore |
@@ -145,7 +148,7 @@ The very first iOS release requires creating an app record:
    - Platform: **iOS**
    - Name: **Coqui**
    - Primary Language: **English (US)**
-   - Bundle ID: **ai.coquibot.app**
+   - Bundle ID: **bot.coqui**
    - SKU: **coqui-app**
 4. Complete the app information:
    - **Privacy**: describe data collection (Coqui stores all data locally — no server-side tracking)
@@ -226,7 +229,7 @@ Run `scripts/release-setup.sh apple` to create or select a certificate. If you h
 
 ### "Provisioning profile doesn't match"
 
-The profile must match both the bundle ID (`ai.coquibot.app`) and the signing certificate. Download a new profile from the Apple Developer portal that references your current certificate: `scripts/release-setup.sh profiles`
+The profile must match both the bundle ID (`bot.coqui`) and the signing certificate. Download a new profile from the Apple Developer portal that references your current certificate: `scripts/release-setup.sh profiles`
 
 ### "keytool not found"
 
@@ -257,7 +260,7 @@ If missing, run: `scripts/release-setup.sh android`
 ### TestFlight upload fails
 
 - **Authentication error**: regenerate app-specific password at [appleid.apple.com](https://appleid.apple.com/account/manage)
-- **Bundle ID mismatch**: ensure App Store Connect app record uses `ai.coquibot.app`
+- **Bundle ID mismatch**: ensure App Store Connect app record uses `bot.coqui`
 - **Version already exists**: bump the version with `scripts/release.sh tag patch`
 - **Alternative upload**: use Transporter (free on Mac App Store) — drag and drop the `.ipa` file
 

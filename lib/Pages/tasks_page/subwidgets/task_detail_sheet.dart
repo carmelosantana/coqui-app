@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:coqui_app/Models/coqui_task.dart';
+import 'package:coqui_app/Models/coqui_task_event.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:provider/provider.dart';
 import 'task_status_badge.dart';
@@ -26,6 +27,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   void initState() {
     super.initState();
     _task = widget.task;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TaskProvider>().watchTask(_task.id);
+    });
   }
 
   @override
@@ -36,8 +40,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
-    final updated =
-        await context.read<TaskProvider>().refreshTask(_task.id);
+    final updated = await context.read<TaskProvider>().refreshTask(_task.id);
     if (mounted && updated != null) {
       setState(() => _task = updated);
     }
@@ -48,8 +51,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     setState(() => _isCancelling = true);
     await context.read<TaskProvider>().cancelTask(_task.id);
     if (mounted) {
-      final updated =
-          await context.read<TaskProvider>().refreshTask(_task.id);
+      final updated = await context.read<TaskProvider>().refreshTask(_task.id);
       if (mounted && updated != null) setState(() => _task = updated);
       setState(() => _isCancelling = false);
     }
@@ -98,8 +100,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ),
             // Header row
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
@@ -135,8 +136,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.stop_circle_outlined),
                       tooltip: 'Cancel task',
@@ -154,6 +154,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 padding: const EdgeInsets.all(20),
                 children: [
                   _InfoRow(label: 'Role', value: _task.role),
+                  if (_task.profile != null && _task.profile!.isNotEmpty)
+                    _InfoRow(label: 'Profile', value: _task.profile!),
                   _InfoRow(label: 'Session', value: _task.sessionId),
                   _InfoRow(
                     label: 'Created',
@@ -187,6 +189,21 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                       isError: true,
                     ),
                   ],
+                  const SizedBox(height: 16),
+                  _SectionLabel(label: 'Event Log'),
+                  Consumer<TaskProvider>(
+                    builder: (context, provider, _) {
+                      final events = provider.eventsForTask(_task.id);
+                      if (events.isEmpty) {
+                        return const _EmptyTaskEvents();
+                      }
+                      return Column(
+                        children: events
+                            .map((event) => _TaskEventTile(event: event))
+                            .toList(),
+                      );
+                    },
+                  ),
                   // Input injection for running tasks
                   if (_task.isRunning) ...[
                     const SizedBox(height: 24),
@@ -216,7 +233,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                   height: 18,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Theme.of(context).colorScheme.onPrimary),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary),
                                 )
                               : const Icon(Icons.send),
                           onPressed: _isSendingInput ? null : _sendInput,
@@ -241,6 +260,80 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         '${local.day.toString().padLeft(2, '0')} '
         '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+class _EmptyTaskEvents extends StatelessWidget {
+  const _EmptyTaskEvents();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Text(
+        'No task events have been recorded yet.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+
+class _TaskEventTile extends StatelessWidget {
+  final CoquiTaskEvent event;
+
+  const _TaskEventTile({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  event.type,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                _formatTime(event.receivedAt),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            event.summary,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final local = dateTime.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}';
   }
 }
 

@@ -23,6 +23,9 @@ enum LocalServerStatus {
 
   /// Server is stopping.
   stopping,
+
+  /// Server uninstall is in progress.
+  uninstalling,
 }
 
 /// Snapshot of local server information.
@@ -30,54 +33,47 @@ class LocalServerInfo {
   final LocalServerStatus status;
   final String? version;
   final String installPath;
+  final String workspacePath;
   final int? pid;
   final int port;
   final String? apiKey;
-  final bool serviceInstalled;
-  final bool serviceRunning;
-  final bool serviceSupported;
+  final bool instanceConfigMismatch;
   final String? errorMessage;
-  final List<String> logs;
 
   const LocalServerInfo({
     this.status = LocalServerStatus.notInstalled,
     this.version,
     this.installPath = '',
+    this.workspacePath = '',
     this.pid,
     this.port = 3300,
     this.apiKey,
-    this.serviceInstalled = false,
-    this.serviceRunning = false,
-    this.serviceSupported = true,
+    this.instanceConfigMismatch = false,
     this.errorMessage,
-    this.logs = const [],
   });
 
   LocalServerInfo copyWith({
     LocalServerStatus? status,
     String? version,
     String? installPath,
+    String? workspacePath,
     int? pid,
     int? port,
     String? apiKey,
-    bool? serviceInstalled,
-    bool? serviceRunning,
-    bool? serviceSupported,
+    bool? instanceConfigMismatch,
     String? errorMessage,
-    List<String>? logs,
   }) {
     return LocalServerInfo(
       status: status ?? this.status,
       version: version ?? this.version,
       installPath: installPath ?? this.installPath,
+      workspacePath: workspacePath ?? this.workspacePath,
       pid: pid ?? this.pid,
       port: port ?? this.port,
       apiKey: apiKey ?? this.apiKey,
-      serviceInstalled: serviceInstalled ?? this.serviceInstalled,
-      serviceRunning: serviceRunning ?? this.serviceRunning,
-      serviceSupported: serviceSupported ?? this.serviceSupported,
+      instanceConfigMismatch:
+          instanceConfigMismatch ?? this.instanceConfigMismatch,
       errorMessage: errorMessage ?? this.errorMessage,
-      logs: logs ?? this.logs,
     );
   }
 
@@ -86,7 +82,8 @@ class LocalServerInfo {
       status == LocalServerStatus.installing ||
       status == LocalServerStatus.updating ||
       status == LocalServerStatus.starting ||
-      status == LocalServerStatus.stopping;
+      status == LocalServerStatus.stopping ||
+      status == LocalServerStatus.uninstalling;
 
   /// Whether the server is installed (any state except notInstalled/installing).
   bool get isInstalled =>

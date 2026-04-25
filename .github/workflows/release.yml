@@ -125,8 +125,8 @@ jobs:
 
       - name: Import Apple certificate
         env:
-          CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
@@ -142,23 +142,17 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
-      - name: Install macOS provisioning profile
-        env:
-          PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
-        run: |
-          PP_PATH="$RUNNER_TEMP/macos_profile.provisionprofile"
-          echo "$PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
-
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-
       - name: Build macOS release
         run: flutter build macos --release
 
       - name: Determine signing identity
         id: identity
         run: |
-          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/app-signing.keychain-db" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/app-signing.keychain-db" | grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [[ -z "$IDENTITY" ]]; then
+            echo "Developer ID Application identity not found in CI keychain" >&2
+            exit 1
+          fi
           echo "name=${IDENTITY}" >> "$GITHUB_OUTPUT"
 
       - name: Package DMG
@@ -460,5 +454,4 @@ jobs:
             --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

@@ -4,7 +4,9 @@ import 'package:path_provider/path_provider.dart';
 /// Manages platform-specific document paths.
 ///
 /// On web, paths are unused (storage is handled by IndexedDB/OPFS).
-/// On native, resolves to the appropriate application directory.
+/// On desktop, resolves to the application support directory so sandboxed
+/// builds do not rely on user Documents access. On mobile, Hive continues to
+/// use its own platform defaults.
 class PathManager {
   static final PathManager _instance = PathManager._internal();
   String _documentsPath = '';
@@ -17,7 +19,7 @@ class PathManager {
       return;
     }
 
-    if (PlatformInfo.isLinux) {
+    if (PlatformInfo.isDesktop) {
       final directory = await getApplicationSupportDirectory();
       _instance._documentsPath = directory.path;
     } else {
@@ -26,7 +28,7 @@ class PathManager {
     }
   }
 
-  /// The documents directory path. Empty string on web.
+  /// The native storage path. Empty string on web.
   String get documentsPath => _documentsPath;
 
   static PathManager get instance => _instance;

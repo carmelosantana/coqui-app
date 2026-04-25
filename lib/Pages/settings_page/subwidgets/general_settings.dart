@@ -79,43 +79,58 @@ class _GeneralSettingsState extends State<GeneralSettings> {
 
     final selected = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       builder: (context) {
+        final maxHeight = MediaQuery.sizeOf(context).height * 0.75;
+
         return SafeArea(
-          minimum: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Default Role',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              const Divider(),
-              ..._roles!.map((role) {
-                final isSelected = role.name == currentRole;
-                return ListTile(
-                  leading: Icon(
-                    isSelected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Default Role',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
-                  title: Text(role.label),
-                  subtitle: role.description.isNotEmpty
-                      ? Text(
-                          role.description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : null,
-                  onTap: () => Navigator.pop(context, role.name),
-                );
-              }),
-            ],
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _roles!.length,
+                      itemBuilder: (context, index) {
+                        final role = _roles![index];
+                        final isSelected = role.name == currentRole;
+                        return ListTile(
+                          leading: Icon(
+                            isSelected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                          title: Text(role.label),
+                          subtitle: role.description.isNotEmpty
+                              ? Text(
+                                  role.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(context, role.name),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },

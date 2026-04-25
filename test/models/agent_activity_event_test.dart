@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coqui_app/Models/agent_activity_event.dart';
 import 'package:coqui_app/Models/sse_event.dart';
+import 'package:coqui_app/Models/coqui_turn.dart';
 
 void main() {
   group('AgentActivityEvent.fromSseEvent', () {
@@ -45,6 +46,26 @@ void main() {
       final activity = AgentActivityEvent.fromSseEvent(event);
       expect(activity!.type, AgentActivityType.error);
       expect(activity.detail, 'boom');
+    });
+
+    test('turn event maps replayable history to activity rows', () {
+      final event = CoquiTurnEvent(
+        id: 1,
+        eventType: 'tool_call',
+        data: {
+          'tool': 'read_file',
+          'arguments': {'path': 'README.md'},
+        },
+        createdAt: DateTime.parse('2026-04-21T10:00:00Z'),
+      );
+
+      final activity = AgentActivityEvent.fromTurnEvent(event);
+
+      expect(activity, isNotNull);
+      expect(activity!.type, AgentActivityType.toolCall);
+      expect(activity.label, 'read_file');
+      expect(activity.detail, 'path: README.md');
+      expect(activity.timestamp, DateTime.parse('2026-04-21T10:00:00Z'));
     });
 
     test('description combines label and detail', () {

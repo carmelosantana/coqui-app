@@ -6,6 +6,7 @@ class CoquiTask {
   final String id;
   final String sessionId;
   final String? parentSessionId;
+  final String? profile;
   final String status;
   final String? title;
   final String prompt;
@@ -22,6 +23,7 @@ class CoquiTask {
     required this.id,
     required this.sessionId,
     this.parentSessionId,
+    this.profile,
     required this.status,
     this.title,
     required this.prompt,
@@ -40,6 +42,7 @@ class CoquiTask {
       id: json['id'] as String? ?? '',
       sessionId: json['session_id'] as String? ?? '',
       parentSessionId: json['parent_session_id'] as String?,
+      profile: json['profile'] as String?,
       status: json['status'] as String? ?? 'unknown',
       title: json['title'] as String?,
       prompt: json['prompt'] as String? ?? '',
@@ -104,6 +107,7 @@ class CoquiTask {
 
   CoquiTask copyWith({
     String? status,
+    String? profile,
     String? result,
     String? error,
     DateTime? completedAt,
@@ -113,6 +117,7 @@ class CoquiTask {
       id: id,
       sessionId: sessionId,
       parentSessionId: parentSessionId,
+      profile: profile ?? this.profile,
       status: status ?? this.status,
       title: title,
       prompt: prompt,

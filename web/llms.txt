@@ -3,9 +3,9 @@
 > Privacy-first AI agent chat client that runs entirely in your browser via WebAssembly. No server-side code, no tracking, your data stays on your device.
 
 ## Links
-- Project Website: https://coquibot.org
-- Documentation: https://coquibot.org/docs
-- Hosted App: https://app.coquibot.ai
+- Project Website: https://agentcoqui.com
+- Documentation: https://docs.agentcoqui.com
+- Hosted App: https://coqui.bot
 - GitHub (Core): https://github.com/AgentCoqui/coqui
 - GitHub (App): https://github.com/AgentCoqui/coqui-app
 - php-agents Framework: https://github.com/carmelosantana/php-agents
@@ -52,11 +52,11 @@ The web app communicates with any Coqui API server via REST + Server-Sent Events
 Users can self-host the web app using Docker (nginx:alpine) or any static file server that supports custom HTTP headers. Required headers: COOP (same-origin) and COEP (require-corp) for SharedArrayBuffer/WASM threading.
 
 ## Documentation Pages
-- Overview: https://coquibot.org/docs/readme
-- HTTP API Reference: https://coquibot.org/docs/api
-- Skills System: https://coquibot.org/docs/skills
-- Creating Toolkits: https://coquibot.org/docs/toolkits
-- Building Apps with the API: https://coquibot.org/docs/app-api-usage
+- Overview: https://docs.agentcoqui.com/readme
+- HTTP API Reference: https://docs.agentcoqui.com/api
+- Skills System: https://docs.agentcoqui.com/skills
+- Creating Toolkits: https://docs.agentcoqui.com/toolkits
+- Building Apps with the API: https://docs.agentcoqui.com/app-api-usage
 
 ## Tech Stack
 - Flutter/Dart compiled to WASM-GC

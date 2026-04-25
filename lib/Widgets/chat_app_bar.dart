@@ -1,15 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:coqui_app/Theme/coqui_typography.dart';
+import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Models/coqui_session_file.dart';
+import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Theme/coqui_typography.dart';
+import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
+import 'package:coqui_app/Widgets/turn_history_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ChatAppBar({super.key});
@@ -18,34 +26,147 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final chatProvider = Provider.of<ChatProvider>(context);
     final instanceProvider = Provider.of<InstanceProvider>(context);
+    final theme = Theme.of(context);
+    final currentSession = chatProvider.currentSession;
+    final projectLabel = chatProvider.currentSessionProjectLabel ??
+        currentSession?.activeProjectId;
+    final modelLabel = currentSession?.model.trim();
+    final isSessionEditable =
+        currentSession != null && !currentSession.isReadOnly;
 
     return AppBar(
       centerTitle: false,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Server selector dropdown
-          _ServerDropdown(instanceProvider: instanceProvider),
-          if (chatProvider.currentSession != null)
-            InkWell(
-              onTap: () {
-                _handleRoleSelectionButton(context);
-              },
-              customBorder: const StadiumBorder(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Text(
-                  chatProvider.currentSession!.modelRole,
+      titleSpacing: 12,
+      title: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(right: 8),
+        child: Row(
+          children: [
+            _ServerDropdown(instanceProvider: instanceProvider),
+            if (currentSession != null) ...[
+              if (currentSession.isReadOnly) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: Icon(
+                    currentSession.isArchived
+                        ? Icons.archive_outlined
+                        : Icons.lock_outline,
+                    size: 16,
+                  ),
+                  label: Text(
+                    currentSession.isArchived ? 'Archived' : 'Closed',
+                  ),
+                ),
+              ],
+              if (modelLabel != null && modelLabel.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.memory_outlined, size: 16),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      modelLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: CoquiTypography.monoStyle(
+                        Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (currentSession.sessionOriginBadgeLabel != null) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.alt_route, size: 16),
+                  label: Text(currentSession.sessionOriginBadgeLabel!),
+                ),
+              ],
+              if (currentSession.channelSummaryLabel != null) ...[
+                const SizedBox(width: 6),
+                _HeaderInfoChip(
+                  avatar: const Icon(Icons.satellite_alt_outlined, size: 16),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(
+                      currentSession.channelSummaryLabel!,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 6),
+              _HeaderActionChip(
+                avatar: Icon(
+                  currentSession.isGroupSession
+                      ? Icons.groups_2_outlined
+                      : Icons.person_outline,
+                  size: 16,
+                ),
+                label: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    currentSession.compactParticipantSummary,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                onPressed: isSessionEditable && !currentSession.isGroupSession
+                    ? () => _handleProfileSelection(context)
+                    : null,
+              ),
+              const SizedBox(width: 6),
+              _HeaderActionChip(
+                label: Text(
+                  currentSession.modelRole,
                   style: CoquiTypography.monoStyle(
                     Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
+                onPressed: isSessionEditable
+                    ? () => _handleRoleSelectionButton(context)
+                    : null,
               ),
-            ),
-        ],
+              if (projectLabel != null && projectLabel.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _HeaderActionChip(
+                  avatar: const Icon(Icons.folder_outlined, size: 16),
+                  label: Text(projectLabel),
+                  onPressed: () => _openWorkTab(
+                    context,
+                    WorkPageTab.projects,
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
       actions: [
-        if (chatProvider.currentSession != null)
+        if (instanceProvider.restartRequired || instanceProvider.isRestarting)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: TextButton.icon(
+              onPressed: instanceProvider.isRestarting
+                  ? null
+                  : () => promptForPendingServerRestart(context),
+              icon: instanceProvider.isRestarting
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.error,
+                      ),
+                    )
+                  : const Icon(Icons.restart_alt),
+              label: Text(
+                instanceProvider.isRestarting ? 'Restarting' : 'Restart API',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+            ),
+          ),
+        if (currentSession != null)
           IconButton(
             icon: const Icon(Icons.tune),
             onPressed: () {
@@ -59,14 +180,19 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   Future<void> _handleRoleSelectionButton(BuildContext context) async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final currentSession = chatProvider.currentSession;
+    if (currentSession == null) return;
 
-    await showSelectionBottomSheet<CoquiRole>(
+    final selectedRole = await showSelectionBottomSheet<CoquiRole>(
       context: context,
       header: const BottomSheetHeader(title: "Available Roles"),
       fetchItems: () async {
         return await chatProvider.fetchAvailableRoles();
       },
-      currentSelection: null,
+      currentSelection: CoquiRole(
+        name: currentSession.modelRole,
+        model: currentSession.model,
+      ),
       itemBuilder: (role, selected, onSelected) {
         return RoleListTile(
           role: role,
@@ -75,6 +201,38 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         );
       },
     );
+
+    if (selectedRole != null &&
+        selectedRole.name != currentSession.modelRole &&
+        context.mounted) {
+      await chatProvider.updateSessionRole(
+          currentSession.id, selectedRole.name);
+    }
+  }
+
+  Future<void> _handleProfileSelection(BuildContext context) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final session = chatProvider.currentSession;
+    if (session == null) return;
+
+    final selectedProfile = await showProfilePickerDialog(
+      context: context,
+      title: 'Session Profile',
+      fetchProfiles: chatProvider.fetchAvailableProfiles,
+      initialValue: session.profile,
+    );
+
+    if (selectedProfile != null && context.mounted) {
+      final nextProfile = selectedProfile.isEmpty ? null : selectedProfile;
+      if (nextProfile == session.profile) {
+        return;
+      }
+
+      await chatProvider.resolveSessionScope(
+        CoquiRole(name: session.modelRole, model: session.model),
+        profile: nextProfile,
+      );
+    }
   }
 
   Future<void> _handleConfigureButton(BuildContext context) async {
@@ -82,33 +240,98 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     final action = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       builder: (BuildContext context) {
         return SafeArea(
           minimum: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const BottomSheetHeader(title: 'Session Options'),
-              const Divider(),
-              if (chatProvider.lastTurnSummary != null)
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const BottomSheetHeader(title: 'Session Options'),
+                const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('Last Turn'),
-                  subtitle: Text(chatProvider.lastTurnSummary!),
+                  leading: const Icon(Icons.history_outlined),
+                  title: const Text('Turn History'),
+                  subtitle: Text(
+                    chatProvider.lastTurnSummary ??
+                        'Inspect recent session turns',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => Navigator.pop(context, 'turn_history'),
                 ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Rename Session'),
-                onTap: () => Navigator.pop(context, 'rename'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete Session'),
-                textColor: Theme.of(context).colorScheme.error,
-                iconColor: Theme.of(context).colorScheme.error,
-                onTap: () => Navigator.pop(context, 'delete'),
-              ),
-            ],
+                ListTile(
+                  leading: Icon(
+                    chatProvider.currentSession?.isGroupSession == true
+                        ? Icons.groups_2_outlined
+                        : Icons.person_outline,
+                  ),
+                  title: Text(
+                    chatProvider.currentSession?.isGroupSession == true
+                        ? 'Group Members'
+                        : 'Change Profile',
+                  ),
+                  subtitle: Text(
+                    chatProvider.currentSession?.compactParticipantSummary ??
+                        'No profile selected',
+                  ),
+                  onTap: chatProvider.currentSession?.isGroupSession == true
+                      ? null
+                      : () => Navigator.pop(context, 'profile'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: const Text('Session Files'),
+                  onTap: () => Navigator.pop(context, 'files'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.workspaces_outline),
+                  title: const Text('Open Project In Work'),
+                  subtitle: Text(
+                    chatProvider.currentSessionProjectLabel ??
+                        chatProvider.currentSession?.activeProjectId ??
+                        'Use the current chat project and sprint context',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => Navigator.pop(context, 'work_project'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.checklist_outlined),
+                  title: const Text('Open Session Todos'),
+                  subtitle:
+                      const Text('Jump into the current session work list'),
+                  onTap: () => Navigator.pop(context, 'work_todos'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Open Session Artifacts'),
+                  subtitle: const Text(
+                    'Open versioned artifacts for this session in Work',
+                  ),
+                  onTap: () => Navigator.pop(context, 'work_artifacts'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.account_tree_outlined),
+                  title: const Text('Child Runs'),
+                  onTap: () => Navigator.pop(context, 'child_runs'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Rename Session'),
+                  onTap: () => Navigator.pop(context, 'rename'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Delete Session'),
+                  textColor: Theme.of(context).colorScheme.error,
+                  iconColor: Theme.of(context).colorScheme.error,
+                  onTap: () => Navigator.pop(context, 'delete'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -116,11 +339,70 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (action == 'delete') {
       await chatProvider.deleteCurrentSession();
+    } else if (action == 'work_project') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.projects);
+      }
+    } else if (action == 'work_todos') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.todos);
+      }
+    } else if (action == 'work_artifacts') {
+      if (context.mounted) {
+        await _openWorkTab(context, WorkPageTab.artifacts);
+      }
+    } else if (action == 'profile') {
+      if (context.mounted) {
+        await _handleProfileSelection(context);
+      }
+    } else if (action == 'files') {
+      final session = chatProvider.currentSession;
+      if (session != null && context.mounted) {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _SessionFilesSheet(sessionId: session.id),
+        );
+      }
+    } else if (action == 'turn_history') {
+      final session = chatProvider.currentSession;
+      if (session != null && context.mounted) {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => TurnHistorySheet(
+            sessionId: session.id,
+            highlightedTurn: chatProvider.lastCompletedTurn,
+          ),
+        );
+      }
+    } else if (action == 'child_runs') {
+      final session = chatProvider.currentSession;
+      if (session != null && context.mounted) {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _ChildRunsSheet(sessionId: session.id),
+        );
+      }
     } else if (action == 'rename') {
       if (context.mounted) {
         await _showRenameDialog(context, chatProvider);
       }
     }
+  }
+
+  Future<void> _openWorkTab(BuildContext context, WorkPageTab tab) {
+    return openWorkPage(
+      context,
+      arguments: workArgumentsForCurrentSession(
+        context,
+        initialTab: tab,
+      ),
+    );
   }
 
   Future<void> _showRenameDialog(
@@ -166,6 +448,317 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
+class _SessionFilesSheet extends StatefulWidget {
+  final String sessionId;
+
+  const _SessionFilesSheet({required this.sessionId});
+
+  @override
+  State<_SessionFilesSheet> createState() => _SessionFilesSheetState();
+}
+
+class _SessionFilesSheetState extends State<_SessionFilesSheet> {
+  bool _isLoading = true;
+  List<CoquiSessionFile> _files = const [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<CoquiApiService>();
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final files = await api.listSessionFiles(widget.sessionId);
+      if (!mounted) return;
+      setState(() {
+        _files = files;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _deleteFile(CoquiSessionFile file) async {
+    final api = context.read<CoquiApiService>();
+    await api.deleteSessionFile(widget.sessionId, file.id);
+    await _load();
+  }
+
+  void _openFile(CoquiSessionFile file) {
+    final api = context.read<CoquiApiService>();
+    if (api.apiKey.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Direct file open is only available when the server does not require an API key.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    launchUrlString(
+        api.getSessionFileUrl(widget.sessionId, file.id).toString());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 8),
+              child: BottomSheetHeader(title: 'Session Files'),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(_error!, textAlign: TextAlign.center),
+                          ),
+                        )
+                      : _files.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child:
+                                    Text('No uploaded files for this session.'),
+                              ),
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _files.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final file = _files[index];
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: theme.dividerColor),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        file.isImage
+                                            ? Icons.image_outlined
+                                            : Icons.description_outlined,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              file.originalName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.titleSmall,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${file.mimeType} · ${file.sizeLabel}',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Open',
+                                        icon: const Icon(Icons.open_in_new),
+                                        onPressed: () => _openFile(file),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Delete',
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteFile(file),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ChildRunsSheet extends StatefulWidget {
+  final String sessionId;
+
+  const _ChildRunsSheet({required this.sessionId});
+
+  @override
+  State<_ChildRunsSheet> createState() => _ChildRunsSheetState();
+}
+
+class _ChildRunsSheetState extends State<_ChildRunsSheet> {
+  bool _isLoading = true;
+  List<CoquiChildRun> _runs = const [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<CoquiApiService>();
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final runs = await api.listChildRuns(widget.sessionId);
+      if (!mounted) return;
+      setState(() {
+        _runs = runs;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 8),
+              child: BottomSheetHeader(title: 'Child Runs'),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(_error!, textAlign: TextAlign.center),
+                          ),
+                        )
+                      : _runs.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Text(
+                                    'No child runs recorded for this session.'),
+                              ),
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _runs.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final run = _runs[index];
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: theme.dividerColor),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${run.agentRole} · iteration ${run.parentIteration}',
+                                        style: theme.textTheme.titleSmall,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        run.model,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        run.promptPreview,
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                      if (run.result.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          run.resultPreview,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Dropdown for quick server switching directly in the app bar.
 class _ServerDropdown extends StatelessWidget {
   final InstanceProvider instanceProvider;
@@ -184,28 +777,25 @@ class _ServerDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final instances = instanceProvider.instances;
     final active = instanceProvider.activeInstance;
+    final theme = Theme.of(context);
 
     if (instances.isEmpty) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.dns_outlined,
-            size: 16,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return _HeaderInfoChip(
+        avatar: Icon(
+          Icons.dns_outlined,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        label: Text(
+          'No Server',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(width: 4),
-          Text(
-            'No Server',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
+        ),
       );
     }
 
-    Widget statusDot = Container(
+    final statusDot = Container(
       width: 8,
       height: 8,
       decoration: BoxDecoration(
@@ -215,25 +805,10 @@ class _ServerDropdown extends StatelessWidget {
     );
 
     if (instances.length == 1) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          statusDot,
-          const SizedBox(width: 6),
-          Icon(
-            Icons.dns,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              active?.name ?? instances.first.name,
-              style: Theme.of(context).textTheme.labelMedium,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+      return _ServerPill(
+        statusDot: statusDot,
+        label: active?.name ?? instances.first.name,
+        iconColor: theme.colorScheme.primary,
       );
     }
 
@@ -276,25 +851,97 @@ class _ServerDropdown extends StatelessWidget {
           ),
         );
       }).toList(),
-      child: Row(
+      child: _ServerPill(
+        statusDot: statusDot,
+        label: active?.name ?? 'Select Server',
+        iconColor: theme.colorScheme.primary,
+        trailing: const Icon(Icons.arrow_drop_down, size: 18),
+      ),
+    );
+  }
+}
+
+class _HeaderActionChip extends StatelessWidget {
+  final Widget label;
+  final Widget? avatar;
+  final VoidCallback? onPressed;
+
+  const _HeaderActionChip({
+    required this.label,
+    this.avatar,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: avatar,
+      label: label,
+      onPressed: onPressed,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _HeaderInfoChip extends StatelessWidget {
+  final Widget label;
+  final Widget? avatar;
+
+  const _HeaderInfoChip({
+    required this.label,
+    this.avatar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: avatar,
+      label: label,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _ServerPill extends StatelessWidget {
+  final Widget statusDot;
+  final String label;
+  final Color iconColor;
+  final Widget? trailing;
+
+  const _ServerPill({
+    required this.statusDot,
+    required this.label,
+    required this.iconColor,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeaderInfoChip(
+      avatar: statusDot,
+      label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          statusDot,
+          Icon(Icons.dns, size: 16, color: iconColor),
           const SizedBox(width: 6),
-          Icon(
-            Icons.dns,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
             child: Text(
-              active?.name ?? 'Select Server',
-              style: Theme.of(context).textTheme.labelMedium,
+              label,
               overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
-          const Icon(Icons.arrow_drop_down, size: 18),
+          if (trailing != null) ...[
+            const SizedBox(width: 2),
+            trailing!,
+          ],
         ],
       ),
     );

@@ -12,10 +12,15 @@ class ChatSelectRoleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+      ),
       icon: const Icon(Icons.auto_awesome_outlined),
-      label: Text(currentRoleName ?? 'Select a role to start'),
-      iconAlignment: IconAlignment.end,
+      label: Text(currentRoleName ?? 'Select a role'),
       onPressed: onPressed,
     );
   }

@@ -20,6 +20,10 @@ class ServerControls extends StatelessWidget {
             if (info.status == LocalServerStatus.notInstalled)
               _buildInstallSection(context, provider),
             if (info.isInstalled) ...[
+              if (info.instanceConfigMismatch) ...[
+                _buildSyncWarning(context, provider),
+                const SizedBox(height: 16),
+              ],
               _buildProcessSection(context, provider),
               if (info.status == LocalServerStatus.running) ...[
                 const SizedBox(height: 16),
@@ -208,6 +212,46 @@ class ServerControls extends StatelessWidget {
     );
   }
 
+  Widget _buildSyncWarning(
+    BuildContext context,
+    LocalServerProvider provider,
+  ) {
+    return Card(
+      color: Theme.of(context).colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Local instance out of sync',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'The API key stored in ~/.coqui/.workspace/.env does not match the app\'s local server configuration. '
+              'Sync the local instance before starting or updating the server.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: provider.info.isBusy
+                  ? null
+                  : () => provider.syncInstanceFromConfig(),
+              icon: const Icon(Icons.sync),
+              label: const Text('Sync Local Instance'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildErrorCard(BuildContext context, String message) {
     return Card(
       color: Theme.of(context).colorScheme.errorContainer,
@@ -248,7 +292,7 @@ class ServerControls extends StatelessWidget {
       children: [
         Text(
           'If the controls above don\'t work, you can start the server '
-          'manually from a terminal:',
+          'manually from a terminal on this machine:',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

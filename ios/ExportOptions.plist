@@ -12,7 +12,7 @@
 	<string>manual</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>ai.coquibot.app</key>
+		<key>bot.coqui</key>
 		<string>Coqui iOS Distribution</string>
 	</dict>
 </dict>

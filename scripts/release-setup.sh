@@ -21,7 +21,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Local config directory — outside repo, survives clones
 CONFIG_DIR="${HOME}/.coqui-release"
 CONFIG_FILE="${CONFIG_DIR}/config"
-BUNDLE_ID="ai.coquibot.app"
+BUNDLE_ID="bot.coqui"
 
 # ── Colors ────────────────────────────────────────────────────────────
 
@@ -96,6 +96,103 @@ config_set() {
     chmod 600 "$CONFIG_FILE"
 }
 
+store_identity_config() {
+    local identity="$1"
+
+    if echo "$identity" | grep -qi "Developer ID Application"; then
+        config_set "MACOS_SIGNING_IDENTITY" "$identity"
+    else
+        config_set "APPLE_SIGNING_IDENTITY" "$identity"
+    fi
+}
+
+p12_prefix_for_identity() {
+    local identity="$1"
+
+    if echo "$identity" | grep -qi "Developer ID Application"; then
+        echo "MACOS_CERTIFICATE"
+    else
+        echo "APPLE_CERTIFICATE"
+    fi
+}
+
+p12_default_path_for_identity() {
+    local identity="$1"
+
+    if echo "$identity" | grep -qi "Developer ID Application"; then
+        echo "${CONFIG_DIR}/macos-developer-id.p12"
+    else
+        echo "${CONFIG_DIR}/apple-distribution.p12"
+    fi
+}
+
+p12_matches_identity() {
+    local p12_path="$1"
+    local p12_password="$2"
+    local identity="$3"
+    local subject
+
+    subject=$(openssl pkcs12 -legacy -in "$p12_path" -clcerts -nokeys -passin "pass:${p12_password}" 2>/dev/null | openssl x509 -noout -subject 2>/dev/null || true)
+    [[ -n "$subject" && "$subject" == *"$identity"* ]]
+}
+
+configured_p12_matches_identity() {
+    local prefix="$1"
+    local identity="$2"
+    local p12_path
+    local p12_password
+
+    p12_path=$(config_get "${prefix}_P12_PATH")
+    p12_password=$(config_get "${prefix}_PASSWORD")
+
+    if [[ -z "$p12_path" || -z "$p12_password" || -z "$identity" || ! -f "$p12_path" ]]; then
+        echo false
+        return 0
+    fi
+
+    if p12_matches_identity "$p12_path" "$p12_password" "$identity"; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+profile_is_valid_ios_distribution() {
+    local profile_path="$1"
+
+    if [[ -z "$profile_path" || ! -f "$profile_path" ]]; then
+        return 1
+    fi
+
+    local profile_plist
+    profile_plist=$(mktemp "${TMPDIR:-/tmp}/coqui-ios-profile.XXXXXX.plist")
+    if ! security cms -D -i "$profile_path" > "$profile_plist" 2>/dev/null; then
+        rm -f "$profile_plist"
+        return 1
+    fi
+
+    local app_identifier
+    app_identifier=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$profile_plist" 2>/dev/null || true)
+    local get_task_allow
+    get_task_allow=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" "$profile_plist" 2>/dev/null || true)
+    local first_device
+    first_device=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices:0" "$profile_plist" 2>/dev/null || true)
+    rm -f "$profile_plist"
+
+    [[ "$app_identifier" == *."${BUNDLE_ID}" && "$get_task_allow" == "false" && -z "$first_device" ]]
+}
+
+configured_valid_ios_profile() {
+    local profile_path
+    profile_path=$(config_get "IOS_PROVISIONING_PROFILE_PATH")
+
+    if profile_is_valid_ios_distribution "$profile_path"; then
+        echo true
+    else
+        echo false
+    fi
+}
+
 check_command() {
     local cmd="$1"
     local install_msg="$2"
@@ -107,6 +204,47 @@ check_command() {
         return 1
     fi
     return 0
+}
+
+detect_github_repo() {
+    if [[ -n "${GITHUB_REPO:-}" ]]; then
+        echo "$GITHUB_REPO"
+        return 0
+    fi
+
+    local configured_repo
+    configured_repo=$(config_get "GITHUB_REPO")
+    if [[ -n "$configured_repo" ]]; then
+        echo "$configured_repo"
+        return 0
+    fi
+
+    local remote_url
+    remote_url=$(cd "$PROJECT_ROOT" && git remote get-url origin 2>/dev/null || true)
+
+    if [[ -n "$remote_url" ]]; then
+        case "$remote_url" in
+            git@github.com:*/*.git)
+                echo "${remote_url#git@github.com:}" | sed 's/\.git$//'
+                return 0
+                ;;
+            git@github.com:*/*)
+                echo "${remote_url#git@github.com:}"
+                return 0
+                ;;
+            https://github.com/*/*.git)
+                echo "${remote_url#https://github.com/}" | sed 's/\.git$//'
+                return 0
+                ;;
+            https://github.com/*/*)
+                echo "${remote_url#https://github.com/}"
+                return 0
+                ;;
+        esac
+    fi
+
+    GH_PAGER=cat GH_NO_UPDATE_NOTIFIER=1 \
+        gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true
 }
 
 # ── Prerequisites ─────────────────────────────────────────────────────
@@ -202,7 +340,7 @@ setup_apple() {
             local idx=$(( cert_choice - 1 ))
             if [[ $idx -ge 0 && $idx -lt ${#identities[@]} ]]; then
                 local selected_identity="${identities[$idx]}"
-                config_set "APPLE_SIGNING_IDENTITY" "$selected_identity"
+                store_identity_config "$selected_identity"
                 success "Selected: $selected_identity"
             else
                 fail "Invalid selection."
@@ -306,7 +444,7 @@ setup_apple() {
     fi
 
     if [[ -n "$new_identity" ]]; then
-        config_set "APPLE_SIGNING_IDENTITY" "$new_identity"
+        store_identity_config "$new_identity"
         success "Certificate imported: $new_identity"
         _extract_team_id "$new_identity"
         _export_p12 "$new_identity"
@@ -342,7 +480,10 @@ _extract_team_id() {
 
 _export_p12() {
     local identity="$1"
-    local p12_path="${CONFIG_DIR}/apple-distribution.p12"
+    local prefix
+    prefix=$(p12_prefix_for_identity "$identity")
+    local p12_path
+    p12_path=$(p12_default_path_for_identity "$identity")
 
     echo ""
     info "Exporting certificate as .p12 for CI use..."
@@ -354,36 +495,49 @@ _export_p12() {
     if confirm "Export .p12 now? (macOS will show a Keychain prompt)"; then
         read_secret "Choose a password for the .p12 export" p12_export_password
 
-        # Try to export via security command
+        # Try to export via security command first. If the exported file does not
+        # actually contain the selected identity, fall back to a manual export.
         local hash
         hash=$(security find-identity -v -p codesigning 2>/dev/null | grep "$identity" | head -1 | awk '{print $2}' || true)
 
         if [[ -n "$hash" ]]; then
-            # Export using security cms
             security export -k ~/Library/Keychains/login.keychain-db \
                 -t identities -f pkcs12 \
                 -P "$p12_export_password" \
-                -o "$p12_path" 2>/dev/null || {
-                    warn "Automatic export failed. Please export manually:"
-                    echo ""
-                    echo "  1. Open Keychain Access (Applications → Utilities → Keychain Access)"
-                    echo "  2. Select 'My Certificates' in the sidebar"
-                    echo "  3. Right-click your Apple Distribution certificate → Export"
-                    echo "  4. Save as .p12 to: $p12_path"
-                    echo "  5. Re-run: scripts/release-setup.sh apple"
-                    echo ""
-                    read_input "Or enter path to manually exported .p12" p12_path "$p12_path"
-                }
+                -o "$p12_path" 2>/dev/null || true
+        fi
+
+        if [[ -f "$p12_path" ]] && ! p12_matches_identity "$p12_path" "$p12_export_password" "$identity"; then
+            warn "The exported .p12 did not contain the selected identity '$identity'."
+            rm -f "$p12_path"
+        fi
+
+        if [[ ! -f "$p12_path" ]]; then
+            warn "Please export this certificate manually from Keychain Access:"
+            echo ""
+            echo "  1. Open Keychain Access (Applications → Utilities → Keychain Access)"
+            echo "  2. Select 'My Certificates' in the sidebar"
+            echo "  3. Right-click '${identity}' → Export"
+            echo "  4. Save it as: $p12_path"
+            echo "  5. Use the same password you just entered"
+            echo ""
+            read_input "Enter path to the manually exported .p12" p12_path "$p12_path"
+        fi
+
+        if [[ -f "$p12_path" ]] && ! p12_matches_identity "$p12_path" "$p12_export_password" "$identity"; then
+            fail "The .p12 at '$p12_path' does not match '$identity'."
+            echo "  Export the exact certificate shown above and re-run: scripts/release-setup.sh apple"
+            return 1
         fi
 
         if [[ -f "$p12_path" ]]; then
-            config_set "APPLE_CERTIFICATE_P12_PATH" "$p12_path"
-            config_set "APPLE_CERTIFICATE_PASSWORD" "$p12_export_password"
+            config_set "${prefix}_P12_PATH" "$p12_path"
+            config_set "${prefix}_PASSWORD" "$p12_export_password"
 
             # Base64 encode for GitHub secrets
             local p12_b64
             p12_b64=$(base64 -i "$p12_path")
-            config_set "APPLE_CERTIFICATE_P12_B64" "$p12_b64"
+            config_set "${prefix}_P12_B64" "$p12_b64"
 
             chmod 600 "$p12_path"
             success "Certificate exported and base64-encoded for CI"
@@ -450,9 +604,8 @@ setup_profiles() {
     echo "Provisioning profiles link your app's bundle ID to your signing certificate"
     echo "and specify which devices can run the app."
     echo ""
-    echo "You need two profiles:"
+    echo "You need one profile here:"
     echo "  1. iOS Distribution — for App Store / TestFlight"
-    echo "  2. macOS Developer ID — for direct distribution (signed + notarized DMG)"
     echo ""
 
     # Check if App ID is registered
@@ -506,6 +659,16 @@ setup_profiles() {
     read_input "Path to downloaded iOS provisioning profile (.mobileprovision)" ios_profile_path "$HOME/Downloads/Coqui_iOS_Distribution.mobileprovision"
 
     if [[ -f "$ios_profile_path" ]]; then
+        if ! profile_is_valid_ios_distribution "$ios_profile_path"; then
+            fail "The selected profile is not an App Store Connect distribution profile for ${BUNDLE_ID}."
+            echo ""
+            echo "  Expected: no provisioned devices, get-task-allow=false, and application identifier for ${BUNDLE_ID}."
+            echo "  The profile you selected appears to be a device/development profile."
+            echo ""
+            echo "  Download the App Store Connect distribution profile and re-run: scripts/release-setup.sh profiles"
+            return 1
+        fi
+
         # Install to standard location
         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
         cp "$ios_profile_path" ~/Library/MobileDevice/Provisioning\ Profiles/
@@ -523,51 +686,9 @@ setup_profiles() {
         echo "  Download it from the Apple Developer portal and re-run this command."
     fi
 
-    # macOS Developer ID Profile (for direct distribution outside Mac App Store)
     echo ""
-    echo -e "${BOLD}Step 3: Create macOS Developer ID Provisioning Profile${NC}"
-    echo ""
-    echo "  Since we're distributing macOS builds as signed DMGs (not via the Mac App Store),"
-    echo "  you need a Developer ID provisioning profile."
-    echo ""
-    echo "  1. Go to: https://developer.apple.com/account/resources/profiles/add"
-    echo "  2. Select 'Developer ID' under Distribution"
-    echo "  3. Select your Developer ID Application certificate"
-    echo "     (If you don't have one, create it at: https://developer.apple.com/account/resources/certificates/add"
-    echo "      → select 'Developer ID Application')"
-    echo "  4. Select App ID: ${BUNDLE_ID}"
-    echo "  5. Name it: 'Coqui macOS Developer ID'"
-    echo "  6. Click 'Generate' then 'Download'"
-    echo ""
-    echo "  Note: If you only have an Apple Distribution certificate (not Developer ID),"
-    echo "  the macOS build will use that certificate for App Store distribution."
-    echo "  For direct DMG downloads, a Developer ID certificate is recommended."
-    echo ""
-
-    if command -v open &>/dev/null; then
-        if confirm "Open the provisioning profiles page?"; then
-            open "https://developer.apple.com/account/resources/profiles/add"
-        fi
-    fi
-
-    echo ""
-    read_input "Path to downloaded macOS provisioning profile (.provisionprofile)" macos_profile_path "$HOME/Downloads/Coqui_macOS_Developer_ID.provisionprofile"
-
-    if [[ -f "$macos_profile_path" ]]; then
-        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
-        cp "$macos_profile_path" ~/Library/MobileDevice/Provisioning\ Profiles/
-        cp "$macos_profile_path" "${CONFIG_DIR}/macos_developer_id.provisionprofile"
-
-        local macos_b64
-        macos_b64=$(base64 -i "$macos_profile_path")
-        config_set "MACOS_PROVISIONING_PROFILE_B64" "$macos_b64"
-        config_set "MACOS_PROVISIONING_PROFILE_PATH" "$macos_profile_path"
-
-        success "macOS provisioning profile installed and encoded for CI"
-    else
-        warn "macOS provisioning profile not found at: $macos_profile_path"
-        echo "  Download it and re-run: scripts/release-setup.sh profiles"
-    fi
+    info "macOS direct distribution uses a Developer ID Application certificate plus notarization."
+    info "No macOS provisioning profile is required for the signed DMG path in this repo."
 }
 
 # ── Android Keystore ─────────────────────────────────────────────────
@@ -706,7 +827,7 @@ setup_github() {
 
     # Detect repo
     local repo
-    repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+    repo=$(detect_github_repo)
 
     if [[ -z "$repo" ]]; then
         warn "Could not detect GitHub repo from current directory."
@@ -732,24 +853,39 @@ setup_github() {
         if [[ -n "$value" ]]; then
             if echo "$value" | gh secret set "$name" -R "$repo" 2>/dev/null; then
                 success "$name"
-                ((secrets_set++))
+                ((secrets_set += 1))
             else
                 fail "$name — failed to set"
-                ((secrets_failed++))
+                ((secrets_failed += 1))
             fi
         else
             warn "$name — no value found in config (key: $config_key)"
             echo -e "  ${DIM}Run the relevant setup step first, then re-run: scripts/release-setup.sh github${NC}"
-            ((secrets_failed++))
+            ((secrets_failed += 1))
         fi
     }
 
     echo "── Apple Signing ──"
-    _push_secret "APPLE_CERTIFICATE_P12" "APPLE_CERTIFICATE_P12_B64"
-    _push_secret "APPLE_CERTIFICATE_PASSWORD" "APPLE_CERTIFICATE_PASSWORD"
+    if [[ "$(configured_p12_matches_identity APPLE_CERTIFICATE "$(config_get APPLE_SIGNING_IDENTITY)")" == "true" ]]; then
+        _push_secret "APPLE_CERTIFICATE_P12" "APPLE_CERTIFICATE_P12_B64"
+        _push_secret "APPLE_CERTIFICATE_PASSWORD" "APPLE_CERTIFICATE_PASSWORD"
+    else
+        warn "APPLE_CERTIFICATE_* — configured iOS .p12 does not match $(config_get APPLE_SIGNING_IDENTITY)"
+        ((secrets_failed += 2))
+    fi
     _push_secret "APPLE_TEAM_ID" "APPLE_TEAM_ID"
     _push_secret "APPLE_ID" "APPLE_ID"
     _push_secret "APPLE_APP_SPECIFIC_PASSWORD" "APPLE_APP_SPECIFIC_PASSWORD"
+
+    echo ""
+    echo "── macOS Signing ──"
+    if [[ "$(configured_p12_matches_identity MACOS_CERTIFICATE "$(config_get MACOS_SIGNING_IDENTITY)")" == "true" ]]; then
+        _push_secret "MACOS_CERTIFICATE_P12" "MACOS_CERTIFICATE_P12_B64"
+        _push_secret "MACOS_CERTIFICATE_PASSWORD" "MACOS_CERTIFICATE_PASSWORD"
+    else
+        warn "MACOS_CERTIFICATE_* — configured macOS .p12 does not match $(config_get MACOS_SIGNING_IDENTITY)"
+        ((secrets_failed += 2))
+    fi
 
     # Generate a random keychain password for CI
     local kc_pass
@@ -759,8 +895,12 @@ setup_github() {
 
     echo ""
     echo "── Provisioning Profiles ──"
-    _push_secret "IOS_PROVISIONING_PROFILE" "IOS_PROVISIONING_PROFILE_B64"
-    _push_secret "MACOS_PROVISIONING_PROFILE" "MACOS_PROVISIONING_PROFILE_B64"
+    if [[ "$(configured_valid_ios_profile)" == "true" ]]; then
+        _push_secret "IOS_PROVISIONING_PROFILE" "IOS_PROVISIONING_PROFILE_B64"
+    else
+        warn "IOS_PROVISIONING_PROFILE — configured profile is not a valid App Store Connect distribution profile"
+        ((secrets_failed += 1))
+    fi
 
     echo ""
     echo "── Android Signing ──"
@@ -787,7 +927,7 @@ setup_github() {
 setup_vercel() {
     step "Vercel Deployment Setup"
 
-    echo "Vercel deploys the web WASM build to app.coquibot.ai."
+    echo "Vercel deploys the web WASM build to coqui.bot."
     echo "You need a Vercel account and a project linked to this repo."
     echo ""
 
@@ -797,7 +937,7 @@ setup_vercel() {
     fi
 
     local repo
-    repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+    repo=$(detect_github_repo)
 
     echo -e "${BOLD}Step 1: Get your Vercel token${NC}"
     echo ""
@@ -866,10 +1006,10 @@ verify() {
     _check() {
         local label="$1"
         local ok="$2"
-        ((total++))
+        ((total += 1))
         if [[ "$ok" == "true" ]]; then
             success "$label"
-            ((passed++))
+            ((passed += 1))
         else
             fail "$label"
         fi
@@ -905,12 +1045,17 @@ verify() {
 
     _check "Config directory exists" "$([[ -d "$CONFIG_DIR" ]] && echo true || echo false)"
     _check "Apple signing identity set" "$([[ -n "$(config_get APPLE_SIGNING_IDENTITY)" ]] && echo true || echo false)"
+    local has_macos_identity="false"
+    if [[ -n "$(config_get MACOS_SIGNING_IDENTITY)" ]] || security find-identity -v -p codesigning 2>/dev/null | grep -qi 'Developer ID Application'; then
+        has_macos_identity="true"
+    fi
+    _check "macOS signing identity available" "$has_macos_identity"
     _check "Apple Team ID set" "$([[ -n "$(config_get APPLE_TEAM_ID)" ]] && echo true || echo false)"
     _check "Apple ID (email) set" "$([[ -n "$(config_get APPLE_ID)" ]] && echo true || echo false)"
     _check "Apple app-specific password set" "$([[ -n "$(config_get APPLE_APP_SPECIFIC_PASSWORD)" ]] && echo true || echo false)"
-    _check "Certificate .p12 exported" "$([[ -n "$(config_get APPLE_CERTIFICATE_P12_B64)" ]] && echo true || echo false)"
-    _check "iOS provisioning profile" "$([[ -n "$(config_get IOS_PROVISIONING_PROFILE_B64)" ]] && echo true || echo false)"
-    _check "macOS provisioning profile" "$([[ -n "$(config_get MACOS_PROVISIONING_PROFILE_B64)" ]] && echo true || echo false)"
+    _check "iOS certificate .p12 exported" "$(configured_p12_matches_identity APPLE_CERTIFICATE "$(config_get APPLE_SIGNING_IDENTITY)")"
+    _check "macOS certificate .p12 exported" "$(configured_p12_matches_identity MACOS_CERTIFICATE "$(config_get MACOS_SIGNING_IDENTITY)")"
+    _check "iOS provisioning profile" "$(configured_valid_ios_profile)"
     _check "Android keystore exists" "$([[ -f "$(config_get ANDROID_KEYSTORE_PATH 2>/dev/null || echo /nonexistent)" ]] && echo true || echo false)"
     _check "Android key.properties exists" "$([[ -f "${PROJECT_ROOT}/android/key.properties" ]] && echo true || echo false)"
 
@@ -920,32 +1065,27 @@ verify() {
 
     if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
         local repo
-        repo=$(cd "$PROJECT_ROOT" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || true)
+        repo=$(detect_github_repo)
         if [[ -n "$repo" ]]; then
             local secret_list
             secret_list=$(gh secret list -R "$repo" 2>/dev/null || true)
 
-            local required_secrets=(
-                "APPLE_CERTIFICATE_P12"
-                "APPLE_CERTIFICATE_PASSWORD"
-                "APPLE_TEAM_ID"
-                "APPLE_ID"
-                "APPLE_APP_SPECIFIC_PASSWORD"
-                "KEYCHAIN_PASSWORD"
-                "IOS_PROVISIONING_PROFILE"
-                "MACOS_PROVISIONING_PROFILE"
-                "ANDROID_KEYSTORE_BASE64"
-                "ANDROID_KEYSTORE_PASSWORD"
-                "ANDROID_KEY_ALIAS"
-                "ANDROID_KEY_PASSWORD"
-                "VERCEL_TOKEN"
-                "VERCEL_ORG_ID"
-                "VERCEL_PROJECT_ID"
-            )
-
-            for secret in "${required_secrets[@]}"; do
-                _check "GitHub: $secret" "$(echo "$secret_list" | grep -q "^${secret}" && echo true || echo false)"
-            done
+            _check "GitHub: APPLE_CERTIFICATE_P12" "$(echo "$secret_list" | grep -q '^APPLE_CERTIFICATE_P12' && [[ "$(configured_p12_matches_identity APPLE_CERTIFICATE "$(config_get APPLE_SIGNING_IDENTITY)")" == "true" ]] && echo true || echo false)"
+            _check "GitHub: APPLE_CERTIFICATE_PASSWORD" "$(echo "$secret_list" | grep -q '^APPLE_CERTIFICATE_PASSWORD' && [[ "$(configured_p12_matches_identity APPLE_CERTIFICATE "$(config_get APPLE_SIGNING_IDENTITY)")" == "true" ]] && echo true || echo false)"
+            _check "GitHub: MACOS_CERTIFICATE_P12" "$(echo "$secret_list" | grep -q '^MACOS_CERTIFICATE_P12' && [[ "$(configured_p12_matches_identity MACOS_CERTIFICATE "$(config_get MACOS_SIGNING_IDENTITY)")" == "true" ]] && echo true || echo false)"
+            _check "GitHub: MACOS_CERTIFICATE_PASSWORD" "$(echo "$secret_list" | grep -q '^MACOS_CERTIFICATE_PASSWORD' && [[ "$(configured_p12_matches_identity MACOS_CERTIFICATE "$(config_get MACOS_SIGNING_IDENTITY)")" == "true" ]] && echo true || echo false)"
+            _check "GitHub: APPLE_TEAM_ID" "$(echo "$secret_list" | grep -q '^APPLE_TEAM_ID' && echo true || echo false)"
+            _check "GitHub: APPLE_ID" "$(echo "$secret_list" | grep -q '^APPLE_ID' && echo true || echo false)"
+            _check "GitHub: APPLE_APP_SPECIFIC_PASSWORD" "$(echo "$secret_list" | grep -q '^APPLE_APP_SPECIFIC_PASSWORD' && echo true || echo false)"
+            _check "GitHub: KEYCHAIN_PASSWORD" "$(echo "$secret_list" | grep -q '^KEYCHAIN_PASSWORD' && echo true || echo false)"
+            _check "GitHub: IOS_PROVISIONING_PROFILE" "$(echo "$secret_list" | grep -q '^IOS_PROVISIONING_PROFILE' && [[ "$(configured_valid_ios_profile)" == "true" ]] && echo true || echo false)"
+            _check "GitHub: ANDROID_KEYSTORE_BASE64" "$(echo "$secret_list" | grep -q '^ANDROID_KEYSTORE_BASE64' && echo true || echo false)"
+            _check "GitHub: ANDROID_KEYSTORE_PASSWORD" "$(echo "$secret_list" | grep -q '^ANDROID_KEYSTORE_PASSWORD' && echo true || echo false)"
+            _check "GitHub: ANDROID_KEY_ALIAS" "$(echo "$secret_list" | grep -q '^ANDROID_KEY_ALIAS' && echo true || echo false)"
+            _check "GitHub: ANDROID_KEY_PASSWORD" "$(echo "$secret_list" | grep -q '^ANDROID_KEY_PASSWORD' && echo true || echo false)"
+            _check "GitHub: VERCEL_TOKEN" "$(echo "$secret_list" | grep -q '^VERCEL_TOKEN' && echo true || echo false)"
+            _check "GitHub: VERCEL_ORG_ID" "$(echo "$secret_list" | grep -q '^VERCEL_ORG_ID' && echo true || echo false)"
+            _check "GitHub: VERCEL_PROJECT_ID" "$(echo "$secret_list" | grep -q '^VERCEL_PROJECT_ID' && echo true || echo false)"
         else
             warn "Could not detect GitHub repo — skipping secret verification"
         fi

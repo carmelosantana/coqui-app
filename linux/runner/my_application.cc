@@ -10,9 +10,53 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlMethodChannel* app_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static gboolean restart_application_idle(gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+
+  g_autoptr(GError) error = nullptr;
+  g_autofree gchar* executable_path = g_file_read_link("/proc/self/exe", &error);
+  if (error == nullptr && executable_path != nullptr) {
+    g_autofree gchar* quoted_path = g_shell_quote(executable_path);
+    g_spawn_command_line_async(quoted_path, nullptr);
+  }
+
+  g_application_quit(G_APPLICATION(self));
+  return G_SOURCE_REMOVE;
+}
+
+static void app_method_call_cb(FlMethodChannel* channel,
+                               FlMethodCall* method_call,
+                               gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  const gchar* method = fl_method_call_get_name(method_call);
+
+  if (strcmp(method, "isRestartSupported") == 0) {
+    g_autoptr(FlValue) result = fl_value_new_bool(TRUE);
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(result));
+    fl_method_call_respond(method_call, response, nullptr);
+    return;
+  }
+
+  if (strcmp(method, "restartApplication") == 0) {
+    g_autoptr(FlValue) result = fl_value_new_bool(TRUE);
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(result));
+    fl_method_call_respond(method_call, response, nullptr);
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, restart_application_idle,
+                    g_object_ref(self), g_object_unref);
+    return;
+  }
+
+  g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+      fl_method_not_implemented_response_new());
+  fl_method_call_respond(method_call, response, nullptr);
+}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -59,6 +103,15 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->app_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "coqui/app",
+      FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->app_channel, app_method_call_cb, g_object_ref(self),
+      g_object_unref);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -103,6 +156,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->app_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 
@@ -114,7 +168,7 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
-static void my_application_init(MyApplication* self) {}
+static void my_application_init(MyApplication* self) { self->app_channel = nullptr; }
 
 MyApplication* my_application_new() {
   // Set the program name to the application ID, which helps various systems

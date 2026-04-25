@@ -84,6 +84,7 @@ class _StatusChip extends StatelessWidget {
       LocalServerStatus.updating => ('Updating…', Colors.orange),
       LocalServerStatus.starting => ('Starting…', Colors.orange),
       LocalServerStatus.stopping => ('Stopping…', Colors.orange),
+      LocalServerStatus.uninstalling => ('Uninstalling…', Colors.orange),
     };
 
     return Row(

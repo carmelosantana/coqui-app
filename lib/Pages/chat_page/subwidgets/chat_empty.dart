@@ -22,6 +22,7 @@ class ChatEmpty extends StatelessWidget {
                 fit: BoxFit.cover,
               ),
             ),
+            const SizedBox(height: 24),
             child,
           ],
         ),

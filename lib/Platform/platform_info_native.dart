@@ -17,4 +17,7 @@ class PlatformInfo {
 
   /// True on macOS, Linux, or Windows.
   static bool get isDesktop => isMacOS || isLinux || isWindows;
+
+  /// True when the app can install and manage a local Coqui server directly.
+  static bool get isManagedLocalServerSupported => isMacOS || isLinux;
 }

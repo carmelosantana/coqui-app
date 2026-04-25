@@ -4,6 +4,8 @@ Cross-platform Flutter client for the [Coqui](https://github.com/AgentCoqui/coqu
 
 Connect to a Coqui API server, manage sessions, and chat with your agent in real-time via SSE streaming. Supports multiple server instances with role-based session creation.
 
+On macOS and Linux, the desktop app can install and manage a local Coqui server for you. On Windows, local hosting is manual: run Coqui through WSL2 or Docker, then connect to it from the app as a normal server instance.
+
 ## Platforms
 
 - Linux
@@ -24,7 +26,7 @@ Download the latest release from [GitHub Releases](https://github.com/AgentCoqui
 | Windows | `Coqui-*-windows-x64.zip` | Extract and run `coqui.exe` |
 | Linux | `Coqui-*-linux-x64.tar.gz` | Extract and run `./coqui` |
 | iOS | `Coqui-*-ios.ipa` | Install via TestFlight |
-| Web | [app.coquibot.ai](https://app.coquibot.ai) | No install needed |
+| Web | [coqui.bot](https://coqui.bot) | No install needed |
 
 All release artifacts include SHA-256 checksums in `SHA256SUMS.txt`.
 
@@ -38,8 +40,13 @@ flutter pub get
 flutter run
 ```
 
-3. Open **Settings**, add your Coqui server URL and API key, and test the connection.
-4. Start a new chat by selecting a role.
+1. Open **Settings**, add your Coqui server URL and API key, and test the connection.
+2. Start a new chat by selecting a role.
+
+### Desktop Local Server
+
+- macOS and Linux: use the **Local Server** page to install Coqui into `~/.coqui`, manage the local API process, and sync the app with `~/.coqui/.workspace/.env`.
+- Windows: use WSL2 or Docker to run Coqui manually, then add that server in **Settings**.
 
 ## Building
 
@@ -161,7 +168,7 @@ Install APK to emulator/device:
 Launch app from terminal:
 
 ```bash
-~/Library/Android/sdk/platform-tools/adb shell monkey -p ai.coquibot.app.debug -c android.intent.category.LAUNCHER 1
+~/Library/Android/sdk/platform-tools/adb shell monkey -p bot.coqui.debug -c android.intent.category.LAUNCHER 1
 ```
 
 Tip: you can also drag `build/app/outputs/flutter-apk/app-debug.apk` onto a running emulator window.
@@ -243,7 +250,7 @@ Pushing a `v*` tag triggers the release pipeline (`.github/workflows/release.yml
 1. **Validate** — `flutter analyze` + `flutter test` (blocks all builds if failing)
 2. **Build** — Android APK, macOS DMG (signed + notarized), iOS IPA, Linux tar.gz, Windows zip, Web WASM — all in parallel
 3. **Release** — Creates a GitHub Release with all artifacts and SHA-256 checksums
-4. **Deploy** — Deploys the web build to Vercel (`app.coquibot.ai`)
+4. **Deploy** — Deploys the web build to Vercel (`coqui.bot`)
 
 See [RELEASE.md](RELEASE.md) for the full release checklist.
 

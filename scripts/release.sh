@@ -15,7 +15,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CONFIG_DIR="${HOME}/.coqui-release"
 CONFIG_FILE="${CONFIG_DIR}/config"
-BUNDLE_ID="ai.coquibot.app"
+BUNDLE_ID="bot.coqui"
 
 # ── Colors ────────────────────────────────────────────────────────────
 
@@ -47,6 +47,49 @@ config_get() {
     if [[ -f "$CONFIG_FILE" ]]; then
         grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2-
     fi
+}
+
+has_valid_ios_distribution_profile() {
+    local profile_path
+    profile_path=$(config_get "IOS_PROVISIONING_PROFILE_PATH")
+
+    if [[ -z "$profile_path" || ! -f "$profile_path" ]]; then
+        return 1
+    fi
+
+    local profile_plist
+    profile_plist=$(mktemp "${TMPDIR:-/tmp}/coqui-ios-profile.XXXXXX.plist")
+    if ! security cms -D -i "$profile_path" > "$profile_plist" 2>/dev/null; then
+        rm -f "$profile_plist"
+        return 1
+    fi
+
+    local app_identifier
+    app_identifier=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$profile_plist" 2>/dev/null || true)
+    local get_task_allow
+    get_task_allow=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" "$profile_plist" 2>/dev/null || true)
+    local first_device
+    first_device=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices:0" "$profile_plist" 2>/dev/null || true)
+    rm -f "$profile_plist"
+
+    [[ "$app_identifier" == *."${BUNDLE_ID}" && "$get_task_allow" == "false" && -z "$first_device" ]]
+}
+
+resolve_macos_signing_identity() {
+    local configured
+    configured=$(config_get "MACOS_SIGNING_IDENTITY")
+    if [[ -n "$configured" ]]; then
+        echo "$configured"
+        return 0
+    fi
+
+    configured=$(security find-identity -v -p codesigning 2>/dev/null | grep -i "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/' || true)
+    if [[ -n "$configured" ]]; then
+        echo "$configured"
+        return 0
+    fi
+
+    config_get "APPLE_SIGNING_IDENTITY"
 }
 
 # ── Version Helpers ───────────────────────────────────────────────────
@@ -137,24 +180,26 @@ cmd_status() {
     echo ""
     echo -e "  ${BOLD}Signing:${NC}"
 
-    local identity
-    identity=$(config_get "APPLE_SIGNING_IDENTITY")
-    if [[ -n "$identity" ]]; then
-        echo -e "    Apple cert:   ${GREEN}✓${NC} $identity"
+    local ios_identity
+    ios_identity=$(config_get "APPLE_SIGNING_IDENTITY")
+    if [[ -n "$ios_identity" ]]; then
+        echo -e "    iOS cert:     ${GREEN}✓${NC} $ios_identity"
     else
-        echo -e "    Apple cert:   ${RED}✗${NC} not configured"
+        echo -e "    iOS cert:     ${RED}✗${NC} not configured"
     fi
 
-    if [[ -n "$(config_get IOS_PROVISIONING_PROFILE_B64)" ]]; then
+    local macos_identity
+    macos_identity=$(resolve_macos_signing_identity)
+    if [[ -n "$macos_identity" ]]; then
+        echo -e "    macOS cert:   ${GREEN}✓${NC} $macos_identity"
+    else
+        echo -e "    macOS cert:   ${RED}✗${NC} not configured"
+    fi
+
+    if has_valid_ios_distribution_profile; then
         echo -e "    iOS profile:  ${GREEN}✓${NC} configured"
     else
         echo -e "    iOS profile:  ${RED}✗${NC} not configured"
-    fi
-
-    if [[ -n "$(config_get MACOS_PROVISIONING_PROFILE_B64)" ]]; then
-        echo -e "    macOS profile: ${GREEN}✓${NC} configured"
-    else
-        echo -e "    macOS profile: ${RED}✗${NC} not configured"
     fi
 
     if [[ -f "${PROJECT_ROOT}/android/key.properties" ]]; then
@@ -259,37 +304,58 @@ cmd_build() {
 _validate_signing() {
     local platform="$1"
 
-    local needs_apple=false
     local needs_android=false
 
     case "$platform" in
-        macos|ios)  needs_apple=true ;;
         android)    needs_android=true ;;
-        all)        needs_apple=true; needs_android=true ;;
+        all)        needs_android=true ;;
     esac
 
-    if [[ "$needs_apple" == "true" && "$(uname -s)" == "Darwin" ]]; then
-        local identity
-        identity=$(config_get "APPLE_SIGNING_IDENTITY")
-        if [[ -z "$identity" ]]; then
-            fail "No Apple signing identity configured."
-            echo ""
-            echo "  Run: scripts/release-setup.sh apple"
-            echo "  This will help you create or select a signing certificate."
-            echo ""
-            return 1
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        if [[ "$platform" == "ios" || "$platform" == "all" ]]; then
+            local ios_identity
+            ios_identity=$(config_get "APPLE_SIGNING_IDENTITY")
+            if [[ -z "$ios_identity" ]]; then
+                fail "No iOS signing identity configured."
+                echo ""
+                echo "  Run: scripts/release-setup.sh apple"
+                echo "  Select an Apple Distribution or Apple Development certificate for local iOS builds."
+                echo ""
+                return 1
+            fi
+
+            if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$ios_identity"; then
+                fail "iOS signing certificate '$ios_identity' not found in Keychain."
+                echo ""
+                echo "  The certificate may have expired or been removed."
+                echo "  Run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+            success "iOS signing identity: $ios_identity"
         fi
 
-        # Verify cert is still in Keychain
-        if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$identity"; then
-            fail "Apple signing certificate '$identity' not found in Keychain."
-            echo ""
-            echo "  The certificate may have expired or been removed."
-            echo "  Run: scripts/release-setup.sh apple"
-            echo ""
-            return 1
+        if [[ "$platform" == "macos" || "$platform" == "all" ]]; then
+            local macos_identity
+            macos_identity=$(resolve_macos_signing_identity)
+            if [[ -z "$macos_identity" ]]; then
+                fail "No macOS signing identity configured."
+                echo ""
+                echo "  Install or export a Developer ID Application certificate and re-run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+
+            if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$macos_identity"; then
+                fail "macOS signing certificate '$macos_identity' not found in Keychain."
+                echo ""
+                echo "  The certificate may have expired or been removed."
+                echo "  Run: scripts/release-setup.sh apple"
+                echo ""
+                return 1
+            fi
+            success "macOS signing identity: $macos_identity"
         fi
-        success "Apple signing identity: $identity"
     fi
 
     if [[ "$needs_android" == "true" ]]; then
@@ -344,7 +410,7 @@ _build_target() {
 _build_macos() {
     local version="$1"
     local identity
-    identity=$(config_get "APPLE_SIGNING_IDENTITY")
+    identity=$(resolve_macos_signing_identity)
 
     info "Building macOS release..."
     (cd "$PROJECT_ROOT" && flutter build macos --release)
@@ -374,15 +440,54 @@ _build_macos() {
 
 _build_ios() {
     local version="$1"
+    local export_plist="${PROJECT_ROOT}/ios/ExportOptions.plist"
+    local generated_export_plist=""
+    local team_id=""
+    local -a build_cmd=(flutter build ipa --release)
 
     info "Building iOS IPA..."
-    if [[ ! -f "${PROJECT_ROOT}/ios/ExportOptions.plist" ]]; then
-        fail "ios/ExportOptions.plist not found."
-        echo "  This file defines how the IPA is signed and packaged."
+
+    if [[ -f "$export_plist" ]] && has_valid_ios_distribution_profile; then
+        info "Using manual export options from ios/ExportOptions.plist"
+        build_cmd+=(--export-options-plist=ios/ExportOptions.plist)
+    else
+        team_id=$(config_get "APPLE_TEAM_ID")
+        if [[ -z "$team_id" ]]; then
+            fail "APPLE_TEAM_ID is not configured."
+            echo "  Run: scripts/release-setup.sh apple"
+            return 1
+        fi
+
+        generated_export_plist=$(mktemp "${TMPDIR:-/tmp}/coqui-ios-export.XXXXXX.plist")
+        cat > "$generated_export_plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>app-store</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <key>uploadBitcode</key>
+  <false/>
+  <key>uploadSymbols</key>
+  <true/>
+  <key>teamID</key>
+  <string>${team_id}</string>
+</dict>
+</plist>
+EOF
+
+        info "No local iOS provisioning profile configured; using automatic App Store export for team ${team_id}"
+        build_cmd+=(--export-options-plist="$generated_export_plist")
+    fi
+
+    if ! (cd "$PROJECT_ROOT" && "${build_cmd[@]}"); then
+        [[ -n "$generated_export_plist" ]] && rm -f "$generated_export_plist"
         return 1
     fi
 
-    (cd "$PROJECT_ROOT" && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist)
+    [[ -n "$generated_export_plist" ]] && rm -f "$generated_export_plist"
 
     local ipa_file
     ipa_file=$(find "${PROJECT_ROOT}/build/ios/ipa" -name "*.ipa" -type f 2>/dev/null | head -1)
@@ -522,7 +627,7 @@ cmd_tag() {
         echo "     - Windows zip"
         echo "     - Web WASM"
         echo "  3. Create a GitHub Release with all artifacts"
-        echo "  4. Deploy the web build to Vercel (app.coquibot.ai)"
+        echo "  4. Deploy the web build to Vercel (coqui.bot)"
         echo ""
         echo "  Monitor progress at:"
         local repo

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>ai.coquibot.app</id>
+  <id>bot.coqui</id>
 
   <name>Coqui</name>
   <summary>AI agent chat client</summary>
@@ -22,8 +22,8 @@
     </ul>
   </description>
 
-  <icon type="stock">ai.coquibot.app</icon>
-  <launchable type="desktop-id">ai.coquibot.app.desktop</launchable>
+  <icon type="stock">bot.coqui</icon>
+  <launchable type="desktop-id">bot.coqui.desktop</launchable>
 
   <developer id="ai.coquibot">
      <name>Coqui Bot</name>
@@ -46,7 +46,7 @@
 
   <content_rating type="oars-1.1" />
 
-  <url type="homepage">https://coquibot.org</url>
+  <url type="homepage">https://agentcoqui.com</url>
   <url type="vcs-browser">https://github.com/AgentCoqui/coqui-app</url>
   <url type="bugtracker">https://github.com/AgentCoqui/coqui-app/issues</url>
 

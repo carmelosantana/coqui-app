@@ -56,7 +56,7 @@
 				<key>CFBundleTypeRole</key>
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
-				<string>ai.coquibot.app</string>
+				<string>bot.coqui</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>coquibot</string>

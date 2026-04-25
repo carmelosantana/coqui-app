@@ -15,6 +15,8 @@ import 'package:path/path.dart' as path;
 /// On native, uses sqflite (mobile) or FFI (desktop).
 class DatabaseService {
   late Database _db;
+  bool _isOpen = false;
+  String? _databaseFile;
 
   Future<String> getDatabasesPathForPlatform() async {
     if (PlatformInfo.isWeb) {
@@ -27,24 +29,44 @@ class DatabaseService {
     return await db_factory.getDatabaseFactory().getDatabasesPath();
   }
 
+  Future<String> resolveDatabasePath(String databaseFile) async {
+    if (PlatformInfo.isWeb) {
+      return databaseFile;
+    }
+
+    return path.join(await getDatabasesPathForPlatform(), databaseFile);
+  }
+
   Future<void> open(String databaseFile) async {
     final factory = db_factory.getDatabaseFactory();
-    final dbPath = PlatformInfo.isWeb
-        ? databaseFile
-        : path.join(await getDatabasesPathForPlatform(), databaseFile);
+    final dbPath = await resolveDatabasePath(databaseFile);
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 6,
         onCreate: (Database db, int version) async {
           await db.execute('''CREATE TABLE IF NOT EXISTS sessions (
 id TEXT PRIMARY KEY,
 instance_id TEXT,
 model_role TEXT NOT NULL,
 model TEXT,
+session_origin TEXT NOT NULL DEFAULT 'user',
+profile TEXT,
+group_enabled INTEGER NOT NULL DEFAULT 0,
+group_max_rounds INTEGER NOT NULL DEFAULT 3,
+group_composition_key TEXT,
+group_members_json TEXT,
+active_project_id TEXT,
 created_at INTEGER NOT NULL,
 updated_at INTEGER NOT NULL,
 token_count INTEGER DEFAULT 0,
+is_closed INTEGER NOT NULL DEFAULT 0,
+is_archived INTEGER NOT NULL DEFAULT 0,
+closed_at INTEGER,
+archived_at INTEGER,
+closure_reason TEXT,
+channel_bound INTEGER NOT NULL DEFAULT 0,
+channel_json TEXT,
 title TEXT
 ) WITHOUT ROWID;''');
 
@@ -59,11 +81,199 @@ created_at INTEGER NOT NULL,
 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 ) WITHOUT ROWID;''');
         },
+        onUpgrade: (Database db, int oldVersion, int newVersion) async {
+          if (oldVersion < 2) {
+            await _addColumnIfMissing(db, 'sessions', 'profile', 'TEXT');
+          }
+          if (oldVersion < 3) {
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'active_project_id',
+              'TEXT',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'is_closed',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'is_archived',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'closed_at',
+              'INTEGER',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'archived_at',
+              'INTEGER',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'closure_reason',
+              'TEXT',
+            );
+          }
+          if (oldVersion < 4) {
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_enabled',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_max_rounds',
+              'INTEGER NOT NULL DEFAULT 3',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_composition_key',
+              'TEXT',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'group_members_json',
+              'TEXT',
+            );
+          }
+          if (oldVersion < 5) {
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'channel_bound',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'channel_json',
+              'TEXT',
+            );
+          }
+          if (oldVersion < 6) {
+            await _addColumnIfMissing(
+              db,
+              'sessions',
+              'session_origin',
+              "TEXT NOT NULL DEFAULT 'user'",
+            );
+          }
+        },
+        onOpen: (Database db) async {
+          await _ensureSessionSchema(db);
+        },
       ),
     );
+    _databaseFile = databaseFile;
+    _isOpen = true;
   }
 
-  Future<void> close() async => _db.close();
+  Future<void> _ensureSessionSchema(Database db) async {
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'session_origin',
+      "TEXT NOT NULL DEFAULT 'user'",
+    );
+    await _addColumnIfMissing(db, 'sessions', 'profile', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'active_project_id', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'is_closed',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'is_archived',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'closed_at', 'INTEGER');
+    await _addColumnIfMissing(db, 'sessions', 'archived_at', 'INTEGER');
+    await _addColumnIfMissing(db, 'sessions', 'closure_reason', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'group_enabled',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'group_max_rounds',
+      'INTEGER NOT NULL DEFAULT 3',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'group_composition_key', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'group_members_json', 'TEXT');
+    await _addColumnIfMissing(
+      db,
+      'sessions',
+      'channel_bound',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'sessions', 'channel_json', 'TEXT');
+    await _addColumnIfMissing(db, 'sessions', 'title', 'TEXT');
+  }
+
+  Future<void> _addColumnIfMissing(
+    DatabaseExecutor db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    if (await _tableHasColumn(db, table, column)) {
+      return;
+    }
+
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+  }
+
+  Future<bool> _tableHasColumn(
+    DatabaseExecutor db,
+    String table,
+    String column,
+  ) async {
+    final rows = await db.rawQuery('PRAGMA table_info($table)');
+
+    return rows.any((row) => row['name'] == column);
+  }
+
+  Future<void> close() async {
+    if (!_isOpen) {
+      return;
+    }
+
+    if (_db.isOpen) {
+      await _db.close();
+    }
+
+    _isOpen = false;
+  }
+
+  Future<void> deleteDatabaseFile({String? databaseFile}) async {
+    final targetFile = databaseFile ?? _databaseFile;
+    if (targetFile == null || targetFile.isEmpty) {
+      return;
+    }
+
+    final dbPath = await resolveDatabasePath(targetFile);
+    await close();
+    await db_factory.getDatabaseFactory().deleteDatabase(dbPath);
+  }
 
   // ── Session Operations ──────────────────────────────────────────────
 
@@ -126,6 +336,14 @@ FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     for (final session in sessions) {
       await deleteSession(session.id);
     }
+  }
+
+  /// Clear the entire local conversation cache.
+  Future<void> clearSessionCache() async {
+    await _db.transaction((txn) async {
+      await txn.delete('messages');
+      await txn.delete('sessions');
+    });
   }
 
   // ── Message Operations ──────────────────────────────────────────────
