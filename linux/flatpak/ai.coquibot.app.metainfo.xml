@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>bot.coqui</id>
+  <id>ai.coquibot.app</id>
 
   <name>Coqui</name>
   <summary>AI agent chat client</summary>
@@ -22,8 +22,8 @@
     </ul>
   </description>
 
-  <icon type="stock">bot.coqui</icon>
-  <launchable type="desktop-id">bot.coqui.desktop</launchable>
+  <icon type="stock">ai.coquibot.app</icon>
+  <launchable type="desktop-id">ai.coquibot.app.desktop</launchable>
 
   <developer id="ai.coquibot">
      <name>Coqui Bot</name>

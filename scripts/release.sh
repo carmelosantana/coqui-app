@@ -15,7 +15,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CONFIG_DIR="${HOME}/.coqui-release"
 CONFIG_FILE="${CONFIG_DIR}/config"
-BUNDLE_ID="bot.coqui"
+BUNDLE_ID="ai.coquibot.app"
 
 # ── Colors ────────────────────────────────────────────────────────────
 
@@ -627,7 +627,7 @@ cmd_tag() {
         echo "     - Windows zip"
         echo "     - Web WASM"
         echo "  3. Create a GitHub Release with all artifacts"
-        echo "  4. Deploy the web build to Vercel (coqui.bot)"
+        echo "  4. Deploy the web build to Vercel (app.coquibot.ai)"
         echo ""
         echo "  Monitor progress at:"
         local repo

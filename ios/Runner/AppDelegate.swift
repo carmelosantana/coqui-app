@@ -8,7 +8,7 @@ import UIKit
 
     let messenger = engineBridge.applicationRegistrar.messenger()
     let iconChannel = FlutterMethodChannel(
-      name: "bot.coqui/icon",
+      name: "ai.coquibot.app/icon",
       binaryMessenger: messenger)
 
     iconChannel.setMethodCallHandler { (call, result) in

@@ -5,7 +5,7 @@
 ## Links
 - Project Website: https://agentcoqui.com
 - Documentation: https://docs.agentcoqui.com
-- Hosted App: https://coqui.bot
+- Hosted App: https://app.coquibot.ai
 - GitHub (Core): https://github.com/AgentCoqui/coqui
 - GitHub (App): https://github.com/AgentCoqui/coqui-app
 - php-agents Framework: https://github.com/carmelosantana/php-agents
