@@ -1,4 +1,4 @@
-package bot.coqui
+package ai.coquibot.app
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

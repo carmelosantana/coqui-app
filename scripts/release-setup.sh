@@ -21,7 +21,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Local config directory — outside repo, survives clones
 CONFIG_DIR="${HOME}/.coqui-release"
 CONFIG_FILE="${CONFIG_DIR}/config"
-BUNDLE_ID="bot.coqui"
+BUNDLE_ID="ai.coquibot.app"
 
 # ── Colors ────────────────────────────────────────────────────────────
 
@@ -670,15 +670,16 @@ setup_profiles() {
         fi
 
         # Install to standard location
+        local installed_profile_path="${CONFIG_DIR}/ios_distribution.mobileprovision"
         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
         cp "$ios_profile_path" ~/Library/MobileDevice/Provisioning\ Profiles/
-        cp "$ios_profile_path" "${CONFIG_DIR}/ios_distribution.mobileprovision"
+        cp "$ios_profile_path" "$installed_profile_path"
 
         # Base64 encode for CI
         local ios_b64
         ios_b64=$(base64 -i "$ios_profile_path")
         config_set "IOS_PROVISIONING_PROFILE_B64" "$ios_b64"
-        config_set "IOS_PROVISIONING_PROFILE_PATH" "$ios_profile_path"
+        config_set "IOS_PROVISIONING_PROFILE_PATH" "$installed_profile_path"
 
         success "iOS provisioning profile installed and encoded for CI"
     else
@@ -927,7 +928,7 @@ setup_github() {
 setup_vercel() {
     step "Vercel Deployment Setup"
 
-    echo "Vercel deploys the web WASM build to coqui.bot."
+    echo "Vercel deploys the web WASM build to app.coquibot.ai."
     echo "You need a Vercel account and a project linked to this repo."
     echo ""
 

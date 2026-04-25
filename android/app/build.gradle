@@ -12,7 +12,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "bot.coqui"
+    namespace = "ai.coquibot.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "bot.coqui"
+        applicationId = "ai.coquibot.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

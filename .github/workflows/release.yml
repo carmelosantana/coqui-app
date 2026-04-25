@@ -448,9 +448,17 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      - name: Generate Vercel prebuilt output
+        run: |
+          vercel build --prod \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy to Vercel (production)
         run: |
-          vercel deploy --prod --prebuilt \
+          vercel deploy --prod --prebuilt --archive=tgz \
             --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

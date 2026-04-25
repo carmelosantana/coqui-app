@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Allow: /llms.txt
 
-Sitemap: https://coqui.bot/sitemap.xml
+Sitemap: https://app.coquibot.ai/sitemap.xml
