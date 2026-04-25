@@ -258,8 +258,6 @@ class ChatNavigationDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
         return NavigationDrawer(
