@@ -16,6 +16,8 @@ import 'package:coqui_app/Services/local_server_service.dart';
 /// [ChangeNotifier]. Handles installation, process lifecycle, periodic health
 /// polling, and auto-configuring a local [CoquiInstance].
 class LocalServerProvider extends ChangeNotifier {
+  static const Duration _startupGraceWindow = Duration(seconds: 25);
+
   final LocalServerService _service;
   final InstanceProvider _instanceProvider;
 
@@ -48,6 +50,7 @@ class LocalServerProvider extends ChangeNotifier {
 
   StreamSubscription<String>? _logSub;
   Timer? _healthTimer;
+  DateTime? _startupGraceDeadline;
 
   LocalServerProvider({
     required LocalServerService service,
@@ -175,13 +178,9 @@ class LocalServerProvider extends ChangeNotifier {
       unsafe: unsafe,
     );
     if (success) {
-      _updateInfo(
-        status: LocalServerStatus.running,
-        pid: _service.processPid,
-        errorMessage: null,
-      );
-      _startHealthPolling();
+      await _applySuccessfulStart();
     } else {
+      _startupGraceDeadline = null;
       _updateInfo(
         status: LocalServerStatus.error,
         errorMessage: 'Failed to start server. Check the console for details.',
@@ -191,6 +190,7 @@ class LocalServerProvider extends ChangeNotifier {
   }
 
   Future<void> stopProcess() async {
+    _startupGraceDeadline = null;
     _updateStatus(LocalServerStatus.stopping);
     await _service.stopProcess();
     _stopHealthPolling();
@@ -227,19 +227,43 @@ class LocalServerProvider extends ChangeNotifier {
 
   Future<void> _pollHealth() async {
     final healthy = await _service.checkHealth(port: _info.port);
+    final now = DateTime.now();
+    var newStatus = _info.status;
+    String? errorMessage = _info.errorMessage;
 
-    final newStatus = healthy
-        ? LocalServerStatus.running
-        : (_info.isInstalled ? LocalServerStatus.stopped : _info.status);
+    if (healthy) {
+      newStatus = LocalServerStatus.running;
+      errorMessage = null;
+      _startupGraceDeadline = null;
+    } else if (_info.status == LocalServerStatus.starting) {
+      final deadline = _startupGraceDeadline;
+      if (deadline != null && now.isBefore(deadline)) {
+        newStatus = LocalServerStatus.starting;
+      } else {
+        _startupGraceDeadline = null;
+        newStatus = LocalServerStatus.error;
+        errorMessage =
+            'Server did not become healthy in time. Check the console for details.';
+        _addLog('Server did not become healthy in time.');
+      }
+    } else if (_info.status == LocalServerStatus.error) {
+      newStatus = LocalServerStatus.error;
+    } else if (_info.isInstalled) {
+      newStatus = LocalServerStatus.stopped;
+      errorMessage = null;
+    }
 
     if (_info.status == LocalServerStatus.running && !healthy) {
       _addLog('Local server is no longer responding on port ${_info.port}.');
     }
 
-    if (newStatus != _info.status || _info.pid != _service.processPid) {
+    if (newStatus != _info.status ||
+        _info.pid != _service.processPid ||
+        errorMessage != _info.errorMessage) {
       _info = _info.copyWith(
         status: newStatus,
         pid: _service.processPid,
+        errorMessage: errorMessage,
       );
       notifyListeners();
     }
@@ -349,7 +373,7 @@ class LocalServerProvider extends ChangeNotifier {
     if (autoApprove) flags.write(' --auto-approve');
     if (unsafe) flags.write(' --unsafe');
 
-    return '/bin/bash "$path/bin/coqui-launcher" --api-only --host 127.0.0.1 --port $port${flags.toString()}';
+    return '/bin/bash "$path/bin/coqui-launcher" --api-only --background --host 127.0.0.1 --port $port${flags.toString()}';
   }
 
   Future<bool> _startManagedProcess() async {
@@ -363,19 +387,27 @@ class LocalServerProvider extends ChangeNotifier {
       unsafe: unsafe,
     );
     if (success) {
-      _updateInfo(
-        status: LocalServerStatus.running,
-        pid: _service.processPid,
-        errorMessage: null,
-      );
-      _startHealthPolling();
+      await _applySuccessfulStart();
     } else {
+      _startupGraceDeadline = null;
       _updateInfo(
         status: LocalServerStatus.error,
         errorMessage: 'Failed to start server. Check the console for details.',
       );
     }
     return success;
+  }
+
+  Future<void> _applySuccessfulStart() async {
+    final healthy = await _service.checkHealth(port: _info.port);
+    _startupGraceDeadline =
+        healthy ? null : DateTime.now().add(_startupGraceWindow);
+    _updateInfo(
+      status: healthy ? LocalServerStatus.running : LocalServerStatus.starting,
+      pid: _service.processPid,
+      errorMessage: null,
+    );
+    _startHealthPolling();
   }
 
   Future<void> _refreshInstanceConfigMismatch() async {
