@@ -29,15 +29,17 @@ class _FakeDatabaseService extends DatabaseService {
 }
 
 class _FakeApiService extends CoquiApiService {
-  final List<CoquiSession> sessions;
-
   _FakeApiService({required this.sessions});
+
+  List<CoquiSession> sessions;
+  int listSessionsCalls = 0;
 
   @override
   Future<List<CoquiSession>> listSessions({
     int limit = 50,
     String? status,
   }) async {
+    listSessionsCalls++;
     return List<CoquiSession>.from(sessions);
   }
 }
@@ -172,5 +174,76 @@ void main() {
     expect(find.text('signal-dm:+18885551234'), findsOneWidget);
     expect(find.text('Channel'), findsOneWidget);
     expect(find.text('trinity'), findsOneWidget);
+  });
+
+  testWidgets('pulling down refreshes the rendered sessions list',
+      (tester) async {
+    final apiService = _FakeApiService(
+      sessions: [
+        CoquiSession(
+          id: 'session-1',
+          modelRole: 'orchestrator',
+          model: 'gpt-test',
+          title: 'Original Session',
+          createdAt: DateTime.utc(2026, 4, 23, 10),
+          updatedAt: DateTime.utc(2026, 4, 23, 10, 5),
+        ),
+      ],
+    );
+    final chatProvider = ChatProvider(
+      apiService: apiService,
+      databaseService: _FakeDatabaseService(),
+    );
+
+    await chatProvider.refreshSessions();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ChatProvider>.value(
+        value: chatProvider,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              child: ChatNavigationDrawer(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Original Session'), findsOneWidget);
+    expect(find.text('Refreshed Session'), findsNothing);
+    expect(find.text('New Session'), findsNothing);
+
+    apiService.sessions = [
+      CoquiSession(
+        id: 'session-1',
+        modelRole: 'orchestrator',
+        model: 'gpt-test',
+        title: 'Refreshed Session',
+        createdAt: DateTime.utc(2026, 4, 23, 10),
+        updatedAt: DateTime.utc(2026, 4, 23, 10, 6),
+      ),
+      CoquiSession(
+        id: 'session-2',
+        modelRole: 'orchestrator',
+        model: 'gpt-test',
+        title: 'New Session',
+        createdAt: DateTime.utc(2026, 4, 23, 11),
+        updatedAt: DateTime.utc(2026, 4, 23, 11, 5),
+      ),
+    ];
+
+    await tester.drag(find.byType(Scrollable), const Offset(0, 300));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(apiService.listSessionsCalls, greaterThanOrEqualTo(2));
+    expect(find.text('Original Session'), findsNothing);
+    expect(find.text('Refreshed Session'), findsOneWidget);
+    expect(find.text('New Session'), findsOneWidget);
   });
 }

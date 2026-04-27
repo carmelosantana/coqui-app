@@ -16,6 +16,17 @@ import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 
 import 'title_divider.dart';
 
+final class _ChatDrawerScrollBehavior extends MaterialScrollBehavior {
+  const _ChatDrawerScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const AlwaysScrollableScrollPhysics().applyTo(
+      super.getScrollPhysics(context),
+    );
+  }
+}
+
 class ChatDrawer extends StatelessWidget {
   const ChatDrawer({super.key});
 
@@ -290,50 +301,56 @@ class ChatNavigationDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, _) {
-        return NavigationDrawer(
-          selectedIndex: chatProvider.selectedDestination,
-          onDestinationSelected: (destination) {
-            // First item is "New Chat" (index 0)
-            chatProvider.destinationSelected(destination);
+        return ScrollConfiguration(
+          behavior: const _ChatDrawerScrollBehavior(),
+          child: RefreshIndicator(
+            onRefresh: chatProvider.refreshSessions,
+            child: NavigationDrawer(
+              selectedIndex: chatProvider.selectedDestination,
+              onDestinationSelected: (destination) {
+                // First item is "New Chat" (index 0)
+                chatProvider.destinationSelected(destination);
 
-            if (ResponsiveBreakpoints.of(context).isMobile) {
-              Navigator.pop(context);
-            }
-          },
-          children: [
-            const SizedBox(height: 12),
-            NavigationDrawerDestination(
-              icon: const Icon(Icons.add_circle_outline),
-              selectedIcon: const Icon(Icons.add_circle),
-              label: const Text('New Chat'),
+                if (ResponsiveBreakpoints.of(context).isMobile) {
+                  Navigator.pop(context);
+                }
+              },
+              children: [
+                const SizedBox(height: 12),
+                NavigationDrawerDestination(
+                  icon: const Icon(Icons.add_circle_outline),
+                  selectedIcon: const Icon(Icons.add_circle),
+                  label: const Text('New Chat'),
+                ),
+                if (chatProvider.sessions.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
+                    child: TitleDivider(title: 'Sessions'),
+                  ),
+                  ...chatProvider.sessions.map(
+                    (session) => _buildSessionDestination(
+                      context,
+                      chatProvider,
+                      session,
+                    ),
+                  ),
+                ],
+                if (chatProvider.archivedSessions.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
+                    child: TitleDivider(title: 'Archived'),
+                  ),
+                  ...chatProvider.archivedSessions.map(
+                    (session) => _buildSessionDestination(
+                      context,
+                      chatProvider,
+                      session,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (chatProvider.sessions.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
-                child: TitleDivider(title: 'Sessions'),
-              ),
-              ...chatProvider.sessions.map(
-                (session) => _buildSessionDestination(
-                  context,
-                  chatProvider,
-                  session,
-                ),
-              ),
-            ],
-            if (chatProvider.archivedSessions.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(28, 16, 28, 10),
-                child: TitleDivider(title: 'Archived'),
-              ),
-              ...chatProvider.archivedSessions.map(
-                (session) => _buildSessionDestination(
-                  context,
-                  chatProvider,
-                  session,
-                ),
-              ),
-            ],
-          ],
+          ),
         );
       },
     );
