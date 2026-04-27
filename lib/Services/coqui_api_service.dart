@@ -20,6 +20,9 @@ import 'package:coqui_app/Models/coqui_configured_model.dart';
 import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
+import 'package:coqui_app/Models/coqui_mcp_server.dart';
+import 'package:coqui_app/Models/coqui_mcp_tool.dart';
+import 'package:coqui_app/Models/coqui_mcp_tool_search_result.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_restart_state.dart';
 import 'package:coqui_app/Models/coqui_project.dart';
@@ -35,6 +38,7 @@ import 'package:coqui_app/Models/coqui_task_event.dart';
 import 'package:coqui_app/Models/coqui_todo.dart';
 import 'package:coqui_app/Models/coqui_todo_stats.dart';
 import 'package:coqui_app/Models/coqui_turn.dart';
+import 'package:coqui_app/Models/coqui_tool_visibility.dart';
 import 'package:coqui_app/Models/coqui_loop.dart';
 import 'package:coqui_app/Models/coqui_webhook.dart';
 import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
@@ -476,6 +480,356 @@ class CoquiApiService {
       return CoquiRestartState.fromJson(restart.cast<String, dynamic>());
     }
     return CoquiRestartState.empty;
+  }
+
+  // ── MCP ───────────────────────────────────────────────────────────
+
+  Future<List<CoquiMcpServer>> listMcpServers() async {
+    final response = await http.get(
+      _url('/mcp/servers'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final servers = body['servers'] as List? ?? [];
+
+    return servers
+        .map((item) => CoquiMcpServer.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CoquiMcpServer> getMcpServer(String name) async {
+    final response = await http.get(
+      _url('/mcp/servers/$name'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiMcpServer.fromJson(body['server'] as Map<String, dynamic>);
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      createMcpServer({
+    required String name,
+    required String command,
+    List<String> args = const [],
+    String? description,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'command': command,
+      'args': args,
+    };
+    if (description != null && description.isNotEmpty) {
+      payload['description'] = description;
+    }
+
+    final response = await http.post(
+      _url('/mcp/servers'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      server: CoquiMcpServer.fromJson(body['server'] as Map<String, dynamic>),
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'next_turn',
+      message: body['message'] as String? ?? 'MCP server created.',
+    );
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      updateMcpServer(
+    String currentName, {
+    String? name,
+    String? command,
+    List<String>? args,
+    String? description,
+    bool clearDescription = false,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (command != null && command.isNotEmpty) payload['command'] = command;
+    if (args != null) payload['args'] = args;
+    if (clearDescription) {
+      payload['description'] = '';
+    } else if (description != null) {
+      payload['description'] = description;
+    }
+
+    final response = await http.patch(
+      _url('/mcp/servers/$currentName'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      server: CoquiMcpServer.fromJson(body['server'] as Map<String, dynamic>),
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'next_turn',
+      message: body['message'] as String? ?? 'MCP server updated.',
+    );
+  }
+
+  Future<({bool deleted, String name, String applied})> deleteMcpServer(
+    String name,
+  ) async {
+    final response = await http.delete(
+      _url('/mcp/servers/$name'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+
+    return (
+      deleted: body['deleted'] as bool? ?? false,
+      name: body['name'] as String? ?? name,
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'live',
+    );
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      enableMcpServer(String name) async {
+    return _postMcpServerMutation('/mcp/servers/$name/enable');
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      disableMcpServer(String name) async {
+    return _postMcpServerMutation('/mcp/servers/$name/disable');
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      promoteMcpServer(String name) async {
+    return _postMcpServerMutation('/mcp/servers/$name/promote');
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      demoteMcpServer(String name) async {
+    return _postMcpServerMutation('/mcp/servers/$name/demote');
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      autoMcpServer(String name) async {
+    return _postMcpServerMutation('/mcp/servers/$name/auto');
+  }
+
+  Future<({CoquiMcpServer server, int durationMs, String message})>
+      connectMcpServer(String name) async {
+    return _postMcpServerRuntime('/mcp/servers/$name/connect');
+  }
+
+  Future<({String name, String applied, String message})> disconnectMcpServer(
+    String name,
+  ) async {
+    final response = await http.post(
+      _url('/mcp/servers/$name/disconnect'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      name: body['name'] as String? ?? name,
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'live',
+      message: body['message'] as String? ?? 'MCP server disconnected.',
+    );
+  }
+
+  Future<({CoquiMcpServer server, int durationMs, String message})>
+      refreshMcpServer(String name) async {
+    return _postMcpServerRuntime('/mcp/servers/$name/refresh');
+  }
+
+  Future<({CoquiMcpServer server, int durationMs, String message})>
+      testMcpServer(String name) async {
+    return _postMcpServerRuntime('/mcp/servers/$name/test');
+  }
+
+  Future<List<CoquiMcpTool>> listMcpServerTools(String name) async {
+    final response = await http.get(
+      _url('/mcp/servers/$name/tools'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final tools = body['tools'] as List? ?? [];
+
+    return tools
+        .map((item) => CoquiMcpTool.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<CoquiMcpToolSearchResult>> searchMcpTools(
+    String query, {
+    String? server,
+  }) async {
+    final params = <String, String>{'query': query};
+    if (server != null && server.isNotEmpty) {
+      params['server'] = server;
+    }
+
+    final response = await http.get(
+      _url('/mcp/tools/search', params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final results = body['results'] as List? ?? [];
+
+    return results
+        .map((item) =>
+            CoquiMcpToolSearchResult.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<({String name, String key, String placeholder, String applied})>
+      setMcpServerEnv(
+    String name, {
+    required String key,
+    String? value,
+    String? placeholder,
+  }) async {
+    final payload = <String, dynamic>{'key': key};
+    if (value != null) {
+      payload['value'] = value;
+    } else if (placeholder != null && placeholder.isNotEmpty) {
+      payload['placeholder'] = placeholder;
+    }
+
+    final response = await http.post(
+      _url('/mcp/servers/$name/env'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      name: body['name'] as String? ?? name,
+      key: body['key'] as String? ?? key,
+      placeholder: body['placeholder'] as String? ?? '',
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'next_turn',
+    );
+  }
+
+  Future<({String server, String envKey, int? expiresAt, String applied})>
+      authorizeMcpServer(
+    String name, {
+    required String authUrl,
+    required String tokenUrl,
+    String? clientId,
+    List<String> scopes = const [],
+  }) async {
+    final payload = <String, dynamic>{
+      'auth_url': authUrl,
+      'token_url': tokenUrl,
+      'scopes': scopes,
+    };
+    if (clientId != null && clientId.isNotEmpty) {
+      payload['client_id'] = clientId;
+    }
+
+    final response = await http.post(
+      _url('/mcp/servers/$name/auth'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      server: body['server'] as String? ?? name,
+      envKey: body['env_key'] as String? ?? '',
+      expiresAt: body['expires_at'] is int
+          ? body['expires_at'] as int
+          : int.tryParse('${body['expires_at'] ?? ''}'),
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'next_turn',
+    );
+  }
+
+  Future<({CoquiMcpServer server, String applied, String message})>
+      _postMcpServerMutation(String path) async {
+    final response = await http.post(
+      _url(path),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      server: CoquiMcpServer.fromJson(body['server'] as Map<String, dynamic>),
+      applied:
+          (body['runtime'] as Map<String, dynamic>?)?['applied'] as String? ??
+              'next_turn',
+      message: body['message'] as String? ?? '',
+    );
+  }
+
+  Future<({CoquiMcpServer server, int durationMs, String message})>
+      _postMcpServerRuntime(String path) async {
+    final response = await http.post(
+      _url(path),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{}),
+    );
+    final body = _parseResponse(response);
+
+    return (
+      server: CoquiMcpServer.fromJson(body['server'] as Map<String, dynamic>),
+      durationMs: _coerceInt(body['duration_ms']),
+      message: body['message'] as String? ?? '',
+    );
+  }
+
+  Future<List<CoquiToolVisibility>> listToolVisibilities({
+    String? profile,
+  }) async {
+    final params = <String, String>{};
+    if (profile != null && profile.isNotEmpty) {
+      params['profile'] = profile;
+    }
+
+    final response = await http.get(
+      _url('/toolkits', params.isEmpty ? null : params),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    final tools = body['tools'] as List? ?? [];
+
+    return tools
+        .map(
+          (item) => CoquiToolVisibility.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<CoquiToolVisibility> setToolVisibility(
+    String name,
+    String visibility,
+  ) async {
+    final response = await http.post(
+      _url('/toolkits/visibility'),
+      headers: _headers,
+      body: jsonEncode(
+        <String, dynamic>{
+          'target': 'tool',
+          'name': name,
+          'visibility': visibility,
+        },
+      ),
+    );
+    final body = _parseResponse(response);
+
+    return CoquiToolVisibility(
+      name: body['name'] as String? ?? name,
+      visibility: body['visibility'] as String? ?? visibility,
+      protection: null,
+    );
   }
 
   // ── File uploads ─────────────────────────────────────────────────────

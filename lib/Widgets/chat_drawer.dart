@@ -6,6 +6,7 @@ import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/channel_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
+import 'package:coqui_app/Providers/mcp_provider.dart';
 import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Theme/coqui_colors.dart';
 import 'package:provider/provider.dart';
@@ -74,6 +75,7 @@ class ChatDrawer extends StatelessWidget {
               _buildWorkButton(context),
               _buildTasksButton(context),
               _buildChannelsButton(context),
+              _buildMcpButton(context),
               _buildConfigButton(context),
               _buildInfoButton(context),
               _buildSettingsRailButton(context),
@@ -201,6 +203,34 @@ class ChatDrawer extends StatelessWidget {
                     Navigator.pop(context);
                   }
                   Navigator.pushNamed(context, '/config');
+                }
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildMcpButton(BuildContext context) {
+    return Consumer2<InstanceProvider, McpProvider>(
+      builder: (context, instanceProvider, mcpProvider, _) {
+        final hasInstance = instanceProvider.hasActiveInstance;
+        final dotColor = mcpProvider.hasIssues
+            ? Theme.of(context).colorScheme.error
+            : mcpProvider.hasConnectedServers
+                ? CoquiColors.chart2
+                : null;
+
+        return _DrawerActionChip(
+          icon: Icons.extension_outlined,
+          label: 'MCP',
+          badgeColor: dotColor,
+          enabled: hasInstance,
+          onPressed: hasInstance
+              ? () {
+                  if (ResponsiveBreakpoints.of(context).isMobile) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/mcp');
                 }
               : null,
         );
