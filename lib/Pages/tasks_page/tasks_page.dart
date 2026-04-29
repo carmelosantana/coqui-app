@@ -261,7 +261,7 @@ class _TasksPageState extends State<TasksPage>
         title: const Text('Automation'),
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true,
+          isScrollable: false,
           tabs: const [
             Tab(text: 'Tasks', icon: Icon(Icons.task_outlined)),
             Tab(text: 'Webhooks', icon: Icon(Icons.webhook_outlined)),

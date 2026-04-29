@@ -1,4 +1,6 @@
 /// State model for the local Coqui server managed by the desktop app.
+const _localServerInfoUnset = Object();
+
 enum LocalServerStatus {
   /// Server is not installed at all.
   notInstalled,
@@ -54,26 +56,32 @@ class LocalServerInfo {
 
   LocalServerInfo copyWith({
     LocalServerStatus? status,
-    String? version,
+    Object? version = _localServerInfoUnset,
     String? installPath,
     String? workspacePath,
-    int? pid,
+    Object? pid = _localServerInfoUnset,
     int? port,
-    String? apiKey,
+    Object? apiKey = _localServerInfoUnset,
     bool? instanceConfigMismatch,
-    String? errorMessage,
+    Object? errorMessage = _localServerInfoUnset,
   }) {
     return LocalServerInfo(
       status: status ?? this.status,
-      version: version ?? this.version,
+      version: identical(version, _localServerInfoUnset)
+          ? this.version
+          : version as String?,
       installPath: installPath ?? this.installPath,
       workspacePath: workspacePath ?? this.workspacePath,
-      pid: pid ?? this.pid,
+      pid: identical(pid, _localServerInfoUnset) ? this.pid : pid as int?,
       port: port ?? this.port,
-      apiKey: apiKey ?? this.apiKey,
+      apiKey: identical(apiKey, _localServerInfoUnset)
+          ? this.apiKey
+          : apiKey as String?,
       instanceConfigMismatch:
           instanceConfigMismatch ?? this.instanceConfigMismatch,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: identical(errorMessage, _localServerInfoUnset)
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 

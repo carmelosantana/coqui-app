@@ -857,7 +857,7 @@ class _WorkPageState extends State<WorkPage>
         title: const Text('Work'),
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true,
+          isScrollable: false,
           tabs: const [
             Tab(text: 'Projects', icon: Icon(Icons.folder_outlined)),
             Tab(text: 'Sprints', icon: Icon(Icons.flag_outlined)),

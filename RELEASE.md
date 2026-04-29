@@ -191,6 +191,82 @@ Triggered by `v*` tag:
 3. **Release** — GitHub Release with all artifacts + checksums
 4. **Deploy** — Web build to Vercel production
 
+## Hybrid Release Workflow (Local Apple Builds)
+
+Apple jobs (macOS DMG, iOS IPA) are **optional** for GitHub Release creation. This allows you to:
+
+- Build macOS and iOS locally on your Mac (where signing typically works best)
+- Ship the release immediately with Android/Linux/Windows/Web artifacts
+- Upload local Apple builds afterward
+
+### When to Use Hybrid Mode
+
+- Apple CI builds are failing while local builds succeed
+- You want faster release cycles (don't wait for macOS/iOS runners)
+- You prefer building iOS/macOS locally for additional QA
+
+### Workflow
+
+**1. Tag the release normally:**
+
+\`\`\`bash
+scripts/release.sh tag patch
+\`\`\`
+
+**2. CI builds Android, Linux, Windows, and Web; creates GitHub Release**
+
+The Release job depends only on `[build-android, build-linux, build-windows, build-web]`, so it succeeds even if Apple CI jobs fail.
+
+**3. Build Apple artifacts locally on your Mac:**
+
+\`\`\`bash
+scripts/release.sh build --platform macos
+scripts/release.sh build --platform ios
+\`\`\`
+
+**4. Upload artifacts to the GitHub Release:**
+
+\`\`\`bash
+# Option A: Use GitHub CLI
+gh release upload v1.0.0 \
+  build/macos/Coqui-1.0.0-macos-arm64.dmg \
+  build/ios/ipa/Coqui-1.0.0-ios.ipa
+
+# Option B: Manual upload via github.com
+# 1. Go to the release: github.com/carmelosantana/coqui-app/releases/tag/vX.Y.Z
+# 2. Click "Upload" or drag/drop the .dmg and .ipa files
+# 3. Each file auto-detects as a release asset
+\`\`\`
+
+**5. (Optional) Recalculate checksums:**
+
+The original SHA256SUMS.txt won't include Apple artifacts. To update it:
+
+\`\`\`bash
+cd /path/to/release
+sha256sum *.dmg *.ipa >> SHA256SUMS.txt
+gh release upload v1.0.0 SHA256SUMS.txt --clobber
+\`\`\`
+
+### Troubleshooting Hybrid Releases
+
+**"My local build succeeds but CI fails"**
+
+- Likely cause: signing environment differences or expired certificates in CI
+- Solution: Use the hybrid workflow — build locally, upload afterward
+- To debug CI: check GitHub Actions logs for the specific failing job
+
+**"I forget to upload the Apple artifacts"**
+
+- Add a comment to the release noting which artifacts are local builds
+- Use GitHub's release description to track local vs. CI builds
+
+**"I want Apple CI builds again"**
+
+- Update `.github/workflows/release.yml` to add `build-macos` and `build-ios` back to the `release` job `needs:` clause
+- This will gate GitHub Release creation until all platforms succeed
+
+
 ## Icon Pipeline
 
 Each platform uses a different source icon:

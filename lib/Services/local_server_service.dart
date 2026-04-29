@@ -108,6 +108,7 @@ class LocalServerService {
   String get _launcherPath => '$installPath/bin/coqui-launcher';
   String get _versionFile => '$installPath/.coqui-version';
   String get _logsDir => '$workspacePath/logs';
+  String get _apiPidPath => '$workspacePath/pids/api.pid';
 
   /// Resolve the user's default shell and build an environment map that
   /// inherits the full login PATH (Homebrew, nix, etc.).
@@ -164,8 +165,21 @@ class LocalServerService {
       workspacePath: workspacePath,
       port: config.port,
       apiKey: config.apiKey,
-      pid: _serverProcess?.pid,
+      pid: processPid,
     );
+  }
+
+  int? _readTrackedPid() {
+    try {
+      final file = File(_apiPidPath);
+      if (!file.existsSync()) {
+        return null;
+      }
+
+      return int.tryParse(file.readAsStringSync().trim());
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<LocalServerConfigSnapshot> readConfig() async {
@@ -474,7 +488,7 @@ class LocalServerService {
       return false;
     }
 
-    if (_serverProcess != null) {
+    if (isProcessRunning) {
       _log('Server process is already running.');
       return true;
     }
@@ -489,12 +503,12 @@ class LocalServerService {
     try {
       final env = await _loginEnvironment();
       final useLauncher = File(_launcherPath).existsSync();
-      Process serverProcess;
 
       if (useLauncher) {
         final args = [
           _launcherPath,
           '--api-only',
+          '--background',
           '--host',
           host,
           '--port',
@@ -502,39 +516,60 @@ class LocalServerService {
           if (autoApprove) '--auto-approve',
           if (unsafe) '--unsafe',
         ];
-        serverProcess = await Process.start(
+        final launcherProcess = await Process.start(
           '/bin/bash',
           args,
           workingDirectory: installPath,
           environment: env,
         );
-      } else {
-        final phpAvailable = await isPhpAvailable();
-        if (!phpAvailable) {
-          _log('Error: PHP is not available in PATH.');
+        await _pipeProcessOutput(launcherProcess);
+
+        final exitCode = await launcherProcess.exitCode;
+        if (exitCode != 0) {
+          _log('Launcher start command exited with code $exitCode');
           return false;
         }
-        final args = [
-          _binPath,
-          'api',
-          '--host',
-          host,
-          '--port',
-          '$port',
-          if (autoApprove) '--auto-approve',
-          if (unsafe) '--unsafe',
-        ];
-        serverProcess = await Process.start(
-          'php',
-          args,
-          workingDirectory: installPath,
-          environment: env,
+
+        final healthy = await _waitForHealth(
+          port: port,
+          timeout: const Duration(seconds: 20),
+          requireManagedProcess: false,
         );
+
+        if (healthy) {
+          _log('Server started (PID: ${processPid ?? 'unknown'}).');
+        } else {
+          _log('Server launch acknowledged. Waiting for API health...');
+        }
+
+        return true;
       }
+
+      final phpAvailable = await isPhpAvailable();
+      if (!phpAvailable) {
+        _log('Error: PHP is not available in PATH.');
+        return false;
+      }
+      final args = [
+        _binPath,
+        'api',
+        '--host',
+        host,
+        '--port',
+        '$port',
+        if (autoApprove) '--auto-approve',
+        if (unsafe) '--unsafe',
+      ];
+      final serverProcess = await Process.start(
+        'php',
+        args,
+        workingDirectory: installPath,
+        environment: env,
+      );
 
       _serverProcess = serverProcess;
 
-      _pipeProcessOutput(serverProcess);
+      await _pipeProcessOutput(serverProcess);
 
       // Monitor process exit
       serverProcess.exitCode.then((code) {
@@ -563,6 +598,46 @@ class LocalServerService {
 
   /// Stop the running server process.
   Future<void> stopProcess() async {
+    final useLauncher = !Platform.isWindows && File(_launcherPath).existsSync();
+
+    if (useLauncher) {
+      final trackedPid = _readTrackedPid();
+      if (trackedPid == null && _serverProcess == null) {
+        _log('No server process to stop.');
+        return;
+      }
+
+      _log('Stopping server...');
+      try {
+        final env = await _loginEnvironment();
+        final config = await readConfig();
+        final stopProcess = await Process.start(
+          '/bin/bash',
+          [
+            _launcherPath,
+            'stop-api',
+            '--port',
+            '${config.port}',
+          ],
+          workingDirectory: installPath,
+          environment: env,
+        );
+
+        await _pipeProcessOutput(stopProcess);
+        final exitCode = await stopProcess.exitCode;
+        if (exitCode != 0) {
+          _log('Launcher stop command exited with code $exitCode');
+        }
+      } catch (e) {
+        _log('Failed to stop server: $e');
+      } finally {
+        _serverProcess = null;
+      }
+
+      _log('Server stopped.');
+      return;
+    }
+
     final process = _serverProcess;
     if (process == null) {
       _log('No server process to stop.');
@@ -592,10 +667,11 @@ class LocalServerService {
   }
 
   /// Whether a managed server process is running.
-  bool get isProcessRunning => _serverProcess != null;
+  bool get isProcessRunning =>
+      _serverProcess != null || _readTrackedPid() != null;
 
   /// PID of the managed server process, if running.
-  int? get processPid => _serverProcess?.pid;
+  int? get processPid => _serverProcess?.pid ?? _readTrackedPid();
 
   // ── Health check ──────────────────────────────────────────────────────
 
@@ -615,6 +691,7 @@ class LocalServerService {
   Future<bool> _waitForHealth({
     required int port,
     Duration timeout = const Duration(seconds: 12),
+    bool requireManagedProcess = true,
   }) async {
     final deadline = DateTime.now().add(timeout);
 
@@ -623,7 +700,7 @@ class LocalServerService {
         return true;
       }
 
-      if (_serverProcess == null) {
+      if (requireManagedProcess && _serverProcess == null) {
         return false;
       }
 
