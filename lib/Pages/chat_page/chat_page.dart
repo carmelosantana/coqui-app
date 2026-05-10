@@ -26,6 +26,18 @@ enum _SessionContinuationChoice { resume, startNew }
 
 enum _SessionCreationMode { single, group }
 
+const _navigationModeKey = 'navigation_mode';
+
+enum _NavigationMode { human, machine }
+
+_NavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
+  final rawValue = settingsBox.get(_navigationModeKey, defaultValue: 'human');
+
+  return rawValue == 'machine'
+      ? _NavigationMode.machine
+      : _NavigationMode.human;
+}
+
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
 
@@ -209,41 +221,60 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildSessionSetupControls(ChatProvider chatProvider) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 720),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SegmentedButton<_SessionCreationMode>(
-            segments: const [
-              ButtonSegment<_SessionCreationMode>(
-                value: _SessionCreationMode.single,
-                icon: Icon(Icons.person_outline),
-                label: Text('Single'),
-              ),
-              ButtonSegment<_SessionCreationMode>(
-                value: _SessionCreationMode.group,
-                icon: Icon(Icons.groups_2_outlined),
-                label: Text('Group'),
+    final settingsBox = Hive.box('settings');
+
+    return ValueListenableBuilder<Box<dynamic>>(
+      valueListenable: settingsBox.listenable(keys: const [_navigationModeKey]),
+      builder: (context, box, _) {
+        final isMachineMode =
+            _readNavigationMode(box) == _NavigationMode.machine;
+        final displayedMode =
+            isMachineMode ? _sessionCreationMode : _SessionCreationMode.single;
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMachineMode)
+                SegmentedButton<_SessionCreationMode>(
+                  segments: const [
+                    ButtonSegment<_SessionCreationMode>(
+                      value: _SessionCreationMode.single,
+                      icon: Icon(Icons.person_outline),
+                      label: Text('Single'),
+                    ),
+                    ButtonSegment<_SessionCreationMode>(
+                      value: _SessionCreationMode.group,
+                      icon: Icon(Icons.groups_2_outlined),
+                      label: Text('Group'),
+                    ),
+                  ],
+                  selected: {_sessionCreationMode},
+                  onSelectionChanged: (selection) {
+                    if (selection.isEmpty) return;
+                    setState(() {
+                      _sessionCreationMode = selection.first;
+                    });
+                  },
+                )
+              else
+                _CompanionModeHint(
+                  onSwitchHintPressed: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+              const SizedBox(height: 16),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: displayedMode == _SessionCreationMode.single
+                    ? _buildSingleSessionControls()
+                    : _buildGroupSessionControls(chatProvider),
               ),
             ],
-            selected: {_sessionCreationMode},
-            onSelectionChanged: (selection) {
-              if (selection.isEmpty) return;
-              setState(() {
-                _sessionCreationMode = selection.first;
-              });
-            },
           ),
-          const SizedBox(height: 16),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _sessionCreationMode == _SessionCreationMode.single
-                ? _buildSingleSessionControls()
-                : _buildGroupSessionControls(chatProvider),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -442,7 +473,11 @@ class _ChatPageState extends State<ChatPage> {
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
-        if (_sessionCreationMode == _SessionCreationMode.group) {
+        final isMachineMode = _readNavigationMode(Hive.box('settings')) ==
+            _NavigationMode.machine;
+
+        if (isMachineMode &&
+            _sessionCreationMode == _SessionCreationMode.group) {
           final groupMaxRounds = _parsedGroupMaxRounds;
           if (_selectedGroupProfiles.length < 2) {
             messenger.showSnackBar(
@@ -511,7 +546,7 @@ class _ChatPageState extends State<ChatPage> {
             );
           }
         } else {
-          await chatProvider.createNewSession(roleToUse);
+          await chatProvider.resolveSessionScope(roleToUse);
         }
       } on CoquiException catch (e) {
         messenger.showSnackBar(
@@ -1017,5 +1052,50 @@ class _ChatPageState extends State<ChatPage> {
         ),
       );
     }
+  }
+}
+
+class _CompanionModeHint extends StatelessWidget {
+  final VoidCallback onSwitchHintPressed;
+
+  const _CompanionModeHint({required this.onSwitchHintPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Start simple',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Human mode starts with one profile and one conversation. Switch to Machine mode in Settings when you want group sessions and operator workflows.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onSwitchHintPressed,
+            icon: const Icon(Icons.settings_outlined),
+            label: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
   }
 }

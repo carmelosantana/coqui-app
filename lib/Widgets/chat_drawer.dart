@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Models/local_server_state.dart';
 import 'package:coqui_app/Platform/platform_info.dart';
@@ -15,6 +16,25 @@ import 'package:responsive_framework/responsive_framework.dart';
 import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 
 import 'title_divider.dart';
+
+const _navigationModeKey = 'navigation_mode';
+
+enum _DrawerNavigationMode { human, machine }
+
+_DrawerNavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
+  final rawValue = settingsBox.get(_navigationModeKey, defaultValue: 'human');
+
+  return rawValue == 'machine'
+      ? _DrawerNavigationMode.machine
+      : _DrawerNavigationMode.human;
+}
+
+Future<void> _writeNavigationMode(_DrawerNavigationMode mode) {
+  return Hive.box('settings').put(
+    _navigationModeKey,
+    mode == _DrawerNavigationMode.machine ? 'machine' : 'human',
+  );
+}
 
 final class _ChatDrawerScrollBehavior extends MaterialScrollBehavior {
   const _ChatDrawerScrollBehavior();
@@ -74,27 +94,47 @@ class ChatDrawer extends StatelessWidget {
   }
 
   Widget _buildSettingsButton(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-      child: SizedBox(
-        height: 54,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+    final settingsBox = Hive.box('settings');
+
+    return ValueListenableBuilder<Box<dynamic>>(
+      valueListenable: settingsBox.listenable(keys: const [_navigationModeKey]),
+      builder: (context, box, _) {
+        final mode = _readNavigationMode(box);
+        final showAdvancedActions = mode == _DrawerNavigationMode.machine;
+
+        return Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildWorkButton(context),
-              _buildTasksButton(context),
-              _buildChannelsButton(context),
-              _buildMcpButton(context),
-              _buildConfigButton(context),
-              _buildInfoButton(context),
-              _buildSettingsRailButton(context),
-              if (PlatformInfo.isDesktop) _buildServerButton(context),
+              _DrawerModeToggle(
+                mode: mode,
+                onChanged: (nextMode) => _writeNavigationMode(nextMode),
+              ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    if (showAdvancedActions) ...[
+                      _buildWorkButton(context),
+                      _buildTasksButton(context),
+                      _buildChannelsButton(context),
+                      _buildMcpButton(context),
+                      _buildConfigButton(context),
+                      _buildInfoButton(context),
+                    ],
+                    _buildSettingsRailButton(context),
+                    if (PlatformInfo.isDesktop) _buildServerButton(context),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -655,4 +695,65 @@ class _DrawerActionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DrawerModeToggle extends StatelessWidget {
+  final _DrawerNavigationMode mode;
+  final ValueChanged<_DrawerNavigationMode> onChanged;
+
+  const _DrawerModeToggle({
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isMachine = mode == _DrawerNavigationMode.machine;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Navigation',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<_DrawerNavigationMode>(
+          segments: const [
+            ButtonSegment<_DrawerNavigationMode>(
+              value: _DrawerNavigationMode.human,
+              icon: Icon(Icons.favorite_border),
+              label: Text('Human'),
+            ),
+            ButtonSegment<_DrawerNavigationMode>(
+              value: _DrawerNavigationMode.machine,
+              icon: Icon(Icons.tune),
+              label: Text('Machine'),
+            ),
+          ],
+          selected: {_readSelectedMode(mode)},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) {
+            final nextMode = selection.first;
+            if (nextMode != mode) {
+              onChanged(nextMode);
+            }
+          },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          isMachine
+              ? 'Workflows, automation, channels, and operator tools are visible.'
+              : 'Keep Coqui focused on chat, sessions, setup, and support.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
+  }
+
+  _DrawerNavigationMode _readSelectedMode(_DrawerNavigationMode mode) => mode;
 }

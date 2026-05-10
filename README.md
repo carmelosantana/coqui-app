@@ -4,6 +4,13 @@ Cross-platform Flutter client for the [Coqui](https://github.com/AgentCoqui/coqu
 
 Connect to a Coqui API server, manage sessions, and chat with your agent in real-time via SSE streaming. Supports multiple server instances with role-based session creation.
 
+The app now supports two navigation modes:
+
+- `Human` keeps the interface focused on chat, sessions, connection/setup, and support.
+- `Machine` exposes the broader operator surface such as work management, automation, channels, MCP, and other advanced tooling.
+
+`Human` is the default mode for a simpler first-run experience. You can switch modes from the chat drawer or from Settings.
+
 On macOS and Linux, the desktop app can install and manage a local Coqui server for you. On Windows, local hosting is manual: run Coqui through WSL2 or Docker, then connect to it from the app as a normal server instance.
 
 ## Platforms

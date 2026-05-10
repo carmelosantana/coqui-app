@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session_file.dart';
@@ -19,162 +20,191 @@ import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+const _navigationModeKey = 'navigation_mode';
+
+enum _NavigationMode { human, machine }
+
+_NavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
+  final rawValue = settingsBox.get(_navigationModeKey, defaultValue: 'human');
+
+  return rawValue == 'machine'
+      ? _NavigationMode.machine
+      : _NavigationMode.human;
+}
+
 class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ChatAppBar({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final chatProvider = Provider.of<ChatProvider>(context);
-    final instanceProvider = Provider.of<InstanceProvider>(context);
-    final theme = Theme.of(context);
-    final currentSession = chatProvider.currentSession;
-    final projectLabel = chatProvider.currentSessionProjectLabel ??
-        currentSession?.activeProjectId;
-    final modelLabel = currentSession?.model.trim();
-    final isSessionEditable =
-        currentSession != null && !currentSession.isReadOnly;
+    final settingsBox = Hive.box('settings');
 
-    return AppBar(
-      centerTitle: false,
-      titleSpacing: 12,
-      title: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(right: 8),
-        child: Row(
-          children: [
-            _ServerDropdown(instanceProvider: instanceProvider),
-            if (currentSession != null) ...[
-              if (currentSession.isReadOnly) ...[
-                const SizedBox(width: 6),
-                _HeaderInfoChip(
-                  avatar: Icon(
-                    currentSession.isArchived
-                        ? Icons.archive_outlined
-                        : Icons.lock_outline,
-                    size: 16,
+    return ValueListenableBuilder<Box<dynamic>>(
+      valueListenable: settingsBox.listenable(keys: const [_navigationModeKey]),
+      builder: (context, box, _) {
+        final chatProvider = Provider.of<ChatProvider>(context);
+        final instanceProvider = Provider.of<InstanceProvider>(context);
+        final theme = Theme.of(context);
+        final currentSession = chatProvider.currentSession;
+        final projectLabel = chatProvider.currentSessionProjectLabel ??
+            currentSession?.activeProjectId;
+        final modelLabel = currentSession?.model.trim();
+        final isSessionEditable =
+            currentSession != null && !currentSession.isReadOnly;
+        final isMachineMode =
+            _readNavigationMode(box) == _NavigationMode.machine;
+
+        return AppBar(
+          centerTitle: false,
+          titleSpacing: 12,
+          title: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(
+              children: [
+                _ServerDropdown(instanceProvider: instanceProvider),
+                if (currentSession != null) ...[
+                  if (currentSession.isReadOnly) ...[
+                    const SizedBox(width: 6),
+                    _HeaderInfoChip(
+                      avatar: Icon(
+                        currentSession.isArchived
+                            ? Icons.archive_outlined
+                            : Icons.lock_outline,
+                        size: 16,
+                      ),
+                      label: Text(
+                        currentSession.isArchived ? 'Archived' : 'Closed',
+                      ),
+                    ),
+                  ],
+                  if (modelLabel != null && modelLabel.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    _HeaderInfoChip(
+                      avatar: const Icon(Icons.memory_outlined, size: 16),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 220),
+                        child: Text(
+                          modelLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: CoquiTypography.monoStyle(
+                            Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (currentSession.sessionOriginBadgeLabel != null) ...[
+                    const SizedBox(width: 6),
+                    _HeaderInfoChip(
+                      avatar: const Icon(Icons.alt_route, size: 16),
+                      label: Text(currentSession.sessionOriginBadgeLabel!),
+                    ),
+                  ],
+                  if (currentSession.channelSummaryLabel != null) ...[
+                    const SizedBox(width: 6),
+                    _HeaderInfoChip(
+                      avatar:
+                          const Icon(Icons.satellite_alt_outlined, size: 16),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 240),
+                        child: Text(
+                          currentSession.channelSummaryLabel!,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 6),
+                  _HeaderActionChip(
+                    avatar: Icon(
+                      currentSession.isGroupSession
+                          ? Icons.groups_2_outlined
+                          : Icons.person_outline,
+                      size: 16,
+                    ),
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: Text(
+                        currentSession.compactParticipantSummary,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    onPressed:
+                        isSessionEditable && !currentSession.isGroupSession
+                            ? () => _handleProfileSelection(context)
+                            : null,
                   ),
-                  label: Text(
-                    currentSession.isArchived ? 'Archived' : 'Closed',
-                  ),
-                ),
-              ],
-              if (modelLabel != null && modelLabel.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _HeaderInfoChip(
-                  avatar: const Icon(Icons.memory_outlined, size: 16),
-                  label: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: Text(
-                      modelLabel,
-                      overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 6),
+                  _HeaderActionChip(
+                    label: Text(
+                      currentSession.modelRole,
                       style: CoquiTypography.monoStyle(
                         Theme.of(context).textTheme.labelSmall,
                       ),
                     ),
+                    onPressed: isSessionEditable
+                        ? () => _handleRoleSelectionButton(context)
+                        : null,
                   ),
-                ),
-              ],
-              if (currentSession.sessionOriginBadgeLabel != null) ...[
-                const SizedBox(width: 6),
-                _HeaderInfoChip(
-                  avatar: const Icon(Icons.alt_route, size: 16),
-                  label: Text(currentSession.sessionOriginBadgeLabel!),
-                ),
-              ],
-              if (currentSession.channelSummaryLabel != null) ...[
-                const SizedBox(width: 6),
-                _HeaderInfoChip(
-                  avatar: const Icon(Icons.satellite_alt_outlined, size: 16),
-                  label: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
-                    child: Text(
-                      currentSession.channelSummaryLabel!,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 6),
-              _HeaderActionChip(
-                avatar: Icon(
-                  currentSession.isGroupSession
-                      ? Icons.groups_2_outlined
-                      : Icons.person_outline,
-                  size: 16,
-                ),
-                label: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 260),
-                  child: Text(
-                    currentSession.compactParticipantSummary,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                onPressed: isSessionEditable && !currentSession.isGroupSession
-                    ? () => _handleProfileSelection(context)
-                    : null,
-              ),
-              const SizedBox(width: 6),
-              _HeaderActionChip(
-                label: Text(
-                  currentSession.modelRole,
-                  style: CoquiTypography.monoStyle(
-                    Theme.of(context).textTheme.labelSmall,
-                  ),
-                ),
-                onPressed: isSessionEditable
-                    ? () => _handleRoleSelectionButton(context)
-                    : null,
-              ),
-              if (projectLabel != null && projectLabel.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _HeaderActionChip(
-                  avatar: const Icon(Icons.folder_outlined, size: 16),
-                  label: Text(projectLabel),
-                  onPressed: () => _openWorkTab(
-                    context,
-                    WorkPageTab.projects,
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        if (instanceProvider.restartRequired || instanceProvider.isRestarting)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: TextButton.icon(
-              onPressed: instanceProvider.isRestarting
-                  ? null
-                  : () => promptForPendingServerRestart(context),
-              icon: instanceProvider.isRestarting
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.error,
+                  if (isMachineMode &&
+                      projectLabel != null &&
+                      projectLabel.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    _HeaderActionChip(
+                      avatar: const Icon(Icons.folder_outlined, size: 16),
+                      label: Text(projectLabel),
+                      onPressed: () => _openWorkTab(
+                        context,
+                        WorkPageTab.projects,
                       ),
-                    )
-                  : const Icon(Icons.restart_alt),
-              label: Text(
-                instanceProvider.isRestarting ? 'Restarting' : 'Restart API',
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-              ),
+                    ),
+                  ],
+                ],
+              ],
             ),
           ),
-        if (currentSession != null)
-          IconButton(
-            icon: const Icon(Icons.tune),
-            onPressed: () {
-              _handleConfigureButton(context);
-            },
-          ),
-      ],
-      forceMaterialTransparency: !ResponsiveBreakpoints.of(context).isMobile,
+          actions: [
+            if (instanceProvider.restartRequired ||
+                instanceProvider.isRestarting)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: TextButton.icon(
+                  onPressed: instanceProvider.isRestarting
+                      ? null
+                      : () => promptForPendingServerRestart(context),
+                  icon: instanceProvider.isRestarting
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.error,
+                          ),
+                        )
+                      : const Icon(Icons.restart_alt),
+                  label: Text(
+                    instanceProvider.isRestarting
+                        ? 'Restarting'
+                        : 'Restart API',
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            if (currentSession != null)
+              IconButton(
+                icon: const Icon(Icons.tune),
+                onPressed: () {
+                  _handleConfigureButton(context, isMachineMode: isMachineMode);
+                },
+              ),
+          ],
+          forceMaterialTransparency:
+              !ResponsiveBreakpoints.of(context).isMobile,
+        );
+      },
     );
   }
 
@@ -235,7 +265,10 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
   }
 
-  Future<void> _handleConfigureButton(BuildContext context) async {
+  Future<void> _handleConfigureButton(
+    BuildContext context, {
+    required bool isMachineMode,
+  }) async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
     final action = await showModalBottomSheet<String>(
@@ -286,38 +319,40 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   title: const Text('Session Files'),
                   onTap: () => Navigator.pop(context, 'files'),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.workspaces_outline),
-                  title: const Text('Open Project In Work'),
-                  subtitle: Text(
-                    chatProvider.currentSessionProjectLabel ??
-                        chatProvider.currentSession?.activeProjectId ??
-                        'Use the current chat project and sprint context',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                if (isMachineMode) ...[
+                  ListTile(
+                    leading: const Icon(Icons.workspaces_outline),
+                    title: const Text('Open Project In Work'),
+                    subtitle: Text(
+                      chatProvider.currentSessionProjectLabel ??
+                          chatProvider.currentSession?.activeProjectId ??
+                          'Use the current chat project and sprint context',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, 'work_project'),
                   ),
-                  onTap: () => Navigator.pop(context, 'work_project'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.checklist_outlined),
-                  title: const Text('Open Session Todos'),
-                  subtitle:
-                      const Text('Jump into the current session work list'),
-                  onTap: () => Navigator.pop(context, 'work_todos'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('Open Session Artifacts'),
-                  subtitle: const Text(
-                    'Open versioned artifacts for this session in Work',
+                  ListTile(
+                    leading: const Icon(Icons.checklist_outlined),
+                    title: const Text('Open Session Todos'),
+                    subtitle:
+                        const Text('Jump into the current session work list'),
+                    onTap: () => Navigator.pop(context, 'work_todos'),
                   ),
-                  onTap: () => Navigator.pop(context, 'work_artifacts'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.account_tree_outlined),
-                  title: const Text('Child Runs'),
-                  onTap: () => Navigator.pop(context, 'child_runs'),
-                ),
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: const Text('Open Session Artifacts'),
+                    subtitle: const Text(
+                      'Open versioned artifacts for this session in Work',
+                    ),
+                    onTap: () => Navigator.pop(context, 'work_artifacts'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.account_tree_outlined),
+                    title: const Text('Child Runs'),
+                    onTap: () => Navigator.pop(context, 'child_runs'),
+                  ),
+                ],
                 ListTile(
                   leading: const Icon(Icons.edit_outlined),
                   title: const Text('Rename Session'),
