@@ -30,8 +30,12 @@ const _navigationModeKey = 'navigation_mode';
 
 enum _NavigationMode { human, machine }
 
-_NavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
-  final rawValue = settingsBox.get(_navigationModeKey, defaultValue: 'human');
+_NavigationMode _readNavigationMode(
+  Box<dynamic> settingsBox, {
+  String? overrideValue,
+}) {
+  final rawValue = overrideValue ??
+      settingsBox.get(_navigationModeKey, defaultValue: 'human');
 
   return rawValue == 'machine'
       ? _NavigationMode.machine
@@ -39,7 +43,9 @@ _NavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
 }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  const ChatPage({super.key, this.navigationModeOverride});
+
+  final String? navigationModeOverride;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -226,8 +232,11 @@ class _ChatPageState extends State<ChatPage> {
     return ValueListenableBuilder<Box<dynamic>>(
       valueListenable: settingsBox.listenable(keys: const [_navigationModeKey]),
       builder: (context, box, _) {
-        final isMachineMode =
-            _readNavigationMode(box) == _NavigationMode.machine;
+        final isMachineMode = _readNavigationMode(
+              box,
+              overrideValue: widget.navigationModeOverride,
+            ) ==
+            _NavigationMode.machine;
         final displayedMode =
             isMachineMode ? _sessionCreationMode : _SessionCreationMode.single;
 
@@ -473,7 +482,10 @@ class _ChatPageState extends State<ChatPage> {
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
-        final isMachineMode = _readNavigationMode(Hive.box('settings')) ==
+        final isMachineMode = _readNavigationMode(
+              Hive.box('settings'),
+              overrideValue: widget.navigationModeOverride,
+            ) ==
             _NavigationMode.machine;
 
         if (isMachineMode &&

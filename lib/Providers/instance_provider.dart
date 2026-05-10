@@ -37,6 +37,7 @@ class InstanceProvider extends ChangeNotifier {
 
   Timer? _healthTimer;
   bool _isCheckingHealth = false;
+  bool _isDisposed = false;
 
   InstanceProvider({
     required InstanceService instanceService,
@@ -49,6 +50,11 @@ class InstanceProvider extends ChangeNotifier {
   Future<void> _initialize() async {
     await _instanceService.initialize();
     await _instanceService.ensureDefaultInstance();
+
+    if (_isDisposed) {
+      return;
+    }
+
     _instances = _instanceService.getInstances();
     _activeInstance = _instanceService.getActiveInstance();
 
@@ -59,6 +65,10 @@ class InstanceProvider extends ChangeNotifier {
         apiVersion: _activeInstance!.apiVersion,
       );
       _checkHealth();
+    }
+
+    if (_isDisposed) {
+      return;
     }
 
     _startHealthTimer();
@@ -136,7 +146,8 @@ class InstanceProvider extends ChangeNotifier {
   }
 
   /// Remove all locally stored instances and refresh provider state.
-  Future<void> clearStoredInstances({bool ensureDefaultInstance = false}) async {
+  Future<void> clearStoredInstances(
+      {bool ensureDefaultInstance = false}) async {
     await _instanceService.clearAllInstances();
     await reloadFromStorage(ensureDefaultInstance: ensureDefaultInstance);
   }
@@ -219,10 +230,14 @@ class InstanceProvider extends ChangeNotifier {
   }
 
   Future<void> _checkHealth() async {
-    if (_isCheckingHealth) return;
+    if (_isDisposed || _isCheckingHealth) return;
     _isCheckingHealth = true;
 
     try {
+      if (_isDisposed) {
+        return;
+      }
+
       if (_activeInstance == null) {
         if (_isOnline != null) {
           _isOnline = null;
@@ -233,11 +248,18 @@ class InstanceProvider extends ChangeNotifier {
 
       final previousRestartState = _restartState;
       final health = await _apiService.healthCheck();
+
+      if (_isDisposed) {
+        return;
+      }
+
       _applyHealthState(health);
-      final restartChanged = previousRestartState.required != _restartState.required ||
-          previousRestartState.reason != _restartState.reason ||
-          previousRestartState.supported != _restartState.supported ||
-          previousRestartState.managedByLauncher != _restartState.managedByLauncher;
+      final restartChanged =
+          previousRestartState.required != _restartState.required ||
+              previousRestartState.reason != _restartState.reason ||
+              previousRestartState.supported != _restartState.supported ||
+              previousRestartState.managedByLauncher !=
+                  _restartState.managedByLauncher;
 
       if (_isOnline != true) {
         _isOnline = true;
@@ -257,6 +279,7 @@ class InstanceProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _healthTimer?.cancel();
     super.dispose();
   }
@@ -268,7 +291,8 @@ class InstanceProvider extends ChangeNotifier {
       return;
     }
     if (restart is Map) {
-      _restartState = CoquiRestartState.fromJson(restart.cast<String, dynamic>());
+      _restartState =
+          CoquiRestartState.fromJson(restart.cast<String, dynamic>());
       return;
     }
     _restartState = CoquiRestartState.empty;

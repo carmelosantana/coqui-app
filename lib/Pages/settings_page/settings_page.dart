@@ -39,6 +39,8 @@ class _SettingsPageContent extends StatelessWidget {
         SizedBox(height: 16),
         GeneralSettings(),
         SizedBox(height: 16),
+        ProfileSettings(),
+        SizedBox(height: 16),
         DataStorageSettings(),
         SizedBox(height: 16),
         SupporterSettings(),

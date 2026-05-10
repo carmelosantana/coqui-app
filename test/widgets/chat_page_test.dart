@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -82,12 +84,32 @@ class _FakeInstanceService extends InstanceService {
   CoquiInstance? getActiveInstance() => _instances.first;
 }
 
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  @override
+  Future<String?> getApplicationDocumentsPath() async =>
+      '/tmp/coqui_app_widget_tests';
+
+  @override
+  Future<String?> getTemporaryPath() async => '/tmp/coqui_app_widget_tests';
+
+  @override
+  Future<String?> getApplicationSupportPath() async =>
+      '/tmp/coqui_app_widget_tests';
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ChatPage', () {
     late ChatProvider chatProvider;
     late InstanceProvider instanceProvider;
 
-    setUp(() {
+    setUpAll(() async {
+      PathProviderPlatform.instance = _FakePathProviderPlatform();
+      await Hive.initFlutter();
+    });
+
+    setUp(() async {
       final apiService = _FakeApiService();
       chatProvider = ChatProvider(
         apiService: apiService,
@@ -97,9 +119,27 @@ void main() {
         instanceService: _FakeInstanceService(),
         apiService: apiService,
       );
+
+      if (Hive.isBoxOpen('settings')) {
+        await Hive.box('settings').clear();
+      } else {
+        await Hive.openBox('settings');
+      }
     });
 
-    Future<void> pumpChatPage(WidgetTester tester) async {
+    tearDown(() async {
+      if (Hive.isBoxOpen('settings')) {
+        await Hive.box('settings').clear();
+      }
+
+      instanceProvider.dispose();
+      chatProvider.dispose();
+    });
+
+    Future<void> pumpChatPage(
+      WidgetTester tester, {
+      String? navigationModeOverride,
+    }) async {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -118,39 +158,58 @@ void main() {
               useShortestSide: true,
               child: child!,
             ),
-            home: const Scaffold(
-              body: ChatPage(),
+            home: Scaffold(
+              body: ChatPage(
+                navigationModeOverride: navigationModeOverride,
+              ),
             ),
           ),
         ),
       );
 
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
     }
 
-    testWidgets('shows single-session setup by default', (tester) async {
+    Future<void> unmountChatPage(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+
+    testWidgets('shows companion setup by default in human mode', (
+      tester,
+    ) async {
       await pumpChatPage(tester);
 
-      expect(find.text('Single'), findsOneWidget);
-      expect(find.text('Group'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) => widget is SegmentedButton),
+        findsNothing,
+      );
       expect(find.text('Select a role'), findsOneWidget);
       expect(find.text('Select a profile'), findsOneWidget);
       expect(find.text('Select profiles'), findsNothing);
+      expect(find.byKey(const ValueKey<String>('single-session-controls')),
+          findsOneWidget);
+
+      await unmountChatPage(tester);
     });
 
     testWidgets('shows group session controls when group mode is selected', (
       tester,
     ) async {
-      await pumpChatPage(tester);
+      await pumpChatPage(tester, navigationModeOverride: 'machine');
 
       await tester.tap(find.text('Group'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
       expect(find.text('Select profiles'), findsOneWidget);
       expect(find.textContaining('[+]'), findsNothing);
       expect(find.text('Number of rounds'), findsOneWidget);
       expect(find.text('Select a role'), findsNothing);
       expect(find.text('Select a profile'), findsNothing);
+
+      await unmountChatPage(tester);
     });
   });
 }

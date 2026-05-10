@@ -16,6 +16,7 @@ import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/mcp_provider.dart';
+import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Providers/project_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/schedule_provider.dart';
@@ -107,6 +108,11 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => RoleProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ProfileProvider(
             apiService: apiService,
           ),
         ),
