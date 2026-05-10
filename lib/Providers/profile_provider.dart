@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
@@ -9,6 +10,8 @@ class ProfileProvider extends ChangeNotifier {
 
   List<CoquiProfile> _profiles = [];
   final Map<String, CoquiProfile> _profileDetails = {};
+  final Map<String, CoquiBackstoryInspection> _backstoryInspections = {};
+  final Set<String> _loadingBackstoryNames = <String>{};
   bool _isLoading = false;
   bool _isMutating = false;
   String? _error;
@@ -22,6 +25,11 @@ class ProfileProvider extends ChangeNotifier {
       : _apiService = apiService;
 
   CoquiProfile? detailFor(String name) => _profileDetails[name];
+
+  CoquiBackstoryInspection? backstoryFor(String name) =>
+      _backstoryInspections[name];
+
+  bool isLoadingBackstory(String name) => _loadingBackstoryNames.contains(name);
 
   Future<void> fetchProfiles() async {
     _isLoading = true;
@@ -65,6 +73,28 @@ class ProfileProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+    return null;
+  }
+
+  Future<CoquiBackstoryInspection?> fetchBackstoryInspection(
+      String name) async {
+    _error = null;
+    _loadingBackstoryNames.add(name);
+    notifyListeners();
+
+    try {
+      final inspection = await _apiService.inspectProfileBackstory(name);
+      _backstoryInspections[name] = inspection;
+      return inspection;
+    } on CoquiException catch (error) {
+      _error = error.message;
+    } catch (error) {
+      _error = CoquiException.friendly(error).message;
+    } finally {
+      _loadingBackstoryNames.remove(name);
+      notifyListeners();
+    }
+
     return null;
   }
 
@@ -133,6 +163,8 @@ class ProfileProvider extends ChangeNotifier {
   void clear() {
     _profiles = [];
     _profileDetails.clear();
+    _backstoryInspections.clear();
+    _loadingBackstoryNames.clear();
     _error = null;
     _isLoading = false;
     _isMutating = false;

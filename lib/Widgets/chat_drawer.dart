@@ -126,6 +126,7 @@ class ChatDrawer extends StatelessWidget {
                       _buildConfigButton(context),
                       _buildInfoButton(context),
                     ],
+                    _buildProfilesButton(context),
                     _buildSettingsRailButton(context),
                     if (PlatformInfo.isDesktop) _buildServerButton(context),
                   ],
@@ -175,6 +176,19 @@ class ChatDrawer extends StatelessWidget {
           Navigator.pop(context);
         }
         Navigator.pushNamed(context, '/settings');
+      },
+    );
+  }
+
+  Widget _buildProfilesButton(BuildContext context) {
+    return _DrawerActionChip(
+      icon: Icons.face_retouching_natural_outlined,
+      label: 'Profiles',
+      onPressed: () {
+        if (ResponsiveBreakpoints.of(context).isMobile) {
+          Navigator.pop(context);
+        }
+        Navigator.pushNamed(context, '/profiles');
       },
     );
   }
