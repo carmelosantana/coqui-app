@@ -50,15 +50,16 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   Future<CoquiProfile?> fetchProfileDetail(String name) async {
+    final listProfile = _profiles.cast<CoquiProfile?>().firstWhere(
+          (profile) => profile?.name == name,
+          orElse: () => null,
+        );
+
     _error = null;
     notifyListeners();
 
     try {
       final detail = await _apiService.getProfile(name);
-      final listProfile = _profiles.cast<CoquiProfile?>().firstWhere(
-            (profile) => profile?.name == name,
-            orElse: () => null,
-          );
       final mergedDetail = listProfile == null
           ? detail
           : detail.copyWith(isDefault: listProfile.isDefault);
@@ -67,7 +68,15 @@ class ProfileProvider extends ChangeNotifier {
       notifyListeners();
       return mergedDetail;
     } on CoquiException catch (error) {
-      _error = error.message;
+      if (_isSoftNotFound(error)) {
+        if (listProfile != null) {
+          _profileDetails[name] = listProfile;
+          notifyListeners();
+          return listProfile;
+        }
+      } else {
+        _error = error.message;
+      }
     } catch (error) {
       _error = CoquiException.friendly(error).message;
     }
@@ -87,7 +96,11 @@ class ProfileProvider extends ChangeNotifier {
       _backstoryInspections[name] = inspection;
       return inspection;
     } on CoquiException catch (error) {
-      _error = error.message;
+      if (_isSoftNotFound(error)) {
+        _backstoryInspections.remove(name);
+      } else {
+        _error = error.message;
+      }
     } catch (error) {
       _error = CoquiException.friendly(error).message;
     } finally {
@@ -209,5 +222,9 @@ class ProfileProvider extends ChangeNotifier {
 
   void _sortProfiles() {
     _profiles.sort((left, right) => left.label.compareTo(right.label));
+  }
+
+  bool _isSoftNotFound(CoquiException error) {
+    return error.isNotFound || error.statusCode == 404;
   }
 }

@@ -22,8 +22,16 @@ class _ProfileManagerState extends State<ProfileManager> {
   String? _queuedSelectionName;
   bool _isLoadingWorkspace = false;
   bool _isSavingSelectedProfile = false;
+  String _savedDescription = '';
+  String _savedSoul = '';
   late final TextEditingController _descriptionController;
   late final TextEditingController _soulController;
+
+  bool get _hasUnsavedChanges {
+    return _selectedProfileName != null &&
+        (_descriptionController.text != _savedDescription ||
+            _soulController.text != _savedSoul);
+  }
 
   @override
   void initState() {
@@ -186,6 +194,11 @@ class _ProfileManagerState extends State<ProfileManager> {
   }
 
   Future<void> _openCreateDialog(ProfileProvider profileProvider) async {
+    final canContinue = await _confirmSelectionChange(profileProvider);
+    if (!canContinue || !mounted) {
+      return;
+    }
+
     final draft = await showDialog<_ProfileDraft>(
       context: context,
       builder: (context) => const _ProfileEditorDialog(),
@@ -485,6 +498,14 @@ class _ProfileManagerState extends State<ProfileManager> {
       return;
     }
 
+    final canContinue = await _confirmSelectionChange(
+      profileProvider,
+      nextProfileName: profileName,
+    );
+    if (!canContinue || !mounted) {
+      return;
+    }
+
     setState(() {
       _selectedProfileName = profileName;
       _isLoadingWorkspace = true;
@@ -504,22 +525,26 @@ class _ProfileManagerState extends State<ProfileManager> {
   }
 
   void _resetEditorsFromDetail(CoquiProfile? detail) {
-    _descriptionController.text = detail?.description ?? '';
-    _soulController.text = detail?.soul ?? '';
+    _savedDescription = detail?.description ?? '';
+    _savedSoul = detail?.soul ?? '';
+    _descriptionController.text = _savedDescription;
+    _soulController.text = _savedSoul;
   }
 
   void _resetSelection() {
     _selectedProfileName = null;
     _queuedSelectionName = null;
     _isLoadingWorkspace = false;
+    _savedDescription = '';
+    _savedSoul = '';
     _descriptionController.clear();
     _soulController.clear();
   }
 
-  Future<void> _saveSelectedProfile(ProfileProvider profileProvider) async {
+  Future<bool> _saveSelectedProfile(ProfileProvider profileProvider) async {
     final profileName = _selectedProfileName;
     if (profileName == null) {
-      return;
+      return false;
     }
 
     final description = _descriptionController.text.trim();
@@ -530,7 +555,7 @@ class _ProfileManagerState extends State<ProfileManager> {
           content: Text('Provide a description or soul before saving.'),
         ),
       );
-      return;
+      return false;
     }
 
     setState(() => _isSavingSelectedProfile = true);
@@ -540,7 +565,7 @@ class _ProfileManagerState extends State<ProfileManager> {
       soul: soul,
     );
     if (!mounted) {
-      return;
+      return false;
     }
     setState(() => _isSavingSelectedProfile = false);
 
@@ -550,6 +575,61 @@ class _ProfileManagerState extends State<ProfileManager> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Updated profile ${updated.label}.')),
       );
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<bool> _confirmSelectionChange(
+    ProfileProvider profileProvider, {
+    String? nextProfileName,
+  }) async {
+    if (!_hasUnsavedChanges || _selectedProfileName == nextProfileName) {
+      return true;
+    }
+
+    final decision = await showDialog<_UnsavedProfileDecision>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved profile changes'),
+        content: const Text(
+          'You have unsaved edits for the current profile. Save them before leaving, or discard them.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              context,
+              _UnsavedProfileDecision.cancel,
+            ),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(
+              context,
+              _UnsavedProfileDecision.discard,
+            ),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              _UnsavedProfileDecision.save,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    switch (decision) {
+      case _UnsavedProfileDecision.save:
+        return _saveSelectedProfile(profileProvider);
+      case _UnsavedProfileDecision.discard:
+        return true;
+      case _UnsavedProfileDecision.cancel:
+      case null:
+        return false;
     }
   }
 }
@@ -676,7 +756,7 @@ class _BackstoryPreview extends StatelessWidget {
     final data = inspection;
     if (data == null) {
       return Text(
-        'Select a profile to inspect its generated backstory and source state.',
+        'Backstory inspection is unavailable for this profile on the current server, or no generated content exists yet.',
         style: Theme.of(context).textTheme.bodyMedium,
       );
     }
@@ -733,6 +813,12 @@ class _BackstoryPreview extends StatelessWidget {
       ],
     );
   }
+}
+
+enum _UnsavedProfileDecision {
+  save,
+  discard,
+  cancel,
 }
 
 class _BackstoryMetricChip extends StatelessWidget {

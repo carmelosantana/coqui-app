@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
+import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Pages/profiles_page/profile_manager.dart';
@@ -13,15 +14,24 @@ import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/instance_service.dart';
 
 class _FakeApiService extends CoquiApiService {
-  final Map<String, CoquiProfile> _profiles = {
-    'caelum': const CoquiProfile(
-      name: 'caelum',
-      displayName: 'Caelum',
-      description: 'A calm companion.',
-      isDefault: true,
-      soul: '# Caelum\n\nA calm companion.',
-    ),
-  };
+  _FakeApiService({
+    Map<String, CoquiProfile>? profiles,
+    this.failDetailLookup = false,
+    this.failBackstoryLookup = false,
+  }) : _profiles = {
+          'caelum': const CoquiProfile(
+            name: 'caelum',
+            displayName: 'Caelum',
+            description: 'A calm companion.',
+            isDefault: true,
+            soul: '# Caelum\n\nA calm companion.',
+          ),
+          ...?profiles,
+        };
+
+  final Map<String, CoquiProfile> _profiles;
+  final bool failDetailLookup;
+  final bool failBackstoryLookup;
   String? lastUpdatedDescription;
   String? lastUpdatedSoul;
 
@@ -37,6 +47,13 @@ class _FakeApiService extends CoquiApiService {
 
   @override
   Future<CoquiProfile> getProfile(String name) async {
+    if (failDetailLookup) {
+      throw CoquiException(
+        'Not found',
+        statusCode: 404,
+        code: 'not_found',
+      );
+    }
     return _profiles[name]!;
   }
 
@@ -86,6 +103,13 @@ class _FakeApiService extends CoquiApiService {
 
   @override
   Future<CoquiBackstoryInspection> inspectProfileBackstory(String name) async {
+    if (failBackstoryLookup) {
+      throw CoquiException(
+        'Not found',
+        statusCode: 404,
+        code: 'not_found',
+      );
+    }
     return const CoquiBackstoryInspection(
       profile: 'caelum',
       available: true,
@@ -188,6 +212,40 @@ void main() {
     expect(find.byKey(const ValueKey('profile-soul-field')), findsOneWidget);
     expect(find.text('Backstory Preview'), findsOneWidget);
     expect(find.textContaining('memory fragments'), findsOneWidget);
+  });
+
+  testWidgets('profiles page hides optional not found detail errors',
+      (tester) async {
+    final apiService = _FakeApiService(
+      failDetailLookup: true,
+      failBackstoryLookup: true,
+    );
+    final instanceProvider = InstanceProvider(
+      instanceService: _FakeInstanceService(),
+      apiService: apiService,
+    );
+    final profileProvider = ProfileProvider(apiService: apiService);
+
+    addTearDown(() {
+      instanceProvider.dispose();
+      profileProvider.dispose();
+    });
+
+    await tester.pumpWidget(buildSubject(
+      instanceProvider: instanceProvider,
+      profileProvider: profileProvider,
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    instanceProvider.pauseForDestructiveReset();
+
+    expect(find.text('Not found'), findsNothing);
+    expect(find.text('Caelum'), findsWidgets);
+    expect(
+      find.textContaining('Backstory inspection is unavailable'),
+      findsOneWidget,
+    );
   });
 
   test('profile provider can create and delete a profile', () async {
@@ -294,5 +352,61 @@ void main() {
       apiService.lastUpdatedSoul,
       '# Caelum\n\nA steadier collaborative companion.',
     );
+  });
+
+  testWidgets('switching profiles prompts for unsaved changes', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    final apiService = _FakeApiService(
+      profiles: {
+        'nova': const CoquiProfile(
+          name: 'nova',
+          displayName: 'Nova',
+          description: 'A bold strategist.',
+          soul: '# Nova\n\nA bold strategist.',
+        ),
+      },
+    );
+    final instanceProvider = InstanceProvider(
+      instanceService: _FakeInstanceService(),
+      apiService: apiService,
+    );
+    final profileProvider = ProfileProvider(apiService: apiService);
+
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      instanceProvider.dispose();
+      profileProvider.dispose();
+    });
+
+    await tester.pumpWidget(buildSubject(
+      instanceProvider: instanceProvider,
+      profileProvider: profileProvider,
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    instanceProvider.pauseForDestructiveReset();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-description-field')),
+      'A changed description.',
+    );
+    await tester.tap(find.text('Nova').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Unsaved profile changes'), findsOneWidget);
+    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Discard'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+
+    await tester.tap(find.text('Discard'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final descriptionField = tester.widget<TextFormField>(
+      find.byKey(const ValueKey('profile-description-field')),
+    );
+    expect(descriptionField.controller?.text, 'A bold strategist.');
   });
 }
