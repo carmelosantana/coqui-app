@@ -469,6 +469,11 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _handleSendButton(ChatProvider chatProvider) async {
     final instanceProvider =
         Provider.of<InstanceProvider>(context, listen: false);
+    final prompt = _textFieldController.text;
+
+    if (prompt.trim().isEmpty) {
+      return;
+    }
 
     if (instanceProvider.activeInstance == null) {
       setState(() => _crossFadeState = CrossFadeState.showSecond);
@@ -526,7 +531,7 @@ class _ChatPageState extends State<ChatPage> {
 
           if (choice == _SessionContinuationChoice.resume &&
               existingSession != null) {
-            chatProvider.openSession(existingSession.id);
+            await chatProvider.openSession(existingSession.id);
           } else {
             await chatProvider.createNewSession(
               _groupSessionRole,
@@ -549,7 +554,7 @@ class _ChatPageState extends State<ChatPage> {
 
           if (choice == _SessionContinuationChoice.resume &&
               existingSession != null) {
-            chatProvider.openSession(existingSession.id);
+            await chatProvider.openSession(existingSession.id);
           } else {
             await chatProvider.createNewSession(
               roleToUse,
@@ -558,7 +563,7 @@ class _ChatPageState extends State<ChatPage> {
             );
           }
         } else {
-          await chatProvider.resolveSessionScope(roleToUse);
+          await chatProvider.createNewSession(roleToUse);
         }
       } on CoquiException catch (e) {
         messenger.showSnackBar(
@@ -578,10 +583,10 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
 
-      await chatProvider.sendPrompt(_textFieldController.text);
+      await chatProvider.sendPrompt(prompt);
       _clearComposer();
     } else {
-      await chatProvider.sendPrompt(_textFieldController.text);
+      await chatProvider.sendPrompt(prompt);
       _clearComposer();
     }
   }
@@ -637,40 +642,6 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _selectedProfile = nextProfile;
       });
-
-      if (nextProfile == null || nextProfile.isEmpty) {
-        return;
-      }
-
-      await chatProvider.refreshSessions();
-      if (!context.mounted) return;
-
-      final existingSession =
-          chatProvider.latestActiveSessionForProfile(nextProfile);
-      if (existingSession == null || !mounted) {
-        return;
-      }
-
-      final choice = await _showExistingProfileSessionDialog(
-        context,
-        profileName: nextProfile,
-      );
-      if (!context.mounted) return;
-
-      if (choice == null || !mounted) {
-        return;
-      }
-
-      if (choice == _SessionContinuationChoice.resume) {
-        chatProvider.openSession(existingSession.id);
-        return;
-      }
-
-      await _createSessionForProfileSelection(
-        chatProvider,
-        nextProfile,
-        confirmCloseActiveProfileSession: true,
-      );
     }
   }
 
@@ -689,40 +660,6 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _selectedGroupProfiles = selectedProfiles;
     });
-
-    if (selectedProfiles.length < 2) {
-      return;
-    }
-
-    await chatProvider.refreshSessions();
-    if (!context.mounted) return;
-
-    final existingSession = chatProvider.latestActiveSessionForGroupMembers(
-      selectedProfiles,
-    );
-    if (existingSession == null || !mounted) {
-      return;
-    }
-
-    final choice = await _showExistingGroupSessionDialog(
-      context,
-      profiles: selectedProfiles,
-    );
-    if (!context.mounted || choice == null || !mounted) {
-      return;
-    }
-
-    if (choice == _SessionContinuationChoice.resume) {
-      chatProvider.openSession(existingSession.id);
-      return;
-    }
-
-    await _createSessionForGroupSelection(
-      chatProvider,
-      groupProfiles: selectedProfiles,
-      groupMaxRounds: _parsedGroupMaxRounds ?? 3,
-      confirmCloseActiveGroupSession: true,
-    );
   }
 
   Widget _buildClosedSessionNotice(ChatProvider chatProvider) {
@@ -784,7 +721,9 @@ class _ChatPageState extends State<ChatPage> {
               children: [
                 if (resumeTarget != null)
                   TextButton.icon(
-                    onPressed: () => chatProvider.openSession(resumeTarget.id),
+                    onPressed: () async {
+                      await chatProvider.openSession(resumeTarget.id);
+                    },
                     icon: const Icon(Icons.history_toggle_off),
                     label: Text(
                       resumeTarget.title?.isNotEmpty == true
@@ -959,70 +898,6 @@ class _ChatPageState extends State<ChatPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _createSessionForProfileSelection(
-    ChatProvider chatProvider,
-    String profileName, {
-    required bool confirmCloseActiveProfileSession,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    try {
-      await chatProvider.createNewSession(
-        _resolveRoleForNewSession(),
-        profile: profileName,
-        confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
-      );
-    } on CoquiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: errorColor,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(CoquiException.friendly(e).message),
-          backgroundColor: errorColor,
-        ),
-      );
-    }
-  }
-
-  Future<void> _createSessionForGroupSelection(
-    ChatProvider chatProvider, {
-    required List<String> groupProfiles,
-    required int groupMaxRounds,
-    required bool confirmCloseActiveGroupSession,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    try {
-      await chatProvider.createNewSession(
-        _groupSessionRole,
-        groupProfiles: groupProfiles,
-        groupMaxRounds: groupMaxRounds,
-        confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
-      );
-    } on CoquiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: errorColor,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(CoquiException.friendly(e).message),
-          backgroundColor: errorColor,
-        ),
-      );
-    }
   }
 
   Future<void> _startNewSessionFromClosedNotice(

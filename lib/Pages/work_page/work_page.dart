@@ -193,7 +193,7 @@ class _WorkPageState extends State<WorkPage>
     if (targetSessionId != null &&
         targetSessionId.isNotEmpty &&
         chatProvider.currentSession?.id != targetSessionId) {
-      chatProvider.openSession(targetSessionId);
+      await chatProvider.openSession(targetSessionId);
     }
 
     String? targetProjectId = _restoredProjectId.value;

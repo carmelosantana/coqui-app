@@ -47,6 +47,18 @@ import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
 import 'package:coqui_app/Models/coqui_webhook_stats.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
+class CoquiSessionMutationResult {
+  final CoquiSession session;
+  final bool created;
+  final List<String> closedSessionIds;
+
+  const CoquiSessionMutationResult({
+    required this.session,
+    required this.created,
+    this.closedSessionIds = const [],
+  });
+}
+
 /// HTTP client for the Coqui API server.
 ///
 /// Handles all communication with a Coqui instance including
@@ -211,7 +223,7 @@ class CoquiApiService {
   }
 
   /// Create a new session with the given role.
-  Future<CoquiSession> createSession(
+  Future<CoquiSessionMutationResult> createSession(
       {String modelRole = 'orchestrator',
       String? profile,
       bool groupEnabled = false,
@@ -240,11 +252,15 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSession.fromJson(body);
+    return CoquiSessionMutationResult(
+      session: CoquiSession.fromJson(body),
+      created: body['created'] as bool? ?? true,
+      closedSessionIds: _parseClosedSessionIds(body),
+    );
   }
 
   /// Resolve the latest interactive session for a scope, or create one.
-  Future<({CoquiSession session, bool created})> resolveSession({
+  Future<CoquiSessionMutationResult> resolveSession({
     String modelRole = 'orchestrator',
     String? profile,
     bool groupEnabled = false,
@@ -269,7 +285,11 @@ class CoquiApiService {
     final created = body['created'] as bool? ?? false;
     final sessionId = body['id'] as String;
     final session = await getSession(sessionId) ?? CoquiSession.fromJson(body);
-    return (session: session, created: created);
+    return CoquiSessionMutationResult(
+      session: session,
+      created: created,
+      closedSessionIds: _parseClosedSessionIds(body),
+    );
   }
 
   /// Get a session by ID.
@@ -283,6 +303,19 @@ class CoquiApiService {
 
     final body = _parseResponse(response);
     return CoquiSession.fromJson(body);
+  }
+
+  List<String> _parseClosedSessionIds(Map<String, dynamic> body) {
+    final rawIds = body['closed_session_ids'];
+    if (rawIds is! List) {
+      return const [];
+    }
+
+    return rawIds
+        .whereType<String>()
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
   }
 
   /// Delete a session and all associated data.

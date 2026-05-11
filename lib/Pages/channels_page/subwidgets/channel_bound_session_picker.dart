@@ -574,7 +574,7 @@ Future<void> openChannelBoundSession(
     return;
   }
 
-  chatProvider.openSession(session.id);
+  await chatProvider.openSession(session.id);
   navigator.popUntil((route) => route.isFirst);
 }
 
