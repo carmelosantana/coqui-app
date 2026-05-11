@@ -1,4 +1,5 @@
 export 'about_settings.dart';
+export 'agent_behavior_settings.dart';
 export 'data_storage_settings.dart';
 export 'general_settings.dart';
 export 'hosted_banner.dart';

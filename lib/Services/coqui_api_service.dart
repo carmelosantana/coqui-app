@@ -17,6 +17,7 @@ import 'package:coqui_app/Models/coqui_channel_stats.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_command_catalog.dart';
 import 'package:coqui_app/Models/coqui_configured_model.dart';
+import 'package:coqui_app/Models/coqui_context_settings.dart';
 import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
@@ -481,6 +482,33 @@ class CoquiApiService {
       return CoquiRestartState.fromJson(restart.cast<String, dynamic>());
     }
     return CoquiRestartState.empty;
+  }
+
+  Future<CoquiContextSettings> getContextSettings() async {
+    final response = await http.get(
+      _url('/config/context'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiContextSettings.fromJson(body);
+  }
+
+  Future<CoquiContextSettingsUpdateResult> updateContextSettings({
+    Map<String, dynamic> values = const <String, dynamic>{},
+    List<String> reset = const <String>[],
+  }) async {
+    final payload = <String, dynamic>{...values};
+    if (reset.isNotEmpty) {
+      payload['reset'] = reset;
+    }
+
+    final response = await http.patch(
+      _url('/config/context'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiContextSettingsUpdateResult.fromJson(body);
   }
 
   // ── MCP ───────────────────────────────────────────────────────────
