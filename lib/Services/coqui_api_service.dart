@@ -24,6 +24,7 @@ import 'package:coqui_app/Models/coqui_mcp_server.dart';
 import 'package:coqui_app/Models/coqui_mcp_tool.dart';
 import 'package:coqui_app/Models/coqui_mcp_tool_search_result.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_profile_preference_schema.dart';
 import 'package:coqui_app/Models/coqui_restart_state.dart';
 import 'package:coqui_app/Models/coqui_project.dart';
 import 'package:coqui_app/Models/coqui_prompt_inspection.dart';
@@ -1059,6 +1060,16 @@ class CoquiApiService {
         .toList();
   }
 
+  /// Get the curated preference editor schema for profile management.
+  Future<CoquiProfilePreferenceSchema> getProfilePreferenceSchema() async {
+    final response = await http.get(
+      _url('/config/profile-preferences/schema'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProfilePreferenceSchema.fromJson(body);
+  }
+
   /// Get a single profile with full detail fields.
   Future<CoquiProfile> getProfile(String name) async {
     final response = await http.get(
@@ -1154,6 +1165,19 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
     return CoquiBackstoryInspection.fromJson(body);
+  }
+
+  /// Read a single profile backstory source entry for editing flows.
+  Future<String> getProfileBackstoryEntry(
+    String profileName, {
+    required String path,
+  }) async {
+    final response = await http.get(
+      _url('/profiles/$profileName/backstory/entries', {'path': path}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return body['content'] as String? ?? '';
   }
 
   /// Create a backstory folder for a profile and return refreshed inspection data.

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_profile_preference_schema.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 
 class ProfileProvider extends ChangeNotifier {
@@ -11,12 +12,15 @@ class ProfileProvider extends ChangeNotifier {
   List<CoquiProfile> _profiles = [];
   final Map<String, CoquiProfile> _profileDetails = {};
   final Map<String, CoquiBackstoryInspection> _backstoryInspections = {};
+  final Map<String, String> _backstoryEntryContents = {};
+  CoquiProfilePreferenceSchema? _preferenceSchema;
   final Set<String> _loadingBackstoryNames = <String>{};
   bool _isLoading = false;
   bool _isMutating = false;
   String? _error;
 
   List<CoquiProfile> get profiles => _profiles;
+  CoquiProfilePreferenceSchema? get preferenceSchema => _preferenceSchema;
   bool get isLoading => _isLoading;
   bool get isMutating => _isMutating;
   String? get error => _error;
@@ -29,7 +33,29 @@ class ProfileProvider extends ChangeNotifier {
   CoquiBackstoryInspection? backstoryFor(String name) =>
       _backstoryInspections[name];
 
+  String? backstoryEntryContentFor(String name, String path) =>
+      _backstoryEntryContents[_entryCacheKey(name, path)];
+
   bool isLoadingBackstory(String name) => _loadingBackstoryNames.contains(name);
+
+  Future<CoquiProfilePreferenceSchema?> fetchPreferenceSchema() async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      final schema = await _apiService.getProfilePreferenceSchema();
+      _preferenceSchema = schema;
+      notifyListeners();
+      return schema;
+    } on CoquiException catch (error) {
+      _error = error.message;
+    } catch (error) {
+      _error = CoquiException.friendly(error).message;
+    }
+
+    notifyListeners();
+    return null;
+  }
 
   Future<void> fetchProfiles() async {
     _isLoading = true;
@@ -111,6 +137,31 @@ class ProfileProvider extends ChangeNotifier {
     return null;
   }
 
+  Future<String?> fetchBackstoryEntryContent(
+    String profileName,
+    String path,
+  ) async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      final content = await _apiService.getProfileBackstoryEntry(
+        profileName,
+        path: path,
+      );
+      _backstoryEntryContents[_entryCacheKey(profileName, path)] = content;
+      notifyListeners();
+      return content;
+    } on CoquiException catch (error) {
+      _error = error.message;
+    } catch (error) {
+      _error = CoquiException.friendly(error).message;
+    }
+
+    notifyListeners();
+    return null;
+  }
+
   Future<CoquiProfile?> createProfile({
     required String name,
     String? description,
@@ -173,10 +224,58 @@ class ProfileProvider extends ChangeNotifier {
     return deleted ?? false;
   }
 
+  Future<CoquiBackstoryInspection?> createBackstoryFolder(
+    String profileName, {
+    required String path,
+  }) async {
+    return _runMutation(() async {
+      final inspection = await _apiService.createProfileBackstoryFolder(
+        profileName,
+        path: path,
+      );
+      _backstoryInspections[profileName] = inspection;
+      return inspection;
+    });
+  }
+
+  Future<CoquiBackstoryInspection?> saveBackstoryEntry(
+    String profileName, {
+    required String path,
+    required String content,
+  }) async {
+    return _runMutation(() async {
+      final inspection = await _apiService.upsertProfileBackstoryEntry(
+        profileName,
+        path: path,
+        content: content,
+      );
+      _backstoryInspections[profileName] = inspection;
+      _backstoryEntryContents[_entryCacheKey(profileName, path)] = content;
+      return inspection;
+    });
+  }
+
+  Future<CoquiBackstoryInspection?> deleteBackstoryEntry(
+    String profileName, {
+    required String path,
+  }) async {
+    return _runMutation(() async {
+      final inspection = await _apiService.deleteProfileBackstoryEntry(
+        profileName,
+        path: path,
+      );
+      _backstoryInspections[profileName] = inspection;
+      _backstoryEntryContents.remove(_entryCacheKey(profileName, path));
+      return inspection;
+    });
+  }
+
   void clear() {
     _profiles = [];
     _profileDetails.clear();
     _backstoryInspections.clear();
+    _backstoryEntryContents.clear();
+    _preferenceSchema = null;
     _loadingBackstoryNames.clear();
     _error = null;
     _isLoading = false;
@@ -226,5 +325,9 @@ class ProfileProvider extends ChangeNotifier {
 
   bool _isSoftNotFound(CoquiException error) {
     return error.isNotFound || error.statusCode == 404;
+  }
+
+  String _entryCacheKey(String profileName, String path) {
+    return '$profileName::$path';
   }
 }

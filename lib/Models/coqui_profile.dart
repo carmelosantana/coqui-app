@@ -6,6 +6,8 @@ class CoquiProfile {
   final String? model;
   final String? soul;
   final Map<String, dynamic>? preferences;
+  final Map<String, dynamic>? preferenceValues;
+  final Map<String, dynamic>? preferenceDocument;
   final List<String> allowedRoles;
 
   const CoquiProfile({
@@ -16,6 +18,8 @@ class CoquiProfile {
     this.model,
     this.soul,
     this.preferences,
+    this.preferenceValues,
+    this.preferenceDocument,
     this.allowedRoles = const [],
   });
 
@@ -31,6 +35,10 @@ class CoquiProfile {
       model: json['model'] as String?,
       soul: json['soul'] as String?,
       preferences: (json['preferences'] as Map?)?.cast<String, dynamic>(),
+        preferenceValues:
+          (json['preference_values'] as Map?)?.cast<String, dynamic>(),
+        preferenceDocument:
+          (json['preference_document'] as Map?)?.cast<String, dynamic>(),
       allowedRoles: (json['allowed_roles'] as List? ?? const [])
           .whereType<String>()
           .toList(growable: false),
@@ -47,6 +55,8 @@ class CoquiProfile {
     String? model,
     String? soul,
     Map<String, dynamic>? preferences,
+    Map<String, dynamic>? preferenceValues,
+    Map<String, dynamic>? preferenceDocument,
     List<String>? allowedRoles,
   }) {
     return CoquiProfile(
@@ -57,6 +67,8 @@ class CoquiProfile {
       model: model ?? this.model,
       soul: soul ?? this.soul,
       preferences: preferences ?? this.preferences,
+      preferenceValues: preferenceValues ?? this.preferenceValues,
+      preferenceDocument: preferenceDocument ?? this.preferenceDocument,
       allowedRoles: allowedRoles ?? this.allowedRoles,
     );
   }
