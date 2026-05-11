@@ -165,10 +165,10 @@ class ChatProvider extends ChangeNotifier {
     }
 
     final sessionId = _navigableSessions[visibleIndex].id;
-    openSession(sessionId);
+    unawaited(openSession(sessionId));
   }
 
-  void openSession(String sessionId) {
+  Future<void> openSession(String sessionId) async {
     _currentSessionIndex =
         _sessions.indexWhere((session) => session.id == sessionId);
     if (_currentSessionIndex == -1) {
@@ -182,7 +182,9 @@ class ChatProvider extends ChangeNotifier {
     _updateDisplayMessages();
     _pendingFiles.clear();
 
-    _loadCurrentSession();
+    notifyListeners();
+
+    await _loadCurrentSession();
     notifyListeners();
   }
 
@@ -289,7 +291,7 @@ class ChatProvider extends ChangeNotifier {
   }) async {
     final normalizedGroupProfiles = _normalizeGroupProfiles(groupProfiles);
     final isGroupSession = normalizedGroupProfiles.length >= 2;
-    final session = await _apiService.createSession(
+    final mutation = await _apiService.createSession(
       modelRole: isGroupSession ? 'orchestrator' : role.name,
       profile: isGroupSession ? null : profile,
       groupEnabled: isGroupSession,
@@ -299,15 +301,7 @@ class ChatProvider extends ChangeNotifier {
       confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
     );
 
-    _sessions.insert(0, session);
-    _currentSessionIndex = 0;
-
-    await _databaseService.upsertSession(session);
-
-    _messages.clear();
-    _updateDisplayMessages();
-
-    unawaited(_refreshProjectLabelForSession(session));
+    await _applySessionMutation(mutation);
 
     AnalyticsService.trackEvent('session_created', {
       'role': isGroupSession ? 'orchestrator' : role.name,
@@ -317,8 +311,6 @@ class ChatProvider extends ChangeNotifier {
       if (confirmCloseActiveProfileSession) 'replaced_existing_profile': true,
       if (confirmCloseActiveGroupSession) 'replaced_existing_group': true,
     });
-
-    notifyListeners();
   }
 
   /// Resolve or create the latest interactive session for the given scope.
@@ -328,18 +320,7 @@ class ChatProvider extends ChangeNotifier {
       profile: profile,
     );
 
-    final session = resolved.session;
-    _upsertSessionAtTop(session);
-    _currentSessionIndex = 0;
-
-    await _databaseService.upsertSession(session);
-
-    _messages.clear();
-    _updateDisplayMessages();
-    unawaited(_refreshProjectLabelForSession(session));
-    notifyListeners();
-
-    await _loadCurrentSession();
+    await _applySessionMutation(resolved);
 
     AnalyticsService.trackEvent('session_resolved', {
       'role': role.name,
@@ -1311,6 +1292,62 @@ class ChatProvider extends ChangeNotifier {
   void _upsertSessionAtTop(CoquiSession session) {
     _sessions.removeWhere((existing) => existing.id == session.id);
     _sessions.insert(0, session);
+  }
+
+  Future<void> _applySessionMutation(CoquiSessionMutationResult mutation) async {
+    final session = mutation.session;
+
+    _upsertSessionAtTop(session);
+    _markSessionsArchived(mutation.closedSessionIds);
+    _currentSessionIndex = 0;
+
+    await _databaseService.upsertSession(session);
+
+    for (final closedSessionId in mutation.closedSessionIds) {
+      final index = _sessions.indexWhere(
+        (candidate) => candidate.id == closedSessionId,
+      );
+      if (index >= 0) {
+        await _databaseService.upsertSession(_sessions[index]);
+      }
+    }
+
+    _messages.clear();
+    _updateDisplayMessages();
+    _pendingFiles.clear();
+    unawaited(_refreshProjectLabelForSession(session));
+    notifyListeners();
+
+    await _loadCurrentSession();
+    unawaited(refreshSessions());
+  }
+
+  void _markSessionsArchived(List<String> sessionIds) {
+    if (sessionIds.isEmpty) {
+      return;
+    }
+
+    final archivedAt = DateTime.now().toUtc();
+
+    for (final sessionId in sessionIds) {
+      final index = _sessions.indexWhere((session) => session.id == sessionId);
+      if (index == -1) {
+        continue;
+      }
+
+      final existing = _sessions[index];
+      _sessions[index] = existing.copyWith(
+        isClosed: true,
+        isArchived: true,
+        closedAt: existing.closedAt ?? archivedAt,
+        archivedAt: existing.archivedAt ?? archivedAt,
+      );
+      _activeStreams.remove(sessionId);
+      _streamingContent.remove(sessionId);
+      _cancelledStreams.remove(sessionId);
+      _unreadSessions.remove(sessionId);
+      _sessionErrors.remove(sessionId);
+    }
   }
 
   Future<List<CoquiSession>> _hydrateGroupSessions(

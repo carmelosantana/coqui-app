@@ -814,6 +814,7 @@ usage() {
     echo "  build [--platform P] Build signed release artifacts"
     echo "  tag [VERSION]        Bump version, commit, tag, and push"
     echo "  publish              Upload iOS IPA to TestFlight"
+    echo "  upload-apple         Build iOS + macOS locally and upload to GitHub Release"
     echo "  status               Show current release readiness"
     echo ""
     echo "Examples:"
@@ -823,22 +824,26 @@ usage() {
     echo "  scripts/release.sh tag 1.0.0           # Set explicit version"
     echo "  scripts/release.sh build --platform ios  # Build signed IPA"
     echo "  scripts/release.sh publish             # Upload to TestFlight"
+    echo "  scripts/release.sh upload-apple         # Build + upload iOS & macOS to GitHub Release"
+    echo "  scripts/release.sh upload-apple --no-build  # Upload pre-built artifacts only"
     echo ""
     echo "Typical release flow:"
     echo "  1. scripts/release.sh setup            # One-time setup"
     echo "  2. scripts/release.sh tag patch         # Bump, tag, push → CI builds"
-    echo "  3. scripts/release.sh publish           # Upload iOS to TestFlight"
+    echo "  3. scripts/release.sh upload-apple      # Build + upload Apple artifacts"
+    echo "  4. scripts/release.sh publish           # Upload iOS to TestFlight"
     echo ""
 }
 
 case "${1:-}" in
-    setup)    shift; cmd_setup "$@" ;;
-    build)    shift; cmd_build "$@" ;;
-    tag)      shift; cmd_tag "${1:-}" ;;
-    publish)  cmd_publish ;;
-    status)   cmd_status ;;
-    -h|--help) usage ;;
-    "")       usage ;;
+    setup)         shift; cmd_setup "$@" ;;
+    build)         shift; cmd_build "$@" ;;
+    tag)           shift; cmd_tag "${1:-}" ;;
+    publish)       cmd_publish ;;
+    upload-apple)  shift; exec "${SCRIPT_DIR}/upload-apple.sh" "$@" ;;
+    status)        cmd_status ;;
+    -h|--help)     usage ;;
+    "")            usage ;;
     *)
         echo "Unknown command: $1" >&2
         echo "Run: scripts/release.sh --help" >&2

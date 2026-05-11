@@ -26,8 +26,26 @@ enum _SessionContinuationChoice { resume, startNew }
 
 enum _SessionCreationMode { single, group }
 
+const _navigationModeKey = 'navigation_mode';
+
+enum _NavigationMode { human, machine }
+
+_NavigationMode _readNavigationMode(
+  Box<dynamic> settingsBox, {
+  String? overrideValue,
+}) {
+  final rawValue = overrideValue ??
+      settingsBox.get(_navigationModeKey, defaultValue: 'human');
+
+  return rawValue == 'machine'
+      ? _NavigationMode.machine
+      : _NavigationMode.human;
+}
+
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  const ChatPage({super.key, this.navigationModeOverride});
+
+  final String? navigationModeOverride;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -209,41 +227,63 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildSessionSetupControls(ChatProvider chatProvider) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 720),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SegmentedButton<_SessionCreationMode>(
-            segments: const [
-              ButtonSegment<_SessionCreationMode>(
-                value: _SessionCreationMode.single,
-                icon: Icon(Icons.person_outline),
-                label: Text('Single'),
-              ),
-              ButtonSegment<_SessionCreationMode>(
-                value: _SessionCreationMode.group,
-                icon: Icon(Icons.groups_2_outlined),
-                label: Text('Group'),
+    final settingsBox = Hive.box('settings');
+
+    return ValueListenableBuilder<Box<dynamic>>(
+      valueListenable: settingsBox.listenable(keys: const [_navigationModeKey]),
+      builder: (context, box, _) {
+        final isMachineMode = _readNavigationMode(
+              box,
+              overrideValue: widget.navigationModeOverride,
+            ) ==
+            _NavigationMode.machine;
+        final displayedMode =
+            isMachineMode ? _sessionCreationMode : _SessionCreationMode.single;
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMachineMode)
+                SegmentedButton<_SessionCreationMode>(
+                  segments: const [
+                    ButtonSegment<_SessionCreationMode>(
+                      value: _SessionCreationMode.single,
+                      icon: Icon(Icons.person_outline),
+                      label: Text('Single'),
+                    ),
+                    ButtonSegment<_SessionCreationMode>(
+                      value: _SessionCreationMode.group,
+                      icon: Icon(Icons.groups_2_outlined),
+                      label: Text('Group'),
+                    ),
+                  ],
+                  selected: {_sessionCreationMode},
+                  onSelectionChanged: (selection) {
+                    if (selection.isEmpty) return;
+                    setState(() {
+                      _sessionCreationMode = selection.first;
+                    });
+                  },
+                )
+              else
+                _CompanionModeHint(
+                  onSwitchHintPressed: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+              const SizedBox(height: 16),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: displayedMode == _SessionCreationMode.single
+                    ? _buildSingleSessionControls()
+                    : _buildGroupSessionControls(chatProvider),
               ),
             ],
-            selected: {_sessionCreationMode},
-            onSelectionChanged: (selection) {
-              if (selection.isEmpty) return;
-              setState(() {
-                _sessionCreationMode = selection.first;
-              });
-            },
           ),
-          const SizedBox(height: 16),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _sessionCreationMode == _SessionCreationMode.single
-                ? _buildSingleSessionControls()
-                : _buildGroupSessionControls(chatProvider),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -429,6 +469,11 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _handleSendButton(ChatProvider chatProvider) async {
     final instanceProvider =
         Provider.of<InstanceProvider>(context, listen: false);
+    final prompt = _textFieldController.text;
+
+    if (prompt.trim().isEmpty) {
+      return;
+    }
 
     if (instanceProvider.activeInstance == null) {
       setState(() => _crossFadeState = CrossFadeState.showSecond);
@@ -442,7 +487,14 @@ class _ChatPageState extends State<ChatPage> {
       final errorColor = Theme.of(context).colorScheme.error;
 
       try {
-        if (_sessionCreationMode == _SessionCreationMode.group) {
+        final isMachineMode = _readNavigationMode(
+              Hive.box('settings'),
+              overrideValue: widget.navigationModeOverride,
+            ) ==
+            _NavigationMode.machine;
+
+        if (isMachineMode &&
+            _sessionCreationMode == _SessionCreationMode.group) {
           final groupMaxRounds = _parsedGroupMaxRounds;
           if (_selectedGroupProfiles.length < 2) {
             messenger.showSnackBar(
@@ -479,7 +531,7 @@ class _ChatPageState extends State<ChatPage> {
 
           if (choice == _SessionContinuationChoice.resume &&
               existingSession != null) {
-            chatProvider.openSession(existingSession.id);
+            await chatProvider.openSession(existingSession.id);
           } else {
             await chatProvider.createNewSession(
               _groupSessionRole,
@@ -502,7 +554,7 @@ class _ChatPageState extends State<ChatPage> {
 
           if (choice == _SessionContinuationChoice.resume &&
               existingSession != null) {
-            chatProvider.openSession(existingSession.id);
+            await chatProvider.openSession(existingSession.id);
           } else {
             await chatProvider.createNewSession(
               roleToUse,
@@ -531,10 +583,10 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
 
-      await chatProvider.sendPrompt(_textFieldController.text);
+      await chatProvider.sendPrompt(prompt);
       _clearComposer();
     } else {
-      await chatProvider.sendPrompt(_textFieldController.text);
+      await chatProvider.sendPrompt(prompt);
       _clearComposer();
     }
   }
@@ -590,40 +642,6 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _selectedProfile = nextProfile;
       });
-
-      if (nextProfile == null || nextProfile.isEmpty) {
-        return;
-      }
-
-      await chatProvider.refreshSessions();
-      if (!context.mounted) return;
-
-      final existingSession =
-          chatProvider.latestActiveSessionForProfile(nextProfile);
-      if (existingSession == null || !mounted) {
-        return;
-      }
-
-      final choice = await _showExistingProfileSessionDialog(
-        context,
-        profileName: nextProfile,
-      );
-      if (!context.mounted) return;
-
-      if (choice == null || !mounted) {
-        return;
-      }
-
-      if (choice == _SessionContinuationChoice.resume) {
-        chatProvider.openSession(existingSession.id);
-        return;
-      }
-
-      await _createSessionForProfileSelection(
-        chatProvider,
-        nextProfile,
-        confirmCloseActiveProfileSession: true,
-      );
     }
   }
 
@@ -642,40 +660,6 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _selectedGroupProfiles = selectedProfiles;
     });
-
-    if (selectedProfiles.length < 2) {
-      return;
-    }
-
-    await chatProvider.refreshSessions();
-    if (!context.mounted) return;
-
-    final existingSession = chatProvider.latestActiveSessionForGroupMembers(
-      selectedProfiles,
-    );
-    if (existingSession == null || !mounted) {
-      return;
-    }
-
-    final choice = await _showExistingGroupSessionDialog(
-      context,
-      profiles: selectedProfiles,
-    );
-    if (!context.mounted || choice == null || !mounted) {
-      return;
-    }
-
-    if (choice == _SessionContinuationChoice.resume) {
-      chatProvider.openSession(existingSession.id);
-      return;
-    }
-
-    await _createSessionForGroupSelection(
-      chatProvider,
-      groupProfiles: selectedProfiles,
-      groupMaxRounds: _parsedGroupMaxRounds ?? 3,
-      confirmCloseActiveGroupSession: true,
-    );
   }
 
   Widget _buildClosedSessionNotice(ChatProvider chatProvider) {
@@ -737,7 +721,9 @@ class _ChatPageState extends State<ChatPage> {
               children: [
                 if (resumeTarget != null)
                   TextButton.icon(
-                    onPressed: () => chatProvider.openSession(resumeTarget.id),
+                    onPressed: () async {
+                      await chatProvider.openSession(resumeTarget.id);
+                    },
                     icon: const Icon(Icons.history_toggle_off),
                     label: Text(
                       resumeTarget.title?.isNotEmpty == true
@@ -914,70 +900,6 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Future<void> _createSessionForProfileSelection(
-    ChatProvider chatProvider,
-    String profileName, {
-    required bool confirmCloseActiveProfileSession,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    try {
-      await chatProvider.createNewSession(
-        _resolveRoleForNewSession(),
-        profile: profileName,
-        confirmCloseActiveProfileSession: confirmCloseActiveProfileSession,
-      );
-    } on CoquiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: errorColor,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(CoquiException.friendly(e).message),
-          backgroundColor: errorColor,
-        ),
-      );
-    }
-  }
-
-  Future<void> _createSessionForGroupSelection(
-    ChatProvider chatProvider, {
-    required List<String> groupProfiles,
-    required int groupMaxRounds,
-    required bool confirmCloseActiveGroupSession,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    try {
-      await chatProvider.createNewSession(
-        _groupSessionRole,
-        groupProfiles: groupProfiles,
-        groupMaxRounds: groupMaxRounds,
-        confirmCloseActiveGroupSession: confirmCloseActiveGroupSession,
-      );
-    } on CoquiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: errorColor,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(CoquiException.friendly(e).message),
-          backgroundColor: errorColor,
-        ),
-      );
-    }
-  }
-
   Future<void> _startNewSessionFromClosedNotice(
     ChatProvider chatProvider,
     CoquiSession session, {
@@ -1017,5 +939,50 @@ class _ChatPageState extends State<ChatPage> {
         ),
       );
     }
+  }
+}
+
+class _CompanionModeHint extends StatelessWidget {
+  final VoidCallback onSwitchHintPressed;
+
+  const _CompanionModeHint({required this.onSwitchHintPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Start simple',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Human mode starts with one profile and one conversation. Switch to Machine mode in Settings when you want group sessions and operator workflows.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onSwitchHintPressed,
+            icon: const Icon(Icons.settings_outlined),
+            label: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
   }
 }

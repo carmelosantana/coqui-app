@@ -17,6 +17,7 @@ import 'package:coqui_app/Models/coqui_channel_stats.dart';
 import 'package:coqui_app/Models/coqui_child_run.dart';
 import 'package:coqui_app/Models/coqui_command_catalog.dart';
 import 'package:coqui_app/Models/coqui_configured_model.dart';
+import 'package:coqui_app/Models/coqui_context_settings.dart';
 import 'package:coqui_app/Models/coqui_backstory_inspection.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
@@ -24,6 +25,7 @@ import 'package:coqui_app/Models/coqui_mcp_server.dart';
 import 'package:coqui_app/Models/coqui_mcp_tool.dart';
 import 'package:coqui_app/Models/coqui_mcp_tool_search_result.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_profile_preference_schema.dart';
 import 'package:coqui_app/Models/coqui_restart_state.dart';
 import 'package:coqui_app/Models/coqui_project.dart';
 import 'package:coqui_app/Models/coqui_prompt_inspection.dart';
@@ -44,6 +46,18 @@ import 'package:coqui_app/Models/coqui_webhook.dart';
 import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
 import 'package:coqui_app/Models/coqui_webhook_stats.dart';
 import 'package:coqui_app/Models/sse_event.dart';
+
+class CoquiSessionMutationResult {
+  final CoquiSession session;
+  final bool created;
+  final List<String> closedSessionIds;
+
+  const CoquiSessionMutationResult({
+    required this.session,
+    required this.created,
+    this.closedSessionIds = const [],
+  });
+}
 
 /// HTTP client for the Coqui API server.
 ///
@@ -209,7 +223,7 @@ class CoquiApiService {
   }
 
   /// Create a new session with the given role.
-  Future<CoquiSession> createSession(
+  Future<CoquiSessionMutationResult> createSession(
       {String modelRole = 'orchestrator',
       String? profile,
       bool groupEnabled = false,
@@ -238,11 +252,15 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSession.fromJson(body);
+    return CoquiSessionMutationResult(
+      session: CoquiSession.fromJson(body),
+      created: body['created'] as bool? ?? true,
+      closedSessionIds: _parseClosedSessionIds(body),
+    );
   }
 
   /// Resolve the latest interactive session for a scope, or create one.
-  Future<({CoquiSession session, bool created})> resolveSession({
+  Future<CoquiSessionMutationResult> resolveSession({
     String modelRole = 'orchestrator',
     String? profile,
     bool groupEnabled = false,
@@ -267,7 +285,11 @@ class CoquiApiService {
     final created = body['created'] as bool? ?? false;
     final sessionId = body['id'] as String;
     final session = await getSession(sessionId) ?? CoquiSession.fromJson(body);
-    return (session: session, created: created);
+    return CoquiSessionMutationResult(
+      session: session,
+      created: created,
+      closedSessionIds: _parseClosedSessionIds(body),
+    );
   }
 
   /// Get a session by ID.
@@ -281,6 +303,19 @@ class CoquiApiService {
 
     final body = _parseResponse(response);
     return CoquiSession.fromJson(body);
+  }
+
+  List<String> _parseClosedSessionIds(Map<String, dynamic> body) {
+    final rawIds = body['closed_session_ids'];
+    if (rawIds is! List) {
+      return const [];
+    }
+
+    return rawIds
+        .whereType<String>()
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
   }
 
   /// Delete a session and all associated data.
@@ -480,6 +515,33 @@ class CoquiApiService {
       return CoquiRestartState.fromJson(restart.cast<String, dynamic>());
     }
     return CoquiRestartState.empty;
+  }
+
+  Future<CoquiContextSettings> getContextSettings() async {
+    final response = await http.get(
+      _url('/config/context'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiContextSettings.fromJson(body);
+  }
+
+  Future<CoquiContextSettingsUpdateResult> updateContextSettings({
+    Map<String, dynamic> values = const <String, dynamic>{},
+    List<String> reset = const <String>[],
+  }) async {
+    final payload = <String, dynamic>{...values};
+    if (reset.isNotEmpty) {
+      payload['reset'] = reset;
+    }
+
+    final response = await http.patch(
+      _url('/config/context'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiContextSettingsUpdateResult.fromJson(body);
   }
 
   // ── MCP ───────────────────────────────────────────────────────────
@@ -1044,7 +1106,7 @@ class CoquiApiService {
   /// Get available personality profiles with descriptions.
   Future<List<CoquiProfile>> getProfiles() async {
     final response = await http.get(
-      _url('/config/profiles'),
+      _url('/profiles'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1057,6 +1119,182 @@ class CoquiApiService {
               isDefault: (profile['name'] as String?) == defaultProfile,
             ))
         .toList();
+  }
+
+  /// Get the curated preference editor schema for profile management.
+  Future<CoquiProfilePreferenceSchema> getProfilePreferenceSchema() async {
+    final response = await http.get(
+      _url('/config/profile-preferences/schema'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProfilePreferenceSchema.fromJson(body);
+  }
+
+  /// Get a single profile with full detail fields.
+  Future<CoquiProfile> getProfile(String name) async {
+    final response = await http.get(
+      _url('/profiles/$name'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiProfile.fromJson(body);
+  }
+
+  /// Create a profile for onboarding and profile management flows.
+  Future<CoquiProfile> createProfile({
+    required String name,
+    String? description,
+    String? soul,
+    String? backstory,
+    Map<String, dynamic>? preferences,
+  }) async {
+    final payload = <String, dynamic>{'name': name};
+    if (description != null && description.trim().isNotEmpty) {
+      payload['description'] = description.trim();
+    }
+    if (soul != null && soul.trim().isNotEmpty) {
+      payload['soul'] = soul.trim();
+    }
+    if (backstory != null && backstory.trim().isNotEmpty) {
+      payload['backstory'] = backstory.trim();
+    }
+    if (preferences != null) {
+      payload['preferences'] = preferences;
+    }
+
+    final response = await http.post(
+      _url('/profiles'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiProfile.fromJson(body);
+  }
+
+  /// Update a profile's editable metadata.
+  Future<CoquiProfile> updateProfile(
+    String name, {
+    String? description,
+    String? soul,
+    String? backstory,
+    Map<String, dynamic>? preferences,
+    bool clearBackstory = false,
+    bool clearPreferences = false,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (description != null) {
+      payload['description'] = description;
+    }
+    if (soul != null) {
+      payload['soul'] = soul;
+    }
+    if (clearBackstory) {
+      payload['backstory'] = null;
+    } else if (backstory != null) {
+      payload['backstory'] = backstory;
+    }
+    if (clearPreferences) {
+      payload['preferences'] = null;
+    } else if (preferences != null) {
+      payload['preferences'] = preferences;
+    }
+
+    final response = await http.patch(
+      _url('/profiles/$name'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final body = _parseResponse(response);
+    return CoquiProfile.fromJson(body);
+  }
+
+  /// Delete a non-default profile.
+  Future<void> deleteProfile(String name) async {
+    final response = await http.delete(
+      _url('/profiles/$name'),
+      headers: _headers,
+    );
+    _parseResponse(response);
+  }
+
+  /// Get backstory inspection metadata through the profile-scoped route.
+  Future<CoquiBackstoryInspection> inspectProfileBackstory(String name) async {
+    final response = await http.get(
+      _url('/profiles/$name/backstory'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiBackstoryInspection.fromJson(body);
+  }
+
+  /// Read a single profile backstory source entry for editing flows.
+  Future<String> getProfileBackstoryEntry(
+    String profileName, {
+    required String path,
+  }) async {
+    final response = await http.get(
+      _url('/profiles/$profileName/backstory/entries', {'path': path}),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return body['content'] as String? ?? '';
+  }
+
+  /// Create a backstory folder for a profile and return refreshed inspection data.
+  Future<CoquiBackstoryInspection> createProfileBackstoryFolder(
+    String profileName, {
+    required String path,
+  }) async {
+    final response = await http.post(
+      _url('/profiles/$profileName/backstory/folders'),
+      headers: _headers,
+      body: jsonEncode({'path': path}),
+    );
+    final body = _parseResponse(response);
+    return CoquiBackstoryInspection.fromJson(
+      body['backstory'] as Map<String, dynamic>,
+    );
+  }
+
+  /// Create or replace a profile backstory entry and return refreshed inspection data.
+  Future<CoquiBackstoryInspection> upsertProfileBackstoryEntry(
+    String profileName, {
+    required String path,
+    required String content,
+  }) async {
+    final response = await http.put(
+      _url('/profiles/$profileName/backstory/entries'),
+      headers: _headers,
+      body: jsonEncode({
+        'path': path,
+        'content': content,
+      }),
+    );
+    final body = _parseResponse(response);
+    return CoquiBackstoryInspection.fromJson(
+      body['backstory'] as Map<String, dynamic>,
+    );
+  }
+
+  /// Delete a profile backstory entry and return refreshed inspection data.
+  Future<CoquiBackstoryInspection> deleteProfileBackstoryEntry(
+    String profileName, {
+    required String path,
+  }) async {
+    final request = http.Request(
+      'DELETE',
+      _url('/profiles/$profileName/backstory/entries'),
+    )
+      ..headers.addAll(_headers)
+      ..body = jsonEncode({'path': path});
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    final body = _parseResponse(response);
+    return CoquiBackstoryInspection.fromJson(
+      body['backstory'] as Map<String, dynamic>,
+    );
   }
 
   Future<List<CoquiProject>> listProjects({

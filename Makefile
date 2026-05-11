@@ -6,7 +6,7 @@
 	docker-web-build docker-web-start docker-web-stop \
        doctor test analyze \
        fix fix-ios fix-android \
-       release-setup release-status release-verify release-build release-tag release-publish
+       release-setup release-status release-verify release-build release-tag release-publish release-upload-apple
 
 # Default target
 help: ## Show this help
@@ -171,3 +171,6 @@ release-tag: ## Tag and push a release (usage: make release-tag V=patch|minor|ma
 
 release-publish: ## Upload iOS build to TestFlight
 	./scripts/release.sh publish
+
+release-upload-apple: ## Build iOS + macOS locally and upload to GitHub Release
+	./scripts/release.sh upload-apple

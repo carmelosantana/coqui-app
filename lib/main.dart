@@ -7,6 +7,7 @@ import 'package:coqui_app/Pages/config_page/config_page.dart';
 import 'package:coqui_app/Pages/info_page/info_page.dart';
 import 'package:coqui_app/Pages/main_page.dart';
 import 'package:coqui_app/Pages/mcp_page/mcp_page.dart';
+import 'package:coqui_app/Pages/profiles_page/profiles_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
 import 'package:coqui_app/Pages/tasks_page/tasks_page.dart';
@@ -16,6 +17,7 @@ import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/mcp_provider.dart';
+import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Providers/project_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/schedule_provider.dart';
@@ -107,6 +109,11 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => RoleProvider(
+            apiService: apiService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ProfileProvider(
             apiService: apiService,
           ),
         ),
@@ -352,6 +359,12 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/settings') {
               return MaterialPageRoute(
                 builder: (context) => const SettingsPage(),
+              );
+            }
+
+            if (settings.name == '/profiles') {
+              return MaterialPageRoute(
+                builder: (context) => const ProfilesPage(),
               );
             }
 
