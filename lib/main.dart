@@ -13,12 +13,8 @@ import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
 import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
-import 'package:coqui_app/Providers/project_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
-import 'package:coqui_app/Providers/work_provider.dart';
-import 'package:coqui_app/Pages/work_page/work_page.dart';
-import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
 import 'package:coqui_app/Services/services.dart';
 import 'package:coqui_app/Theme/theme.dart';
@@ -111,16 +107,6 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => LoopProvider(
-            apiService: apiService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => ProjectProvider(
-            apiService: apiService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => WorkProvider(
             apiService: apiService,
           ),
         ),
@@ -353,15 +339,6 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/commands') {
               return MaterialPageRoute(
                 builder: (context) => const CommandsHelpPage(),
-              );
-            }
-
-            if (settings.name == '/work') {
-              final args = WorkPageArguments.fromRouteArguments(
-                settings.arguments,
-              );
-              return MaterialPageRoute(
-                builder: (context) => WorkPage(arguments: args),
               );
             }
 
