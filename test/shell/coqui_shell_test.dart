@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/shell/coqui_shell.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
+import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Services/database_service.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
 
 class _FakeProfileProvider extends ProfileProvider {
@@ -16,6 +20,27 @@ class _FakeProfileProvider extends ProfileProvider {
   List<CoquiProfile> get profiles => _list;
   @override
   Future<void> fetchProfiles() async {}
+}
+
+class _InMemoryDatabaseService extends DatabaseService {
+  @override
+  Future<void> open(String databaseFile) async {}
+  @override
+  Future<List<CoquiSession>> getSessions({String? instanceId}) async => const [];
+  @override
+  Future<List<CoquiMessage>> getMessages(String sessionId) async => const [];
+}
+
+class _FakeChatProvider extends ChatProvider {
+  _FakeChatProvider()
+      : super(
+          apiService: CoquiApiService(baseUrl: 'http://localhost:0'),
+          databaseService: _InMemoryDatabaseService(),
+        );
+  @override
+  List<CoquiSession> get sessions => const [];
+  @override
+  bool isSessionStreaming(String id) => false;
 }
 
 void main() {
@@ -30,6 +55,7 @@ void main() {
             CoquiProfile(name: 'orchestrator', displayName: 'Home', isDefault: true),
           ]),
         ),
+        ChangeNotifierProvider<ChatProvider>.value(value: _FakeChatProvider()),
         ChangeNotifierProvider(create: (_) => ShellController()),
       ],
       child: const MaterialApp(home: CoquiShell()),
