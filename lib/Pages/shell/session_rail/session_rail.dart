@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
+import 'package:coqui_app/Pages/shell/popovers/server_switcher.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_section.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_tile.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
@@ -288,7 +289,15 @@ class _FooterBand extends StatelessWidget {
           Expanded(
             child: InkWell(
               key: const ValueKey('server-chip'),
-              onTap: () {},
+              onTap: () => showDialog<void>(
+                context: context,
+                barrierColor: Colors.black54,
+                builder: (dialogContext) => Center(
+                  child: ServerSwitcher(
+                    onClose: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
+              ),
               borderRadius: BorderRadius.circular(CoquiTokens.radii.md),
               child: Container(
                 height: 40,
