@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:coqui_app/Pages/shell/chat/chat_column.dart';
 import 'package:coqui_app/Pages/shell/persona_rail/persona_rail.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_rail.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
@@ -48,7 +49,7 @@ class CoquiShell extends StatelessWidget {
             child: Container(
               key: const ValueKey('chat-column'),
               color: CoquiTokens.surface.chatBg,
-              child: const _Placeholder('chat'),
+              child: const ChatColumn(),
             ),
           ),
           if (loopPanelOpen)
