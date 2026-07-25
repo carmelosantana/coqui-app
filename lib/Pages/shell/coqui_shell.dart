@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:coqui_app/Pages/shell/persona_rail/persona_rail.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
 
@@ -34,11 +35,9 @@ class CoquiShell extends StatelessWidget {
       backgroundColor: CoquiTokens.surface.chatBg,
       body: Row(
         children: [
-          Container(
-            key: const ValueKey('persona-rail'),
-            width: CoquiTokens.personaRailWidth,
-            color: CoquiTokens.surface.personaRail,
-            child: const _Placeholder('persona'),
+          const KeyedSubtree(
+            key: ValueKey('persona-rail'),
+            child: PersonaRail(),
           ),
           Container(
             key: const ValueKey('session-rail'),
