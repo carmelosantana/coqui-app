@@ -19,6 +19,23 @@ class _FakeProfileProvider extends ProfileProvider {
   Future<void> fetchProfiles() async {}
 }
 
+/// Counts `fetchProfiles` calls and deliberately leaves `profiles` empty to
+/// simulate a persistently-empty/erroring backend — the scenario that a naive
+/// build-time guard would refetch forever.
+class _CountingEmptyProfileProvider extends ProfileProvider {
+  _CountingEmptyProfileProvider()
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  int fetchCount = 0;
+  @override
+  List<CoquiProfile> get profiles => const [];
+  @override
+  Future<void> fetchProfiles() async {
+    fetchCount++;
+    // Notify to force a rebuild, mimicking a completed (still-empty) fetch.
+    notifyListeners();
+  }
+}
+
 Widget _wrap({
   required List<CoquiProfile> profiles,
   ShellController? controller,
@@ -98,6 +115,27 @@ void main() {
 
     expect(novaOrb.active, isTrue);
     expect(caelumOrb.active, isFalse);
+  });
+
+  testWidgets('fetches personas exactly once even when the list stays empty',
+      (t) async {
+    final provider = _CountingEmptyProfileProvider();
+    await t.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ProfileProvider>.value(value: provider),
+        ChangeNotifierProvider<ShellController>.value(value: ShellController()),
+      ],
+      child: const MaterialApp(home: Scaffold(body: PersonaRail())),
+    ));
+
+    await t.pumpAndSettle();
+    // Force additional rebuilds; a build-time guard would refetch here.
+    provider.notifyListeners();
+    await t.pump();
+    provider.notifyListeners();
+    await t.pump();
+
+    expect(provider.fetchCount, 1);
   });
 
   testWidgets('orchestrator is rendered from the isDefault profile',

@@ -18,23 +18,34 @@ import 'package:coqui_app/Theme/coqui_tokens.dart';
 /// Profiles come from [ProfileProvider]; the rail kicks off a one-time
 /// [ProfileProvider.fetchProfiles] when the list is empty and no fetch is
 /// already in flight.
-class PersonaRail extends StatelessWidget {
+class PersonaRail extends StatefulWidget {
   const PersonaRail({super.key});
+
+  @override
+  State<PersonaRail> createState() => _PersonaRailState();
+}
+
+class _PersonaRailState extends State<PersonaRail> {
+  bool _fetchRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch personas exactly once for the life of this State. The flag is set
+    // before the async call so an empty/error result can never re-trigger it.
+    _fetchRequested = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      context.read<ProfileProvider>().fetchProfiles();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final profileProvider = context.watch<ProfileProvider>();
     final profiles = profileProvider.profiles;
-
-    if (profiles.isEmpty && !profileProvider.isLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final provider = context.read<ProfileProvider>();
-        // Guard against overlapping fetches: only fire when idle and empty.
-        if (provider.profiles.isEmpty && !provider.isLoading) {
-          provider.fetchProfiles();
-        }
-      });
-    }
 
     final orchestrator = _firstOrchestrator(profiles);
     final personas =
