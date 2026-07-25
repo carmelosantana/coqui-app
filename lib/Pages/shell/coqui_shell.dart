@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Pages/shell/chat/chat_column.dart';
+import 'package:coqui_app/Pages/shell/loop_monitor/loop_monitor.dart';
 import 'package:coqui_app/Pages/shell/persona_rail/persona_rail.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_rail.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
@@ -53,11 +54,10 @@ class CoquiShell extends StatelessWidget {
             ),
           ),
           if (loopPanelOpen)
-            Container(
-              key: const ValueKey('loop-monitor'),
+            const SizedBox(
+              key: ValueKey('loop-monitor'),
               width: CoquiTokens.loopPanelWidth,
-              color: CoquiTokens.surface.sessionRail,
-              child: const _Placeholder('loop'),
+              child: LoopMonitor(),
             ),
         ],
       ),
