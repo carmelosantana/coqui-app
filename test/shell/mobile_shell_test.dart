@@ -21,6 +21,20 @@ class _FakeProfileProvider extends ProfileProvider {
   Future<void> fetchProfiles() async {}
 }
 
+/// Counts fetch calls and always reports an empty list, so the strip's
+/// initState fetch fires exactly once.
+class _CountingProfileProvider extends ProfileProvider {
+  _CountingProfileProvider()
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  int fetchCount = 0;
+  @override
+  List<CoquiProfile> get profiles => const [];
+  @override
+  Future<void> fetchProfiles() async {
+    fetchCount++;
+  }
+}
+
 class _InMemoryDatabaseService extends DatabaseService {
   @override
   Future<void> open(String databaseFile) async {}
@@ -79,5 +93,30 @@ void main() {
 
     // A menu button is available to open the drawer.
     expect(find.byKey(const ValueKey('mobile-menu')), findsOneWidget);
+  });
+
+  testWidgets('mobile persona strip fetches profiles exactly once', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+
+    final profileProvider = _CountingProfileProvider();
+    await t.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ProfileProvider>.value(value: profileProvider),
+        ChangeNotifierProvider<ChatProvider>.value(value: _FakeChatProvider()),
+        ChangeNotifierProvider(create: (_) => ShellController()),
+      ],
+      child: const MaterialApp(home: CoquiShell()),
+    ));
+    // Let the post-frame callback run.
+    await t.pump();
+
+    expect(find.byKey(const ValueKey('persona-strip')), findsOneWidget);
+    expect(profileProvider.fetchCount, 1);
+
+    // A rebuild must not re-trigger the fetch (initState-bound, no loop).
+    await t.pump();
+    expect(profileProvider.fetchCount, 1);
   });
 }
