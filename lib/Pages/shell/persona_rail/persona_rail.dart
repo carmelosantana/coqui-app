@@ -26,14 +26,11 @@ class PersonaRail extends StatefulWidget {
 }
 
 class _PersonaRailState extends State<PersonaRail> {
-  bool _fetchRequested = false;
-
   @override
   void initState() {
     super.initState();
-    // Fetch personas exactly once for the life of this State. The flag is set
-    // before the async call so an empty/error result can never re-trigger it.
-    _fetchRequested = true;
+    // Fetch personas exactly once for the life of this State. Because this is
+    // tied to initState (not build), an empty/error result cannot re-trigger it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
