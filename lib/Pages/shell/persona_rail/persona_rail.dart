@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Pages/shell/persona_rail/persona_orb.dart';
+import 'package:coqui_app/Pages/shell/popovers/persona_editor.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
@@ -140,7 +141,10 @@ class _AddPersonaButton extends StatelessWidget {
       height: 56,
       child: Center(
         child: InkResponse(
-          onTap: () {},
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => const PersonaEditor(),
+          ),
           radius: 28,
           child: CustomPaint(
             painter: _DashedCirclePainter(color: CoquiTokens.border.control),
