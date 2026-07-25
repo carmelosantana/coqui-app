@@ -6,18 +6,6 @@ import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 
-const _navigationModeKey = 'navigation_mode';
-
-enum _NavigationMode { human, machine }
-
-_NavigationMode _readNavigationMode(Box<dynamic> settingsBox) {
-  final rawValue = settingsBox.get(_navigationModeKey, defaultValue: 'human');
-
-  return rawValue == 'machine'
-      ? _NavigationMode.machine
-      : _NavigationMode.human;
-}
-
 class GeneralSettings extends StatefulWidget {
   const GeneralSettings({super.key});
 
@@ -58,7 +46,6 @@ class _GeneralSettingsState extends State<GeneralSettings> {
   Widget build(BuildContext context) {
     final defaultRole = _settingsBox.get('default_role',
         defaultValue: 'orchestrator') as String;
-    final navigationMode = _readNavigationMode(_settingsBox);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,17 +57,6 @@ class _GeneralSettingsState extends State<GeneralSettings> {
               ),
         ),
         const SizedBox(height: 8),
-        ListTile(
-          leading: const Icon(Icons.dashboard_customize_outlined),
-          title: const Text('Navigation Mode'),
-          subtitle: Text(
-            navigationMode == _NavigationMode.machine
-                ? 'Machine mode shows work, automation, channels, MCP, and operator tools.'
-                : 'Human mode keeps Coqui focused on chat, sessions, setup, and support.',
-          ),
-          onTap: () => _showNavigationModePicker(navigationMode),
-          trailing: const Icon(Icons.chevron_right),
-        ),
         ListTile(
           leading: const Icon(Icons.smart_toy_outlined),
           title: const Text('Default Role'),
@@ -96,55 +72,6 @@ class _GeneralSettingsState extends State<GeneralSettings> {
         ),
       ],
     );
-  }
-
-  Future<void> _showNavigationModePicker(_NavigationMode currentMode) async {
-    final selected = await showModalBottomSheet<_NavigationMode>(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  currentMode == _NavigationMode.human
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                ),
-                title: const Text('Human'),
-                subtitle: const Text(
-                  'Keep the app focused on conversations, setup, and support.',
-                ),
-                onTap: () => Navigator.pop(context, _NavigationMode.human),
-              ),
-              ListTile(
-                leading: Icon(
-                  currentMode == _NavigationMode.machine
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                ),
-                title: const Text('Machine'),
-                subtitle: const Text(
-                  'Expose workspaces, automation, channels, MCP, and operator tools.',
-                ),
-                onTap: () => Navigator.pop(context, _NavigationMode.machine),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (selected == null || !mounted) {
-      return;
-    }
-
-    await _settingsBox.put(
-      _navigationModeKey,
-      selected == _NavigationMode.machine ? 'machine' : 'human',
-    );
-    setState(() {});
   }
 
   Future<void> _showRolePicker(String currentRole) async {
