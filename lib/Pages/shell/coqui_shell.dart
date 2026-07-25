@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:coqui_app/Pages/shell/chat/chat_column.dart';
 import 'package:coqui_app/Pages/shell/loop_monitor/loop_monitor.dart';
 import 'package:coqui_app/Pages/shell/persona_rail/persona_rail.dart';
+import 'package:coqui_app/Pages/shell/persona_rail/persona_strip.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_rail.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
@@ -12,11 +13,10 @@ import 'package:coqui_app/Theme/coqui_tokens.dart';
 ///
 /// Desktop (`maxWidth >= 1024`): a `Row` of persona rail, session rail, chat
 /// column, and — when [ShellController.loopPanelOpen] — a loop monitor panel.
-/// Mobile (`maxWidth < 640`): a `Scaffold` with the chat body, a persona strip,
-/// and a `Drawer` placeholder (Task 14 fills this in).
-///
-/// Each column currently renders a [_Placeholder]; later tasks swap in the real
-/// widgets keyed by the same `ValueKey`s used here.
+/// Mobile (`maxWidth < 640`): a `Scaffold` whose body is the [ChatColumn] with
+/// a top [PersonaStrip] and a menu button opening a `Drawer` hosting the
+/// [SessionRail]; when [ShellController.loopPanelOpen] the [LoopMonitor] takes
+/// over the body full-screen instead of being a side panel.
 class CoquiShell extends StatelessWidget {
   const CoquiShell({super.key});
 
@@ -65,44 +65,51 @@ class CoquiShell extends StatelessWidget {
   }
 
   Widget _buildMobile(BuildContext context) {
+    final loopPanelOpen = context.watch<ShellController>().loopPanelOpen;
     return Scaffold(
       key: const ValueKey('mobile-shell'),
       backgroundColor: CoquiTokens.surface.chatBg,
-      drawer: const Drawer(child: _Placeholder('drawer')),
-      body: Column(
-        children: [
-          Container(
-            key: const ValueKey('persona-strip'),
-            height: CoquiTokens.footerBand,
-            color: CoquiTokens.surface.personaRail,
-            child: const _Placeholder('persona'),
-          ),
-          Expanded(
-            child: Container(
-              key: const ValueKey('chat-column'),
-              color: CoquiTokens.surface.chatBg,
-              child: const _Placeholder('chat'),
+      drawer: const Drawer(child: SessionRail()),
+      body: SafeArea(
+        child: Column(
+          children: [
+            SizedBox(
+              height: PersonaStrip.height,
+              child: Row(
+                children: [
+                  Builder(
+                    builder: (context) => IconButton(
+                      key: const ValueKey('mobile-menu'),
+                      icon: Icon(Icons.menu, color: CoquiTokens.text.high),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  ),
+                  const Expanded(
+                    child: KeyedSubtree(
+                      key: ValueKey('persona-strip'),
+                      child: PersonaStrip(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Centered label placeholder standing in for a real column widget until later
-/// tasks replace it.
-class _Placeholder extends StatelessWidget {
-  const _Placeholder(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        label,
-        style: TextStyle(color: CoquiTokens.text.muted),
+            Expanded(
+              child: Container(
+                key: const ValueKey('chat-column'),
+                color: CoquiTokens.surface.chatBg,
+                // On mobile the loop monitor takes over the body full-screen
+                // instead of being a side panel; its close button
+                // ([ShellController.closeLoopPanel]) restores the chat.
+                child: loopPanelOpen
+                    ? const KeyedSubtree(
+                        key: ValueKey('loop-monitor'),
+                        child: LoopMonitor(),
+                      )
+                    : const ChatColumn(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
