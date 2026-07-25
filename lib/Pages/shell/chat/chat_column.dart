@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Pages/chat_page/subwidgets/chat_error.dart';
 import 'package:coqui_app/Pages/chat_page/subwidgets/chat_list_view.dart';
+import 'package:coqui_app/Pages/shell/chat/composer.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
 import 'package:coqui_app/Theme/coqui_typography.dart';
@@ -47,8 +48,10 @@ class ChatColumn extends StatelessWidget {
                         : null,
                   ),
           ),
-          // Task 8 mounts Composer here.
-          const SizedBox(key: ValueKey('composer-slot')),
+          const KeyedSubtree(
+            key: ValueKey('composer-slot'),
+            child: Composer(),
+          ),
         ],
       ),
     );
