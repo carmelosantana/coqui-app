@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'coqui_colors.dart';
 import 'coqui_color_scheme.dart';
+import 'coqui_tokens.dart';
 import 'coqui_typography.dart';
 import 'supporter_themes.dart';
 
@@ -19,6 +20,11 @@ abstract final class CoquiTheme {
     final isLight = brightness == Brightness.light;
     final palette = SupporterThemes.byName(themeName);
 
+    // The default (no supporter palette) dark theme is the Discord-style
+    // reskin sourced entirely from [CoquiTokens]. Supporter-palette paths and
+    // the light path are preserved unchanged.
+    final isTokenDark = !isLight && palette == null;
+
     final ColorScheme colorScheme;
     final CoquiBrandColors brandColors;
 
@@ -29,19 +35,28 @@ abstract final class CoquiTheme {
       brandColors = isLight
           ? CoquiBrandColors.lightFromPalette(palette)
           : CoquiBrandColors.darkFromPalette(palette);
+    } else if (isTokenDark) {
+      colorScheme = CoquiColorScheme.dark().copyWith(
+        primary: CoquiTokens.brand.primaryLime,
+        onPrimary: CoquiTokens.brand.onPrimary,
+        surface: CoquiTokens.surface.card,
+        error: CoquiTokens.status.error,
+      );
+      brandColors = CoquiBrandColors.darkInstance;
     } else {
-      colorScheme =
-          isLight ? CoquiColorScheme.light() : CoquiColorScheme.dark();
-      brandColors = isLight
-          ? CoquiBrandColors.lightInstance
-          : CoquiBrandColors.darkInstance;
+      colorScheme = CoquiColorScheme.light();
+      brandColors = CoquiBrandColors.lightInstance;
     }
 
-    final borderColor =
-        isLight ? CoquiColors.lightBorder : CoquiColors.darkBorder;
-    final cardColor = isLight ? CoquiColors.lightCard : CoquiColors.darkCard;
-    final surfaceColor =
-        isLight ? CoquiColors.lightBackground : CoquiColors.darkBackground;
+    final borderColor = isTokenDark
+        ? CoquiTokens.border.normal
+        : (isLight ? CoquiColors.lightBorder : CoquiColors.darkBorder);
+    final cardColor = isTokenDark
+        ? CoquiTokens.surface.card
+        : (isLight ? CoquiColors.lightCard : CoquiColors.darkCard);
+    final surfaceColor = isTokenDark
+        ? CoquiTokens.surface.chatBg
+        : (isLight ? CoquiColors.lightBackground : CoquiColors.darkBackground);
 
     final base = ThemeData(
       brightness: brightness,

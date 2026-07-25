@@ -16,4 +16,21 @@ abstract final class CoquiTypography {
   static TextStyle monoStyle([TextStyle? base]) {
     return (base ?? const TextStyle()).copyWith(fontFamily: monoFontFamily);
   }
+
+  /// Compact monospace label style built from scratch — for mono chips,
+  /// status labels, and metadata rendered in Geist Mono.
+  static TextStyle mono({
+    double size = 10.5,
+    FontWeight weight = FontWeight.w400,
+    Color? color,
+    double letterSpacing = 0,
+  }) {
+    return TextStyle(
+      fontFamily: monoFontFamily,
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      letterSpacing: letterSpacing,
+    );
+  }
 }
