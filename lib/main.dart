@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:coqui_app/Constants/constants.dart';
 import 'package:coqui_app/Pages/commands_help_page/commands_help_page.dart';
-import 'package:coqui_app/Pages/config_page/config_page.dart';
 import 'package:coqui_app/Pages/info_page/info_page.dart';
 import 'package:coqui_app/Pages/profiles_page/profiles_page.dart';
 import 'package:coqui_app/Pages/server_page/server_page.dart';
 import 'package:coqui_app/Pages/shell/coqui_shell.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Pages/settings_page/settings_page.dart';
-import 'package:coqui_app/Pages/tasks_page/tasks_page.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Providers/local_server_provider.dart';
@@ -17,11 +15,8 @@ import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Providers/project_provider.dart';
 import 'package:coqui_app/Providers/role_provider.dart';
-import 'package:coqui_app/Providers/schedule_provider.dart';
 import 'package:coqui_app/Providers/supporter_provider.dart';
-import 'package:coqui_app/Providers/task_provider.dart';
 import 'package:coqui_app/Providers/work_provider.dart';
-import 'package:coqui_app/Providers/webhook_provider.dart';
 import 'package:coqui_app/Pages/work_page/work_page.dart';
 import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Services/local_server_service.dart';
@@ -111,21 +106,6 @@ Future<void> _initializeApp() async {
         ),
         ChangeNotifierProvider(
           create: (_) => ProfileProvider(
-            apiService: apiService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => TaskProvider(
-            apiService: apiService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => WebhookProvider(
-            apiService: apiService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => ScheduleProvider(
             apiService: apiService,
           ),
         ),
@@ -364,12 +344,6 @@ class _CoquiAppState extends State<CoquiApp> {
               );
             }
 
-            if (settings.name == '/config') {
-              return MaterialPageRoute(
-                builder: (context) => const ConfigPage(),
-              );
-            }
-
             if (settings.name == '/info') {
               return MaterialPageRoute(
                 builder: (context) => const InfoPage(),
@@ -379,12 +353,6 @@ class _CoquiAppState extends State<CoquiApp> {
             if (settings.name == '/commands') {
               return MaterialPageRoute(
                 builder: (context) => const CommandsHelpPage(),
-              );
-            }
-
-            if (settings.name == '/tasks') {
-              return MaterialPageRoute(
-                builder: (context) => const TasksPage(),
               );
             }
 
