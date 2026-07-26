@@ -6,9 +6,11 @@ import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/shell/popovers/server_switcher.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_section.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_tile.dart';
+import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
 import 'package:coqui_app/Theme/coqui_typography.dart';
 
@@ -30,9 +32,51 @@ class _SessionRailState extends State<SessionRail> {
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Fetch roles exactly once for the life of this State so the "+ New
+    // session" control has a role to create with. Tied to initState (not
+    // build) so an empty/error result cannot re-trigger the fetch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final roleProvider = context.read<RoleProvider>();
+      if (roleProvider.roles.isEmpty) {
+        roleProvider.fetchRoles();
+      }
+    });
+  }
+
+  Future<void> _createSession() async {
+    final roleProvider = context.read<RoleProvider>();
+    final roles = roleProvider.roles;
+    if (roles.isEmpty) {
+      // No roles yet: kick off a fetch and no-op this tap.
+      roleProvider.fetchRoles();
+      return;
+    }
+    final CoquiRole role = roles.firstWhere(
+      (r) => r.name == 'orchestrator',
+      orElse: () => roles.first,
+    );
+    final chat = context.read<ChatProvider>();
+    final shell = context.read<ShellController>();
+    await chat.createNewSession(role, profile: shell.activePersona);
+    if (!mounted) {
+      return;
+    }
+    final created = chat.currentSession;
+    if (created != null) {
+      context.read<ShellController>().selectSession(created.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final chat = context.watch<ChatProvider>();
     final shell = context.watch<ShellController>();
+    final rolesAvailable = context.watch<RoleProvider>().roles.isNotEmpty;
     final activePersona = shell.activePersona;
 
     final visible = chat.sessions.where((session) {
@@ -88,6 +132,10 @@ class _SessionRailState extends State<SessionRail> {
                     for (final s in groups) _tile(context, s, chat, shell),
                   ],
                 ),
+                _NewSessionButton(
+                  enabled: rolesAvailable,
+                  onTap: _createSession,
+                ),
               ],
             ),
           ),
@@ -112,6 +160,53 @@ class _SessionRailState extends State<SessionRail> {
         context.read<ChatProvider>().openSession(session.id);
         context.read<ShellController>().selectSession(session.id);
       },
+    );
+  }
+}
+
+/// A subtle "+ New session" chip row at the end of the session list. Tapping it
+/// creates a session (see [_SessionRailState._createSession]). Rests dimmed and
+/// ignores taps while no roles are available to create with.
+class _NewSessionButton extends StatelessWidget {
+  const _NewSessionButton({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color foreground =
+        enabled ? CoquiTokens.text.secondary : CoquiTokens.text.faint;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: InkWell(
+        key: const ValueKey('new-session'),
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(CoquiTokens.radii.md),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: CoquiTokens.surface.chip,
+            borderRadius: BorderRadius.circular(CoquiTokens.radii.md),
+            border: Border.all(color: CoquiTokens.border.hairline),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 16, color: foreground),
+              const SizedBox(width: 8),
+              Text(
+                'New session',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: foreground,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

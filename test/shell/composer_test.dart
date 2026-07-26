@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:coqui_app/Models/coqui_loop.dart';
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/shell/chat/composer.dart';
+import 'package:coqui_app/Pages/shell/popovers/loop_launcher.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
@@ -41,10 +44,29 @@ class _FakeChatProvider extends ChatProvider {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _FakeChatProvider provider) async {
+class _FakeLoopProvider extends LoopProvider {
+  _FakeLoopProvider(this._defs)
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  final List<CoquiLoopDefinition> _defs;
+  @override
+  List<CoquiLoopDefinition> get definitions => _defs;
+  @override
+  Future<void> fetchDefinitions({bool force = false}) async {}
+}
+
+Future<void> _pump(
+  WidgetTester tester,
+  _FakeChatProvider provider, {
+  List<CoquiLoopDefinition> definitions = const [],
+}) async {
   await tester.pumpWidget(
-    ChangeNotifierProvider<ChatProvider>.value(
-      value: provider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ChatProvider>.value(value: provider),
+        ChangeNotifierProvider<LoopProvider>.value(
+          value: _FakeLoopProvider(definitions),
+        ),
+      ],
       child: const MaterialApp(
         home: Scaffold(body: Composer()),
       ),
@@ -136,5 +158,23 @@ void main() {
     await tester.pump();
 
     expect(_loopDeco(tester).color, CoquiTokens.brand.primaryLime);
+  });
+
+  testWidgets('loop button opens then closes the LoopLauncher popover',
+      (tester) async {
+    await _pump(tester, _FakeChatProvider());
+
+    // Closed to start.
+    expect(find.byType(LoopLauncher), findsNothing);
+
+    // First tap opens the launcher.
+    await tester.tap(find.byKey(const ValueKey('composer-loop')));
+    await tester.pump();
+    expect(find.byType(LoopLauncher), findsOneWidget);
+
+    // Second tap closes it.
+    await tester.tap(find.byKey(const ValueKey('composer-loop')));
+    await tester.pump();
+    expect(find.byType(LoopLauncher), findsNothing);
   });
 }

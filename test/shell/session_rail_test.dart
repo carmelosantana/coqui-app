@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_profile.dart';
+import 'package:coqui_app/Models/coqui_role.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_rail.dart';
 import 'package:coqui_app/Pages/shell/session_rail/session_section.dart';
@@ -11,6 +12,7 @@ import 'package:coqui_app/Pages/shell/session_rail/session_tile.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
@@ -61,18 +63,41 @@ class _InMemoryDatabaseService extends DatabaseService {
 }
 
 class _FakeChatProvider extends ChatProvider {
-  _FakeChatProvider(this._sessions)
-      : super(
+  _FakeChatProvider(this._sessions, {CoquiSession? createdSession})
+      : _createdSession = createdSession,
+        super(
           apiService: CoquiApiService(baseUrl: 'http://localhost:0'),
           databaseService: _InMemoryDatabaseService(),
         );
   final List<CoquiSession> _sessions;
+  final CoquiSession? _createdSession;
+
+  /// Records of ([role], [profile]) passed to [createNewSession].
+  final List<({CoquiRole role, String? profile})> createdWith = [];
+  CoquiSession? _current;
+
   @override
   List<CoquiSession> get sessions => _sessions;
   @override
   bool isSessionStreaming(String id) => false;
   @override
   Future<void> openSession(String id) async {}
+
+  @override
+  CoquiSession? get currentSession => _current;
+
+  @override
+  Future<void> createNewSession(
+    CoquiRole role, {
+    String? profile,
+    List<String> groupProfiles = const [],
+    int groupMaxRounds = 3,
+    bool confirmCloseActiveProfileSession = false,
+    bool confirmCloseActiveGroupSession = false,
+  }) async {
+    createdWith.add((role: role, profile: profile));
+    _current = _createdSession;
+  }
 }
 
 class _FakeProfileProvider extends ProfileProvider {
@@ -83,6 +108,19 @@ class _FakeProfileProvider extends ProfileProvider {
   List<CoquiProfile> get profiles => _list;
   @override
   Future<void> fetchProfiles() async {}
+}
+
+class _FakeRoleProvider extends RoleProvider {
+  _FakeRoleProvider(this._list)
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  final List<CoquiRole> _list;
+  int fetchCount = 0;
+  @override
+  List<CoquiRole> get roles => _list;
+  @override
+  Future<void> fetchRoles() async {
+    fetchCount++;
+  }
 }
 
 CoquiSession _session({
@@ -110,14 +148,20 @@ Widget _wrap({
   required List<CoquiSession> sessions,
   required ShellController controller,
   List<CoquiProfile> profiles = const [],
+  List<CoquiRole> roles = const [],
+  _FakeChatProvider? chat,
+  _FakeRoleProvider? roleProvider,
 }) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChatProvider>.value(
-        value: _FakeChatProvider(sessions),
+        value: chat ?? _FakeChatProvider(sessions),
       ),
       ChangeNotifierProvider<ProfileProvider>.value(
         value: _FakeProfileProvider(profiles),
+      ),
+      ChangeNotifierProvider<RoleProvider>.value(
+        value: roleProvider ?? _FakeRoleProvider(roles),
       ),
       ChangeNotifierProvider<ShellController>.value(value: controller),
     ],
@@ -247,5 +291,58 @@ void main() {
     // SessionSection('Pinned') renders SizedBox.shrink when empty, so no
     // 'PINNED' label is painted.
     expect(find.text('PINNED'), findsNothing);
+  });
+
+  testWidgets(
+      'tapping + New session creates a session with the orchestrator role '
+      'and active profile, then selects it', (t) async {
+    final controller = ShellController()..selectPersona('caelum');
+    final orchestrator = CoquiRole(name: 'orchestrator', model: 'gpt-o');
+    final other = CoquiRole(name: 'coder', model: 'gpt-c');
+    final createdSession = _session(id: 'new-1', title: 'Fresh');
+    final chat = _FakeChatProvider(const [], createdSession: createdSession);
+
+    await t.pumpWidget(
+      _wrap(
+        sessions: const [],
+        controller: controller,
+        chat: chat,
+        roles: [other, orchestrator],
+      ),
+    );
+    await t.pump();
+
+    await t.tap(find.byKey(const ValueKey('new-session')));
+    await t.pump();
+
+    expect(chat.createdWith.length, 1);
+    expect(chat.createdWith.single.role.name, 'orchestrator');
+    expect(chat.createdWith.single.profile, 'caelum');
+    expect(controller.activeSessionId, 'new-1');
+  });
+
+  testWidgets('+ New session is disabled while no roles are available',
+      (t) async {
+    final controller = ShellController();
+    final roleProvider = _FakeRoleProvider(const []);
+    final chat = _FakeChatProvider(const []);
+
+    await t.pumpWidget(
+      _wrap(
+        sessions: const [],
+        controller: controller,
+        chat: chat,
+        roleProvider: roleProvider,
+      ),
+    );
+    await t.pump();
+
+    await t.tap(find.byKey(const ValueKey('new-session')));
+    await t.pump();
+
+    // Disabled InkWell: no session is created on tap.
+    expect(chat.createdWith, isEmpty);
+    // initState kicked off exactly one fetch to populate roles.
+    expect(roleProvider.fetchCount, 1);
   });
 }

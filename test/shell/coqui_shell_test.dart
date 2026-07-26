@@ -7,7 +7,9 @@ import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/shell/coqui_shell.dart';
 import 'package:coqui_app/Pages/shell/shell_controller.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
+import 'package:coqui_app/Providers/loop_provider.dart';
 import 'package:coqui_app/Providers/profile_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Services/database_service.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
@@ -43,6 +45,22 @@ class _FakeChatProvider extends ChatProvider {
   bool isSessionStreaming(String id) => false;
 }
 
+class _FakeRoleProvider extends RoleProvider {
+  _FakeRoleProvider()
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  @override
+  Future<void> fetchRoles() async {}
+}
+
+class _FakeLoopProvider extends LoopProvider {
+  _FakeLoopProvider()
+      : super(apiService: CoquiApiService(baseUrl: 'http://localhost:0'));
+  @override
+  Future<void> fetchLoops({String? status, bool silent = false}) async {}
+  @override
+  Future<void> fetchDefinitions({bool force = false}) async {}
+}
+
 void main() {
   testWidgets('desktop shell shows persona + session rails', (t) async {
     t.view.physicalSize = const Size(1440, 900);
@@ -56,6 +74,8 @@ void main() {
           ]),
         ),
         ChangeNotifierProvider<ChatProvider>.value(value: _FakeChatProvider()),
+        ChangeNotifierProvider<RoleProvider>.value(value: _FakeRoleProvider()),
+        ChangeNotifierProvider<LoopProvider>.value(value: _FakeLoopProvider()),
         ChangeNotifierProvider(create: (_) => ShellController()),
       ],
       child: const MaterialApp(home: CoquiShell()),

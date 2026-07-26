@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:coqui_app/Pages/shell/popovers/loop_launcher.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Theme/coqui_tokens.dart';
 
@@ -58,7 +59,12 @@ class _ComposerState extends State<Composer> {
 
   void _toggleLauncher() {
     setState(() => _launcherOpen = !_launcherOpen);
-    // Task 10 mounts the LoopLauncher popover anchored here when _launcherOpen.
+  }
+
+  void _closeLauncher() {
+    if (_launcherOpen) {
+      setState(() => _launcherOpen = false);
+    }
   }
 
   void _send() {
@@ -72,6 +78,25 @@ class _ComposerState extends State<Composer> {
   Widget build(BuildContext context) {
     final sendActive = _canSend;
 
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Loop-launcher popover, anchored above the composer input when open.
+        if (_launcherOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: LoopLauncher(onClose: _closeLauncher),
+            ),
+          ),
+        _buildComposerRow(sendActive),
+      ],
+    );
+  }
+
+  Widget _buildComposerRow(bool sendActive) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Container(
