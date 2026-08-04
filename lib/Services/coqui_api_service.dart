@@ -45,6 +45,7 @@ import 'package:coqui_app/Models/coqui_loop.dart';
 import 'package:coqui_app/Models/coqui_webhook.dart';
 import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
 import 'package:coqui_app/Models/coqui_webhook_stats.dart';
+import 'package:coqui_app/Models/cursor_page.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
 class CoquiSessionMutationResult {
@@ -216,10 +217,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final sessions = body['sessions'] as List? ?? [];
-    return sessions
-        .map((s) => CoquiSession.fromJson(s as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiSession>.fromJson(body, CoquiSession.fromJson).data;
   }
 
   /// Create a new session with the given role.
@@ -418,10 +416,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final messages = body['messages'] as List? ?? [];
-    return messages
-        .map((m) => CoquiMessage.fromJson(m as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiMessage>.fromJson(body, CoquiMessage.fromJson).data;
   }
 
   /// Send a prompt and receive an SSE event stream.
@@ -552,11 +547,8 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final servers = body['servers'] as List? ?? [];
-
-    return servers
-        .map((item) => CoquiMcpServer.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiMcpServer>.fromJson(body, CoquiMcpServer.fromJson)
+        .data;
   }
 
   Future<CoquiMcpServer> getMcpServer(String name) async {
@@ -981,10 +973,7 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final runs = body['child_runs'] as List? ?? [];
-    return runs
-        .map((r) => CoquiChildRun.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiChildRun>.fromJson(body, CoquiChildRun.fromJson).data;
   }
 
   /// Derive a [MediaType] from a filename's extension for multipart uploads.
@@ -1045,10 +1034,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final turns = body['turns'] as List? ?? [];
-    return turns
-        .map((t) => CoquiTurn.fromJson(t as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiTurn>.fromJson(body, CoquiTurn.fromJson).data;
   }
 
   /// Get a specific turn with its messages.
@@ -1083,10 +1069,8 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final events = body['events'] as List? ?? [];
-    return events
-        .map((event) => CoquiTurnEvent.fromJson(event as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiTurnEvent>.fromJson(body, CoquiTurnEvent.fromJson)
+        .data;
   }
 
   /// Get available roles with full metadata.
@@ -1097,10 +1081,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final roles = body['roles'] as List? ?? [];
-    return roles
-        .map((r) => CoquiRole.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiRole>.fromJson(body, CoquiRole.fromJson).data;
   }
 
   /// Get available personality profiles with descriptions.
@@ -1112,7 +1093,7 @@ class CoquiApiService {
     final body = _parseResponse(response);
 
     final defaultProfile = body['default_profile'] as String?;
-    final profiles = body['profiles'] as List? ?? [];
+    final profiles = body['data'] as List? ?? [];
     return profiles
         .map((profile) => CoquiProfile.fromJson(
               profile as Map<String, dynamic>,
@@ -1902,11 +1883,10 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final models = body['models'] as List? ?? [];
-    return models
-        .map((model) =>
-            CoquiConfiguredModel.fromJson(model as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiConfiguredModel>.fromJson(
+      body,
+      CoquiConfiguredModel.fromJson,
+    ).data;
   }
 
   /// Get the fully rendered system prompt inspection payload.
@@ -2297,11 +2277,10 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final events = body['events'] as List? ?? [];
-    return events
-        .map((event) =>
-            CoquiChannelEvent.fromJson(event as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiChannelEvent>.fromJson(
+      body,
+      CoquiChannelEvent.fromJson,
+    ).data;
   }
 
   Future<List<CoquiChannelDelivery>> listChannelDeliveries(
@@ -2336,9 +2315,8 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final schedules = (body['schedules'] as List? ?? [])
-        .map((item) => CoquiSchedule.fromJson(item as Map<String, dynamic>))
-        .toList();
+    final schedules =
+        CursorPage<CoquiSchedule>.fromJson(body, CoquiSchedule.fromJson).data;
 
     return (
       schedules: schedules,
@@ -2474,9 +2452,8 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final loops = (body['loops'] as List? ?? [])
-        .map((item) => CoquiLoop.fromJson(item as Map<String, dynamic>))
-        .toList();
+    final loops =
+        CursorPage<CoquiLoop>.fromJson(body, CoquiLoop.fromJson).data;
 
     return (
       loops: loops,
@@ -2792,10 +2769,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final tasks = body['tasks'] as List? ?? [];
-    return tasks
-        .map((t) => CoquiTask.fromJson(t as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiTask>.fromJson(body, CoquiTask.fromJson).data;
   }
 
   /// Get detailed information about a specific task.
