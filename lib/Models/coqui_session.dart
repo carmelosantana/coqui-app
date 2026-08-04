@@ -140,7 +140,7 @@ class CoquiSession {
         channelBound: channelBound,
         channel: channel,
       ),
-      profile: json['profile'] as String?,
+      profile: json['persona_id'] as String?,
       groupEnabled: parseFlag(json['group_enabled']),
       groupMaxRounds: parseInt(json['group_max_rounds'], fallback: 3),
       groupCompositionKey: json['group_composition_key'] as String?,
@@ -362,6 +362,12 @@ class CoquiSession {
     if (isClosed) return 'closed';
     return 'active';
   }
+
+  /// The session's persona reference (CAP wire field `persona_id`).
+  ///
+  /// The value is the persona name/slug; the internal storage field remains
+  /// [profile] for now (wire-boundary-only rename).
+  String? get personaId => profile;
 
   String? get profileLabel => profile?.isNotEmpty == true ? profile : null;
 

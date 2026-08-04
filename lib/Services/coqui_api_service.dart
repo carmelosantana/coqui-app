@@ -238,7 +238,7 @@ class CoquiApiService {
         payload['confirm_close_active_group_session'] = true;
       }
     } else if (profile != null && profile.isNotEmpty) {
-      payload['profile'] = profile;
+      payload['persona_id'] = profile;
     }
     if (confirmCloseActiveProfileSession) {
       payload['confirm_close_active_profile_session'] = true;
@@ -271,7 +271,7 @@ class CoquiApiService {
       payload['members'] = members;
       payload['group_max_rounds'] = groupMaxRounds;
     } else if (profile != null && profile.isNotEmpty) {
-      payload['profile'] = profile;
+      payload['persona_id'] = profile;
     }
 
     final response = await http.post(
@@ -339,9 +339,9 @@ class CoquiApiService {
     if (modelRole != null) body['model_role'] = modelRole;
     if (groupMaxRounds != null) body['group_max_rounds'] = groupMaxRounds;
     if (clearProfile) {
-      body['profile'] = '';
+      body['persona_id'] = '';
     } else if (profile != null) {
-      body['profile'] = profile;
+      body['persona_id'] = profile;
     }
 
     final response = await http.patch(
@@ -1101,12 +1101,12 @@ class CoquiApiService {
   /// Get available personality profiles with descriptions.
   Future<List<CoquiProfile>> getProfiles() async {
     final response = await http.get(
-      _url('/profiles'),
+      _url('/personas'),
       headers: _headers,
     );
     final body = _parseResponse(response);
 
-    final defaultProfile = body['default_profile'] as String?;
+    final defaultProfile = body['default_persona'] as String?;
     final profiles = body['data'] as List? ?? [];
     return profiles
         .map((profile) => CoquiProfile.fromJson(
@@ -1119,7 +1119,7 @@ class CoquiApiService {
   /// Get the curated preference editor schema for profile management.
   Future<CoquiProfilePreferenceSchema> getProfilePreferenceSchema() async {
     final response = await http.get(
-      _url('/config/profile-preferences/schema'),
+      _url('/config/persona-preferences/schema'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1129,7 +1129,7 @@ class CoquiApiService {
   /// Get a single profile with full detail fields.
   Future<CoquiProfile> getProfile(String name) async {
     final response = await http.get(
-      _url('/profiles/$name'),
+      _url('/personas/$name'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1159,7 +1159,7 @@ class CoquiApiService {
     }
 
     final response = await http.post(
-      _url('/profiles'),
+      _url('/personas'),
       headers: _headers,
       body: jsonEncode(payload),
     );
@@ -1168,6 +1168,9 @@ class CoquiApiService {
   }
 
   /// Update a profile's editable metadata.
+  ///
+  /// When [version] is supplied it is sent as the CAP `If-Match` precondition
+  /// header; the server returns 409 `version_conflict` if the persona changed.
   Future<CoquiProfile> updateProfile(
     String name, {
     String? description,
@@ -1176,6 +1179,7 @@ class CoquiApiService {
     Map<String, dynamic>? preferences,
     bool clearBackstory = false,
     bool clearPreferences = false,
+    int? version,
   }) async {
     final payload = <String, dynamic>{};
     if (description != null) {
@@ -1196,8 +1200,8 @@ class CoquiApiService {
     }
 
     final response = await http.patch(
-      _url('/profiles/$name'),
-      headers: _headers,
+      _url('/personas/$name'),
+      headers: _ifMatchHeaders(version),
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
@@ -1205,18 +1209,30 @@ class CoquiApiService {
   }
 
   /// Delete a non-default profile.
-  Future<void> deleteProfile(String name) async {
+  ///
+  /// When [version] is supplied it is sent as the CAP `If-Match` precondition
+  /// header; the server returns 409 `version_conflict` if the persona changed.
+  Future<void> deleteProfile(String name, {int? version}) async {
     final response = await http.delete(
-      _url('/profiles/$name'),
-      headers: _headers,
+      _url('/personas/$name'),
+      headers: _ifMatchHeaders(version),
     );
     _parseResponse(response);
+  }
+
+  /// Base JSON headers, optionally carrying an `If-Match` precondition.
+  Map<String, String> _ifMatchHeaders(int? version) {
+    final headers = Map<String, String>.from(_headers);
+    if (version != null) {
+      headers['If-Match'] = version.toString();
+    }
+    return headers;
   }
 
   /// Get backstory inspection metadata through the profile-scoped route.
   Future<CoquiBackstoryInspection> inspectProfileBackstory(String name) async {
     final response = await http.get(
-      _url('/profiles/$name/backstory'),
+      _url('/personas/$name/backstory'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1229,7 +1245,7 @@ class CoquiApiService {
     required String path,
   }) async {
     final response = await http.get(
-      _url('/profiles/$profileName/backstory/entries', {'path': path}),
+      _url('/personas/$profileName/backstory/entries', {'path': path}),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1242,7 +1258,7 @@ class CoquiApiService {
     required String path,
   }) async {
     final response = await http.post(
-      _url('/profiles/$profileName/backstory/folders'),
+      _url('/personas/$profileName/backstory/folders'),
       headers: _headers,
       body: jsonEncode({'path': path}),
     );
@@ -1259,7 +1275,7 @@ class CoquiApiService {
     required String content,
   }) async {
     final response = await http.put(
-      _url('/profiles/$profileName/backstory/entries'),
+      _url('/personas/$profileName/backstory/entries'),
       headers: _headers,
       body: jsonEncode({
         'path': path,
@@ -1279,7 +1295,7 @@ class CoquiApiService {
   }) async {
     final request = http.Request(
       'DELETE',
-      _url('/profiles/$profileName/backstory/entries'),
+      _url('/personas/$profileName/backstory/entries'),
     )
       ..headers.addAll(_headers)
       ..body = jsonEncode({'path': path});
@@ -1911,7 +1927,7 @@ class CoquiApiService {
       params['role'] = role;
     }
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(
@@ -1947,7 +1963,7 @@ class CoquiApiService {
       params['role'] = role;
     }
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(

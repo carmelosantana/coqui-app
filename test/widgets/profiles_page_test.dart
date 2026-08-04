@@ -25,6 +25,9 @@ class _FakeApiService extends CoquiApiService {
             displayName: 'Caelum',
             description: 'A calm companion.',
             isDefault: true,
+            id: 'persona_caelum',
+            version: 1,
+            avatar: {'tint': '#2b3a52', 'image_ref': null},
             soul: '# Caelum\n\nA calm companion.',
             preferenceDocument: {
               'prompt_directives': {
@@ -229,6 +232,7 @@ class _FakeApiService extends CoquiApiService {
     Map<String, dynamic>? preferences,
     bool clearBackstory = false,
     bool clearPreferences = false,
+    int? version,
   }) async {
     final current = _profiles[name]!;
     lastUpdatedDescription = description;
@@ -276,7 +280,7 @@ class _FakeApiService extends CoquiApiService {
   }
 
   @override
-  Future<void> deleteProfile(String name) async {
+  Future<void> deleteProfile(String name, {int? version}) async {
     _profiles.remove(name);
   }
 

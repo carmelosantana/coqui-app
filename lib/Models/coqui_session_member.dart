@@ -9,7 +9,7 @@ class CoquiSessionMember {
 
   factory CoquiSessionMember.fromJson(Map<String, dynamic> json) {
     return CoquiSessionMember(
-      profile: json['profile'] as String? ?? '',
+      profile: json['persona_id'] as String? ?? '',
       position: json['position'] as int? ?? 0,
     );
   }

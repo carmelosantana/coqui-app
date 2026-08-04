@@ -11,7 +11,7 @@ void main() {
         'id': 'session-1',
         'model_role': 'orchestrator',
         'model': 'gpt-test',
-        'profile': 'trinity',
+        'persona_id': 'trinity',
         'active_project_id': 'project-123',
         'created_at': '2026-04-21T10:00:00Z',
         'updated_at': '2026-04-21T11:00:00Z',
@@ -94,6 +94,37 @@ void main() {
       expect(restored.title, 'Closed Session');
     });
 
+    test('reads persona_id from CAP session wire (not profile)', () {
+      final session = CoquiSession.fromJson({
+        'id': 's_1',
+        'model_role': 'orchestrator',
+        'model': 'anthropic/claude-sonnet-4',
+        'persona_id': 'caelum',
+        'created_at': '2026-08-04T00:00:00Z',
+        'updated_at': '2026-08-04T00:00:00Z',
+      });
+
+      expect(session.personaId, 'caelum');
+      expect(session.profile, 'caelum');
+    });
+
+    test('reads group member persona_id from CAP wire', () {
+      final session = CoquiSession.fromJson({
+        'id': 'group-session-persona',
+        'model_role': 'orchestrator',
+        'model': 'gpt-test',
+        'group_enabled': 1,
+        'group_members': [
+          {'persona_id': 'caelum', 'position': 0},
+          {'persona_id': 'nova', 'position': 1},
+        ],
+        'created_at': '2026-08-04T00:00:00Z',
+        'updated_at': '2026-08-04T00:00:00Z',
+      });
+
+      expect(session.groupProfileNames, ['caelum', 'nova']);
+    });
+
     test('falls back to session id when no title exists', () {
       final session = CoquiSession.fromJson({
         'id': 'abcdef1234567890',
@@ -132,14 +163,14 @@ void main() {
         'id': 'group-session-1',
         'model_role': 'orchestrator',
         'model': 'gpt-test',
-        'profile': null,
+        'persona_id': null,
         'group_enabled': 1,
         'group_max_rounds': 4,
         'group_composition_key': 'caelum|nova|trinity',
         'group_members': [
-          {'profile': 'caelum', 'position': 0},
-          {'profile': 'nova', 'position': 1},
-          {'profile': 'trinity', 'position': 2},
+          {'persona_id': 'caelum', 'position': 0},
+          {'persona_id': 'nova', 'position': 1},
+          {'persona_id': 'trinity', 'position': 2},
         ],
         'created_at': '2026-04-21T10:00:00Z',
         'updated_at': '2026-04-21T11:00:00Z',
