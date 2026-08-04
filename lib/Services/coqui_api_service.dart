@@ -851,7 +851,7 @@ class CoquiApiService {
   }) async {
     final params = <String, String>{};
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(
@@ -2829,7 +2829,7 @@ class CoquiApiService {
     };
     if (title != null) payload['title'] = title;
     if (parentSessionId != null) payload['parent_session_id'] = parentSessionId;
-    if (profile != null && profile.isNotEmpty) payload['profile'] = profile;
+    if (profile != null && profile.isNotEmpty) payload['persona'] = profile;
 
     final response = await http.post(
       _url('/tasks'),
