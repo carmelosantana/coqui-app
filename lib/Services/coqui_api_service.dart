@@ -1726,10 +1726,7 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final artifacts = body['artifacts'] as List? ?? [];
-    return artifacts
-        .map((item) => CoquiArtifact.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiArtifact>.fromJson(body, CoquiArtifact.fromJson).data;
   }
 
   Future<CoquiArtifact> getArtifact(String sessionId, String artifactId) async {
