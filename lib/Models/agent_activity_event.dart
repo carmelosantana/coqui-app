@@ -188,8 +188,9 @@ class AgentActivityEvent {
           timestamp: timestamp,
         ),
       SseEventType.textDelta || SseEventType.reasoning => null,
+      SseEventType.token ||
+      SseEventType.question ||
       SseEventType.complete ||
-      SseEventType.connected ||
       SseEventType.unknown => null,
       _ => AgentActivityEvent(
           type: AgentActivityType.info,

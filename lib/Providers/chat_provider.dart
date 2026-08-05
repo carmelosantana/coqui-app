@@ -104,7 +104,11 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, int> _sessionIteration = {};
   final Map<String, String?> _sessionSummary = {};
   final Map<String, CoquiTurn?> _sessionLastTurn = {};
-  final Map<String, String?> _sessionTurnProcessIds = {};
+
+  /// Pending structured question projection from a CAP 'question' frame,
+  /// keyed by session. Cleared when a new stream starts. No answer UI is
+  /// wired to this yet — it is wire-boundary state only.
+  final Map<String, Map<String, dynamic>?> _sessionPendingQuestions = {};
 
   List<AgentActivityEvent> get currentTurnActivity =>
       _sessionActivity[currentSession?.id] ?? const [];
@@ -116,6 +120,11 @@ class ChatProvider extends ChangeNotifier {
 
   /// Full typed turn payload from the most recent completed turn.
   CoquiTurn? get lastCompletedTurn => _sessionLastTurn[currentSession?.id];
+
+  /// The most recent unanswered question projection for the active session,
+  /// or null when the turn stream has raised none.
+  Map<String, dynamic>? get pendingQuestion =>
+      _sessionPendingQuestions[currentSession?.id];
 
   // ── Error state ────────────────────────────────────────────────────
 
@@ -208,7 +217,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionIteration.clear();
     _sessionSummary.clear();
     _sessionLastTurn.clear();
-    _sessionTurnProcessIds.clear();
+    _sessionPendingQuestions.clear();
     _activeStreams.clear();
     _streamingContent.clear();
     _cancelledStreams.clear();
@@ -344,7 +353,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionIteration.remove(sessionId);
     _sessionSummary.remove(sessionId);
     _sessionLastTurn.remove(sessionId);
-    _sessionTurnProcessIds.remove(sessionId);
+    _sessionPendingQuestions.remove(sessionId);
 
     try {
       await _apiService.deleteSession(sessionId);
@@ -541,7 +550,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionIteration[session.id] = 0;
     _sessionSummary[session.id] = null;
     _sessionLastTurn[session.id] = null;
-    _sessionTurnProcessIds[session.id] = null;
+    _sessionPendingQuestions[session.id] = null;
     notifyListeners();
 
     try {
@@ -684,10 +693,10 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) stateChanged = true;
             break;
 
-          case SseEventType.textDelta:
-            // Incremental text streaming — append delta to the running content
-            // and update the assistant message bubble in real time.
-            final delta = event.textDeltaContent;
+          case SseEventType.token:
+            // Incremental token streaming — append the token text to the
+            // running content and update the assistant message bubble live.
+            final delta = event.tokenText ?? '';
             if (delta.isNotEmpty) {
               accumulatedContent += delta;
               _streamingContent[session.id] = accumulatedContent;
@@ -702,25 +711,53 @@ class ChatProvider extends ChangeNotifier {
             // Don't set stateChanged — throttled notify handles it
             break;
 
+          case SseEventType.question:
+            // Store the question projection for later answer flows. No answer
+            // UI is wired this phase — this is wire-boundary state only.
+            _sessionPendingQuestions[session.id] = event.question;
+            if (isViewing) stateChanged = true;
+            break;
+
           case SseEventType.reasoning:
             addActivity(event);
             if (isViewing) stateChanged = true;
             break;
 
           case SseEventType.done:
-            // Final authoritative content from the server — replace whatever
-            // was accumulated from text deltas.
-            accumulatedContent = event.content;
-            _streamingContent[session.id] = accumulatedContent;
-            gotContent = accumulatedContent.trim().isNotEmpty;
+            // Terminal CAP frame: `data` is the full turn record
+            // (schema/turn.json via TurnHandler::toWire). Parse it as the
+            // authoritative turn and use its response_text as the final
+            // assistant content, falling back to accumulated tokens when the
+            // record carries none (e.g. a tool-only turn).
+            final turn = CoquiTurn.fromJson(event.data);
+            final completeContent = turn.responseText.trim().isNotEmpty
+                ? turn.responseText
+                : accumulatedContent;
+            if (completeContent.trim().isNotEmpty) {
+              accumulatedContent = completeContent;
+              _streamingContent[session.id] = accumulatedContent;
+              gotContent = true;
+            }
+
+            _sessionLastTurn[session.id] = turn;
+            _sessionSummary[session.id] = turn.summary;
 
             if (isViewing) {
-              upsertStreamingMessage();
+              if (completeContent.trim().isNotEmpty) {
+                upsertStreamingMessage();
+              }
               stateChanged = true;
             } else {
-              // Mark as unread if we're not viewing this session
-              if (!_unreadSessions.contains(session.id)) {
+              // Background session: mark unread when we produced content,
+              // otherwise surface a no-response error.
+              final hasAnyContent =
+                  gotContent || completeContent.trim().isNotEmpty;
+              if (hasAnyContent) {
                 _unreadSessions.add(session.id);
+                stateChanged = true;
+              } else {
+                _sessionErrors[session.id] =
+                    CoquiException('No response received from server');
                 stateChanged = true;
               }
             }
@@ -734,72 +771,11 @@ class ChatProvider extends ChangeNotifier {
             stateChanged = true;
             break;
 
+          case SseEventType.textDelta:
           case SseEventType.complete:
-            final iterations = event.data['iterations'] as int? ?? 0;
-            final tools = event.toolsUsed;
-            final childCount = event.data['child_agent_count'] as int? ?? 0;
-            final tokens = event.totalTokens;
-            final duration = event.durationMs;
-            final completeContent =
-                (event.data['content'] as String?) ?? accumulatedContent;
-            final completeError = event.data['error'];
-            final timestamp = DateTime.now().toIso8601String();
-            final turn = CoquiTurn.fromJson({
-              'id': '',
-              'session_id': session.id,
-              'turn_number': 0,
-              'user_prompt': prompt,
-              'response_text': completeContent,
-              'content': completeContent,
-              'model': session.model,
-              'prompt_tokens': event.data['prompt_tokens'] as int? ?? 0,
-              'completion_tokens': event.data['completion_tokens'] as int? ?? 0,
-              'total_tokens': tokens,
-              'iterations': iterations,
-              'duration_ms': duration,
-              'tools_used': tools,
-              'child_agent_count': childCount,
-              'turn_process_id': _sessionTurnProcessIds[session.id],
-              'restart_requested':
-                  event.data['restart_requested'] as bool? ?? false,
-              'iteration_limit_reached':
-                  event.data['iteration_limit_reached'] as bool? ?? false,
-              'budget_exhausted':
-                  event.data['budget_exhausted'] as bool? ?? false,
-              'context_usage': event.data['context_usage'],
-              'file_edits': event.data['file_edits'],
-              'review_feedback': event.data['review_feedback'],
-              'review_approved': event.data['review_approved'],
-              'background_tasks': event.data['background_tasks'],
-              'error': completeError,
-              'created_at': timestamp,
-              'completed_at': timestamp,
-            });
-            _sessionLastTurn[session.id] = turn;
-            _sessionSummary[session.id] = turn.summary;
-            if (isViewing) {
-              stateChanged = true;
-            } else {
-              // For background sessions: mark as unread or error appropriately
-              if (completeError != null) {
-                _sessionErrors[session.id] = CoquiException(
-                  completeError.toString(),
-                );
-                stateChanged = true;
-              } else {
-                final hasAnyContent =
-                    gotContent || completeContent.trim().isNotEmpty;
-                if (hasAnyContent) {
-                  _unreadSessions.add(session.id);
-                  stateChanged = true;
-                } else {
-                  // Stream ended without any content and no error reported — treat as error
-                  _sessionErrors[session.id] =
-                      CoquiException('No response received from server');
-                  stateChanged = true;
-                }
-              }
-            }
+            // Legacy turn frames. The CAP turn stream no longer emits these
+            // (the server maps text_delta→token and complete→done); they are
+            // retained as enum members only for stored-turn-event replay.
             break;
 
           case SseEventType.title:
@@ -863,10 +839,6 @@ class ChatProvider extends ChangeNotifier {
           case SseEventType.loopComplete:
             addActivity(event);
             if (isViewing) stateChanged = true;
-            break;
-
-          case SseEventType.connected:
-            _sessionTurnProcessIds[session.id] = event.turnProcessId;
             break;
 
           case SseEventType.unknown:

@@ -1087,6 +1087,26 @@ class CoquiApiService {
         .toList();
   }
 
+  /// Answer a question raised during a turn.
+  ///
+  /// Posts to `/sessions/{id}/turns/{turnId}/answer` with the CAP answer
+  /// shape `{selected, text}` — [selected] is the list of chosen option
+  /// labels (empty for free-text-only answers) and [text] is the free-text
+  /// answer or null. Throws [CoquiException] on a catalog error.
+  Future<void> answerTurn(
+    String sessionId,
+    String turnId, {
+    List<String> selected = const [],
+    String? text,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/turns/$turnId/answer'),
+      headers: _headers,
+      body: jsonEncode({'selected': selected, 'text': text}),
+    );
+    _parseResponse(response);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
