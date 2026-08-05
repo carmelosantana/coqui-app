@@ -753,12 +753,12 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${run.agentRole} · iteration ${run.parentIteration}',
+                                        '${run.role} · ${run.status}',
                                         style: theme.textTheme.titleSmall,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        run.model,
+                                        run.model ?? 'inherit',
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
                                           color: theme
@@ -770,7 +770,7 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                                         run.promptPreview,
                                         style: theme.textTheme.bodySmall,
                                       ),
-                                      if (run.result.isNotEmpty) ...[
+                                      if ((run.result ?? '').isNotEmpty) ...[
                                         const SizedBox(height: 8),
                                         Text(
                                           run.resultPreview,

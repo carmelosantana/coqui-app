@@ -985,6 +985,95 @@ class CoquiApiService {
         .toList();
   }
 
+  /// Spawn a child agent run under a session.
+  ///
+  /// `POST /sessions/{id}/child-runs` with `{"role", "prompt"}` — the persona
+  /// is inherited from the session server-side. Returns 202 with the terminal
+  /// child-run object. The endpoint is gated: a session that is not a
+  /// full-access top-level orchestrator yields 403, surfaced as a
+  /// [CoquiException].
+  Future<CoquiChildRun> spawnChildRun(
+    String sessionId, {
+    required String role,
+    required String prompt,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/child-runs'),
+      headers: _headers,
+      body: jsonEncode({'role': role, 'prompt': prompt}),
+    );
+    final body = _parseResponse(response);
+    return CoquiChildRun.fromJson(body);
+  }
+
+  /// Get a single child-run by ID.
+  Future<CoquiChildRun> getChildRun(String sessionId, String childRunId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/child-runs/$childRunId'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiChildRun.fromJson(body);
+  }
+
+  /// Stream a child run's lifecycle frames via SSE.
+  ///
+  /// `GET /sessions/{id}/child-runs/{childRunId}/events`. Children execute
+  /// synchronously, so the deterministic replay is `started` (`{child_run_id}`)
+  /// then a terminal `done` frame whose `data` is the full child-run object.
+  /// Frames are surfaced as [SseEvent]s (the `started` type is unknown to the
+  /// enum but its data still parses); a caller reads the terminal child-run
+  /// from the `done` frame via `CoquiChildRun.fromJson(event.data)`.
+  Stream<SseEvent> streamChildRunEvents(
+    String sessionId,
+    String childRunId,
+  ) async* {
+    final request = http.Request(
+      'GET',
+      _url('/sessions/$sessionId/child-runs/$childRunId/events'),
+    );
+    request.headers['Accept'] = 'text/event-stream';
+    if (_apiKey.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $_apiKey';
+    }
+
+    http.StreamedResponse response;
+    try {
+      response = await request.send();
+    } on http.ClientException catch (e) {
+      throw CoquiException.friendly(e);
+    }
+
+    if (response.statusCode != 200) {
+      await _throwStreamedError(response);
+    }
+
+    var buffer = '';
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      buffer += chunk;
+
+      while (buffer.contains('\n\n')) {
+        final index = buffer.indexOf('\n\n');
+        final block = buffer.substring(0, index).trim();
+        buffer = buffer.substring(index + 2);
+
+        if (block.isEmpty) continue;
+
+        final event = SseEvent.parse(block);
+        if (event != null) {
+          yield event;
+        }
+      }
+    }
+
+    if (buffer.trim().isNotEmpty) {
+      final event = SseEvent.parse(buffer.trim());
+      if (event != null) {
+        yield event;
+      }
+    }
+  }
+
   /// Derive a [MediaType] from a filename's extension for multipart uploads.
   ///
   /// Maps the extensions accepted by the server's [FileUploadStorage] allowed
