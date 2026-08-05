@@ -767,7 +767,8 @@ class ChatProvider extends ChangeNotifier {
             if (isViewing) {
               addActivity(event);
             }
-            _sessionErrors[session.id] = CoquiException(event.errorMessage);
+            _sessionErrors[session.id] =
+                CoquiException(event.errorMessage, code: event.errorCode);
             stateChanged = true;
             break;
 

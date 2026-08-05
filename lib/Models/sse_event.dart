@@ -97,8 +97,13 @@ class SseEvent {
   /// Nesting depth from child events.
   int get childDepth => data['depth'] as int? ?? 0;
 
-  /// Error message from an 'error' event.
-  String get errorMessage => data['message'] as String? ?? '';
+  /// Human-readable message from a CAP 'error' frame (`data { error, code }`,
+  /// schema/sse-error.json → schema/error.json — the same catalog payload an
+  /// ordinary HTTP error carries via ApiErrorCode::toPayload).
+  String get errorMessage => data['error'] as String? ?? '';
+
+  /// Machine-readable catalog code from a CAP 'error' frame.
+  String? get errorCode => data['code'] as String?;
 
   /// Total tokens from a 'complete' event.
   int get totalTokens => data['total_tokens'] as int? ?? 0;

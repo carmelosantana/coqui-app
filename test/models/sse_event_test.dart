@@ -59,13 +59,19 @@ void main() {
       expect(e.question!['prompt'], 'Pick one');
     });
 
-    test('parses error frame with error and code', () {
+    test('parses CAP error frame and exposes errorMessage + errorCode', () {
       final e = SseEvent.parse(
         'event: error\ndata: {"error":"boom","code":"internal_error"}',
       );
       expect(e!.type, SseEventType.error);
-      expect(e.data['error'], 'boom');
-      expect(e.data['code'], 'internal_error');
+      expect(e.errorMessage, 'boom');
+      expect(e.errorCode, 'internal_error');
+    });
+
+    test('errorMessage is empty and errorCode null when keys absent', () {
+      final e = SseEvent.parse('event: error\ndata: {}');
+      expect(e!.errorMessage, '');
+      expect(e.errorCode, isNull);
     });
 
     test('parses a warning event and exposes warningMessage', () {
