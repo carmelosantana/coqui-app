@@ -18,17 +18,13 @@ class ScheduleEditorSheet extends StatefulWidget {
 
 class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
   final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _expressionController = TextEditingController();
+  final _cronController = TextEditingController();
   final _promptController = TextEditingController();
-  final _timezoneController = TextEditingController(text: 'UTC');
 
-  String _selectedRole = 'orchestrator';
-  int _maxIterations = 48;
-  int _maxFailures = 3;
-
-  static const _iterationOptions = [10, 25, 48, 100];
-  static const _failureOptions = [1, 3, 5, 10];
+  // CAP `persona_id`. NOTE: the picker below still lists roles via
+  // RoleProvider; migrating it to a persona picker is out of scope for the
+  // B4 wire-boundary reshape (see task report concern).
+  String _selectedPersona = 'orchestrator';
 
   bool get _isEditing => widget.schedule != null;
 
@@ -38,13 +34,11 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
     final schedule = widget.schedule;
     if (schedule != null) {
       _nameController.text = schedule.name;
-      _descriptionController.text = schedule.description ?? '';
-      _expressionController.text = schedule.scheduleExpression;
-      _promptController.text = schedule.prompt;
-      _timezoneController.text = schedule.timezone;
-      _selectedRole = schedule.role;
-      _maxIterations = schedule.maxIterations;
-      _maxFailures = schedule.maxFailures;
+      _cronController.text = schedule.cron;
+      _promptController.text = schedule.action.prompt ?? '';
+      if (schedule.personaId.isNotEmpty) {
+        _selectedPersona = schedule.personaId;
+      }
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -58,24 +52,22 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
   @override
   void dispose() {
     _nameController.dispose();
-    _descriptionController.dispose();
-    _expressionController.dispose();
+    _cronController.dispose();
     _promptController.dispose();
-    _timezoneController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickRole() async {
+  Future<void> _pickPersona() async {
     final roleProvider = context.read<RoleProvider>();
     final roles = roleProvider.roles;
     final current = roles.cast<CoquiRole?>().firstWhere(
-          (role) => role?.name == _selectedRole,
-          orElse: () => CoquiRole(name: _selectedRole, model: ''),
+          (role) => role?.name == _selectedPersona,
+          orElse: () => CoquiRole(name: _selectedPersona, model: ''),
         );
 
     final selectedRole = await showSelectionBottomSheet<CoquiRole>(
       context: context,
-      header: const Text('Schedule Role'),
+      header: const Text('Schedule Persona'),
       fetchItems: () async {
         if (roleProvider.roles.isEmpty) {
           await roleProvider.fetchRoles();
@@ -99,55 +91,42 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
     );
 
     if (!mounted || selectedRole == null) return;
-    setState(() => _selectedRole = selectedRole.name);
+    setState(() => _selectedPersona = selectedRole.name);
   }
 
   Future<void> _submit() async {
     final provider = context.read<ScheduleProvider>();
     final name = _nameController.text.trim();
-    final expression = _expressionController.text.trim();
+    final cron = _cronController.text.trim();
     final prompt = _promptController.text.trim();
-    final description = _descriptionController.text.trim();
-    final timezone = _timezoneController.text.trim();
 
     if (name.isEmpty) {
       _showSnackBar('Schedule name is required.');
       return;
     }
-    if (expression.isEmpty) {
-      _showSnackBar('Schedule expression is required.');
+    if (cron.isEmpty) {
+      _showSnackBar('Cron expression is required.');
       return;
     }
     if (prompt.isEmpty) {
       _showSnackBar('Prompt is required.');
       return;
     }
-    if (timezone.isEmpty) {
-      _showSnackBar('Timezone is required.');
-      return;
-    }
 
+    final action = ScheduleAction.turn(prompt);
     final schedule = _isEditing
         ? await provider.updateSchedule(
             widget.schedule!.id,
             name: name,
-            description: description,
-            scheduleExpression: expression,
-            prompt: prompt,
-            role: _selectedRole,
-            timezone: timezone,
-            maxIterations: _maxIterations,
-            maxFailures: _maxFailures,
+            cron: cron,
+            personaId: _selectedPersona,
+            action: action,
           )
         : await provider.createSchedule(
             name: name,
-            scheduleExpression: expression,
-            prompt: prompt,
-            role: _selectedRole,
-            timezone: timezone,
-            maxIterations: _maxIterations,
-            maxFailures: _maxFailures,
-            description: description.isEmpty ? null : description,
+            cron: cron,
+            personaId: _selectedPersona,
+            action: action,
           );
 
     if (!mounted) return;
@@ -246,24 +225,12 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _Label(label: 'Description'),
+                    _Label(label: 'Cron *'),
                     const SizedBox(height: 6),
                     TextField(
-                      controller: _descriptionController,
+                      controller: _cronController,
                       decoration: const InputDecoration(
-                        hintText: 'What this schedule should accomplish',
-                        border: OutlineInputBorder(),
-                      ),
-                      minLines: 1,
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    _Label(label: 'Schedule Expression *'),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _expressionController,
-                      decoration: const InputDecoration(
-                        hintText: '0 9 * * 1-5 or @once',
+                        hintText: '0 9 * * 1-5',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -277,7 +244,7 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
                         border: Border.all(color: theme.dividerColor),
                       ),
                       child: Text(
-                        'Use cron expressions for recurring runs and @once for a one-shot schedule. Trigger runs are picked up on the next API scheduler tick.',
+                        'Use a cron expression for recurring runs. Trigger runs are picked up on the next API scheduler tick.',
                         style: theme.textTheme.bodySmall,
                       ),
                     ),
@@ -295,85 +262,14 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
                       maxLines: 8,
                     ),
                     const SizedBox(height: 16),
-                    _Label(label: 'Role'),
+                    _Label(label: 'Persona'),
                     const SizedBox(height: 6),
                     OutlinedButton.icon(
-                      onPressed: _pickRole,
-                      icon: const Icon(Icons.build_circle_outlined),
+                      onPressed: _pickPersona,
+                      icon: const Icon(Icons.person_outline),
                       label: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(_selectedRole),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _Label(label: 'Timezone'),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _timezoneController,
-                      decoration: const InputDecoration(
-                        hintText: 'UTC',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _Label(label: 'Max Iterations'),
-                    const SizedBox(height: 6),
-                    InputDecorator(
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      child: DropdownButton<int>(
-                        value: _maxIterations,
-                        isDense: true,
-                        isExpanded: true,
-                        underline: const SizedBox.shrink(),
-                        items: _iterationOptions
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text('$value iterations'),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _maxIterations = value);
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _Label(label: 'Max Consecutive Failures'),
-                    const SizedBox(height: 6),
-                    InputDecorator(
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      child: DropdownButton<int>(
-                        value: _maxFailures,
-                        isDense: true,
-                        isExpanded: true,
-                        underline: const SizedBox.shrink(),
-                        items: _failureOptions
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text('$value failures'),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _maxFailures = value);
-                          }
-                        },
+                        child: Text(_selectedPersona),
                       ),
                     ),
                     const SizedBox(height: 40),

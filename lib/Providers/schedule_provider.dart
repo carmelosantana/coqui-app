@@ -85,13 +85,9 @@ class ScheduleProvider extends ChangeNotifier {
 
   Future<CoquiSchedule?> createSchedule({
     required String name,
-    required String scheduleExpression,
-    required String prompt,
-    String role = 'orchestrator',
-    String timezone = 'UTC',
-    int maxIterations = 48,
-    int maxFailures = 3,
-    String? description,
+    required String cron,
+    required String personaId,
+    required ScheduleAction action,
   }) async {
     _isCreating = true;
     _error = null;
@@ -100,13 +96,9 @@ class ScheduleProvider extends ChangeNotifier {
     try {
       final schedule = await _apiService.createSchedule(
         name: name,
-        scheduleExpression: scheduleExpression,
-        prompt: prompt,
-        role: role,
-        timezone: timezone,
-        maxIterations: maxIterations,
-        maxFailures: maxFailures,
-        description: description,
+        cron: cron,
+        personaId: personaId,
+        action: action,
       );
       _detailsById[schedule.id] = schedule;
       _schedules = [
@@ -127,13 +119,10 @@ class ScheduleProvider extends ChangeNotifier {
   Future<CoquiSchedule?> updateSchedule(
     String id, {
     String? name,
-    String? description,
-    String? scheduleExpression,
-    String? prompt,
-    String? role,
-    String? timezone,
-    int? maxIterations,
-    int? maxFailures,
+    String? cron,
+    String? personaId,
+    ScheduleAction? action,
+    String? status,
   }) async {
     _mutatingIds.add(id);
     _error = null;
@@ -143,13 +132,10 @@ class ScheduleProvider extends ChangeNotifier {
       final schedule = await _apiService.updateSchedule(
         id,
         name: name,
-        description: description,
-        scheduleExpression: scheduleExpression,
-        prompt: prompt,
-        role: role,
-        timezone: timezone,
-        maxIterations: maxIterations,
-        maxFailures: maxFailures,
+        cron: cron,
+        personaId: personaId,
+        action: action,
+        status: status,
       );
       _detailsById[id] = schedule;
       _replaceSchedule(schedule);

@@ -2384,28 +2384,23 @@ class CoquiApiService {
     return CoquiSchedule.fromJson(body);
   }
 
+  /// Create a schedule.
+  ///
+  /// Sends the CAP body `{name, cron, persona_id, action:{kind, …}}` and
+  /// parses the bare `toWire` object returned with HTTP 201 (not nested under
+  /// `schedule`).
   Future<CoquiSchedule> createSchedule({
     required String name,
-    required String scheduleExpression,
-    required String prompt,
-    String role = 'orchestrator',
-    String timezone = 'UTC',
-    int maxIterations = 48,
-    int maxFailures = 3,
-    String? description,
+    required String cron,
+    required String personaId,
+    required ScheduleAction action,
   }) async {
     final payload = <String, dynamic>{
       'name': name,
-      'schedule_expression': scheduleExpression,
-      'prompt': prompt,
-      'role': role,
-      'timezone': timezone,
-      'max_iterations': maxIterations,
-      'max_failures': maxFailures,
+      'cron': cron,
+      'persona_id': personaId,
+      'action': action.toJson(),
     };
-    if (description != null && description.isNotEmpty) {
-      payload['description'] = description;
-    }
 
     final response = await http.post(
       _url('/schedules'),
@@ -2413,31 +2408,25 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    return CoquiSchedule.fromJson(body);
   }
 
+  /// Update a schedule with any subset of `{name, cron, persona_id, action,
+  /// status}`. Parses the bare `toWire` object in the response.
   Future<CoquiSchedule> updateSchedule(
     String id, {
     String? name,
-    String? description,
-    String? scheduleExpression,
-    String? prompt,
-    String? role,
-    String? timezone,
-    int? maxIterations,
-    int? maxFailures,
+    String? cron,
+    String? personaId,
+    ScheduleAction? action,
+    String? status,
   }) async {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name;
-    if (description != null) payload['description'] = description;
-    if (scheduleExpression != null) {
-      payload['schedule_expression'] = scheduleExpression;
-    }
-    if (prompt != null) payload['prompt'] = prompt;
-    if (role != null) payload['role'] = role;
-    if (timezone != null) payload['timezone'] = timezone;
-    if (maxIterations != null) payload['max_iterations'] = maxIterations;
-    if (maxFailures != null) payload['max_failures'] = maxFailures;
+    if (cron != null) payload['cron'] = cron;
+    if (personaId != null) payload['persona_id'] = personaId;
+    if (action != null) payload['action'] = action.toJson();
+    if (status != null) payload['status'] = status;
 
     final response = await http.patch(
       _url('/schedules/$id'),
@@ -2445,7 +2434,7 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    return CoquiSchedule.fromJson(body);
   }
 
   Future<void> deleteSchedule(String id) async {

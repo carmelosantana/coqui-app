@@ -29,7 +29,7 @@ class ScheduleStatusBadge extends StatelessWidget {
 
   (Color, IconData) _statusStyle(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return schedule.enabled
+    return schedule.isEnabled
         ? (CoquiColors.chart2, Icons.schedule_send_outlined)
         : (cs.onSurfaceVariant, Icons.schedule_outlined);
   }
