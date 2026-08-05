@@ -62,9 +62,6 @@ class SseEvent {
 
   // Convenience data accessors
 
-  /// Content from a 'done' or 'complete' event.
-  String get content => data['content'] as String? ?? '';
-
   /// Incremental token text from a CAP 'token' frame (`data { text }`).
   String? get tokenText => data['text'] as String?;
 
