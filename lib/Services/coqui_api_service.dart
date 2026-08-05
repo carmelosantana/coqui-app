@@ -2445,34 +2445,46 @@ class CoquiApiService {
     _parseResponse(response);
   }
 
+  /// Enable a schedule, then re-fetch the canonical CAP object.
+  ///
+  /// The `/enable` endpoint returns `{"schedule": <raw DB row>}` — a `SELECT *`
+  /// row carrying flat `enabled`/`action_kind` columns, not the CAP `status`
+  /// string or nested `action` union. Parsing that raw shape would corrupt the
+  /// DTO, so we discard it and re-fetch the clean bare `toWire` object via
+  /// [getSchedule].
   Future<CoquiSchedule> enableSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/enable'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
+  /// Disable a schedule, then re-fetch the canonical CAP object. See
+  /// [enableSchedule] for why the raw `{"schedule": …}` row is not parsed.
   Future<CoquiSchedule> disableSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/disable'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
+  /// Trigger a schedule run, then re-fetch the canonical CAP object. The
+  /// method's contract is to return the updated schedule; see [enableSchedule]
+  /// for why the raw `{"schedule": …}` row is not parsed.
   Future<CoquiSchedule> triggerSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/trigger'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
   // ── Loops ──────────────────────────────────────────────────────────
