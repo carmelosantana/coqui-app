@@ -10,6 +10,16 @@ class CoquiProfile {
   final Map<String, dynamic>? preferenceDocument;
   final List<String> allowedRoles;
 
+  /// CAP `persona.json` identity fields.
+  ///
+  /// The persona LIST summary and detail responses omit [id] and [avatar];
+  /// only the served `persona.json` wire (create/update responses) carries
+  /// them, so both are nullable. [version] is the optimistic-concurrency
+  /// token (server-assigned, >= 1) present across all persona wire shapes.
+  final String? id;
+  final int version;
+  final Map<String, dynamic>? avatar;
+
   const CoquiProfile({
     required this.name,
     this.displayName = '',
@@ -21,6 +31,9 @@ class CoquiProfile {
     this.preferenceValues,
     this.preferenceDocument,
     this.allowedRoles = const [],
+    this.id,
+    this.version = 1,
+    this.avatar,
   });
 
   factory CoquiProfile.fromJson(
@@ -42,6 +55,9 @@ class CoquiProfile {
       allowedRoles: (json['allowed_roles'] as List? ?? const [])
           .whereType<String>()
           .toList(growable: false),
+      id: json['id'] as String?,
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      avatar: (json['avatar'] as Map?)?.cast<String, dynamic>(),
     );
   }
 
@@ -58,6 +74,9 @@ class CoquiProfile {
     Map<String, dynamic>? preferenceValues,
     Map<String, dynamic>? preferenceDocument,
     List<String>? allowedRoles,
+    String? id,
+    int? version,
+    Map<String, dynamic>? avatar,
   }) {
     return CoquiProfile(
       name: name ?? this.name,
@@ -70,6 +89,9 @@ class CoquiProfile {
       preferenceValues: preferenceValues ?? this.preferenceValues,
       preferenceDocument: preferenceDocument ?? this.preferenceDocument,
       allowedRoles: allowedRoles ?? this.allowedRoles,
+      id: id ?? this.id,
+      version: version ?? this.version,
+      avatar: avatar ?? this.avatar,
     );
   }
 }

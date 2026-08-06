@@ -142,7 +142,7 @@ void main() {
             'model_role': 'orchestrator',
             'model': 'gpt-test',
             'session_origin': 'channel',
-            'profile': 'trinity',
+            'persona_id': 'trinity',
             'title': 'Channel · signal-dm:+18885551234',
             'created_at': '2026-04-23T10:00:00Z',
             'updated_at': '2026-04-23T10:05:00Z',

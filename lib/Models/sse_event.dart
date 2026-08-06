@@ -62,11 +62,12 @@ class SseEvent {
 
   // Convenience data accessors
 
-  /// Content from a 'done' or 'complete' event.
-  String get content => data['content'] as String? ?? '';
+  /// Incremental token text from a CAP 'token' frame (`data { text }`).
+  String? get tokenText => data['text'] as String?;
 
-  /// Incremental text delta from a 'text_delta' event.
-  String get textDeltaContent => data['content'] as String? ?? '';
+  /// Question projection from a CAP 'question' frame
+  /// (`data { question_id, prompt?, options?, suggested? }`).
+  Map<String, dynamic>? get question => data;
 
   /// Iteration number from an 'iteration' event.
   int get iterationNumber => data['number'] as int? ?? 0;
@@ -93,8 +94,13 @@ class SseEvent {
   /// Nesting depth from child events.
   int get childDepth => data['depth'] as int? ?? 0;
 
-  /// Error message from an 'error' event.
-  String get errorMessage => data['message'] as String? ?? '';
+  /// Human-readable message from a CAP 'error' frame (`data { error, code }`,
+  /// schema/sse-error.json → schema/error.json — the same catalog payload an
+  /// ordinary HTTP error carries via ApiErrorCode::toPayload).
+  String get errorMessage => data['error'] as String? ?? '';
+
+  /// Machine-readable catalog code from a CAP 'error' frame.
+  String? get errorCode => data['code'] as String?;
 
   /// Total tokens from a 'complete' event.
   int get totalTokens => data['total_tokens'] as int? ?? 0;
@@ -104,9 +110,6 @@ class SseEvent {
 
   /// Warning message from a 'warning' event.
   String get warningMessage => data['message'] as String? ?? '';
-
-  /// Turn process ID from a 'connected' event.
-  String get turnProcessId => data['turn_process_id'] as String? ?? '';
 
   /// Duration in ms from a 'complete' event.
   int get durationMs => data['duration_ms'] as int? ?? 0;
@@ -135,6 +138,8 @@ enum SseEventType {
   reviewStart,
   reviewEnd,
   textDelta,
+  token,
+  question,
   done,
   error,
   complete,
@@ -150,7 +155,6 @@ enum SseEventType {
   loopStageEnd,
   loopIterationEnd,
   loopComplete,
-  connected,
   unknown;
 
   factory SseEventType.fromString(String type) {
@@ -167,6 +171,8 @@ enum SseEventType {
       'review_start' => SseEventType.reviewStart,
       'review_end' => SseEventType.reviewEnd,
       'text_delta' => SseEventType.textDelta,
+      'token' => SseEventType.token,
+      'question' => SseEventType.question,
       'done' => SseEventType.done,
       'error' => SseEventType.error,
       'complete' => SseEventType.complete,
@@ -182,7 +188,6 @@ enum SseEventType {
       'loop_stage_end' => SseEventType.loopStageEnd,
       'loop_iteration_end' => SseEventType.loopIterationEnd,
       'loop_complete' => SseEventType.loopComplete,
-      'connected' => SseEventType.connected,
       _ => SseEventType.unknown,
     };
   }

@@ -189,11 +189,16 @@ class _FakeApiService extends CoquiApiService {
 
     yield SseEvent(
       type: SseEventType.done,
-      data: const {'content': 'Acknowledged'},
-    );
-    yield SseEvent(
-      type: SseEventType.complete,
-      data: const {'total_tokens': 1, 'duration_ms': 1},
+      data: {
+        'id': 'turn-${sentPrompts.length}',
+        'session_id': sessionId,
+        'turn_number': sentPrompts.length,
+        'user_prompt': prompt,
+        'response_text': 'Acknowledged',
+        'status': 'completed',
+        'total_tokens': 1,
+        'duration_ms': 1,
+      },
     );
   }
 

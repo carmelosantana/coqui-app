@@ -3,20 +3,17 @@ import 'package:coqui_app/Models/sse_event.dart';
 
 void main() {
   group('SseEventType.fromString', () {
-    test('maps all known server event strings', () {
-      expect(SseEventType.fromString('agent_start'), SseEventType.agentStart);
-      expect(SseEventType.fromString('iteration'), SseEventType.iteration);
+    test('maps CAP turn-stream event strings', () {
+      expect(SseEventType.fromString('token'), SseEventType.token);
       expect(SseEventType.fromString('tool_call'), SseEventType.toolCall);
       expect(SseEventType.fromString('tool_result'), SseEventType.toolResult);
-      expect(SseEventType.fromString('child_start'), SseEventType.childStart);
-      expect(SseEventType.fromString('child_end'), SseEventType.childEnd);
-      expect(SseEventType.fromString('text_delta'), SseEventType.textDelta);
+      expect(SseEventType.fromString('question'), SseEventType.question);
       expect(SseEventType.fromString('done'), SseEventType.done);
       expect(SseEventType.fromString('error'), SseEventType.error);
-      expect(SseEventType.fromString('complete'), SseEventType.complete);
-      expect(SseEventType.fromString('title'), SseEventType.title);
-      expect(SseEventType.fromString('warning'), SseEventType.warning);
-      expect(SseEventType.fromString('connected'), SseEventType.connected);
+    });
+
+    test('connected is no longer a known type', () {
+      expect(SseEventType.fromString('connected'), SseEventType.unknown);
     });
 
     test('maps unknown strings to unknown', () {
@@ -26,65 +23,91 @@ void main() {
   });
 
   group('SseEvent.parse', () {
+    test('parses token frame and exposes tokenText', () {
+      final e = SseEvent.parse('event: token\ndata: {"text":"hel"}');
+      expect(e, isNotNull);
+      expect(e!.type, SseEventType.token);
+      expect(e.tokenText, 'hel');
+    });
+
+    test('tokenText is null when text key absent', () {
+      final e = SseEvent.parse('event: token\ndata: {}');
+      expect(e!.tokenText, isNull);
+    });
+
+    test('parses done frame carrying the turn record', () {
+      final e = SseEvent.parse(
+        'event: done\ndata: {"id":"t_1","session_id":"s_1",'
+        '"status":"completed","response_text":"hi","total_tokens":42}',
+      );
+      expect(e, isNotNull);
+      expect(e!.type, SseEventType.done);
+      expect(e.data['response_text'], 'hi');
+      expect(e.data['status'], 'completed');
+      expect(e.data['total_tokens'], 42);
+    });
+
+    test('parses question frame and exposes the question projection', () {
+      final e = SseEvent.parse(
+        'event: question\ndata: {"question_id":"q_1","prompt":"Pick one",'
+        '"options":[{"value":"a","label":"A"}]}',
+      );
+      expect(e, isNotNull);
+      expect(e!.type, SseEventType.question);
+      expect(e.question, isNotNull);
+      expect(e.question!['question_id'], 'q_1');
+      expect(e.question!['prompt'], 'Pick one');
+    });
+
+    test('parses CAP error frame and exposes errorMessage + errorCode', () {
+      final e = SseEvent.parse(
+        'event: error\ndata: {"error":"boom","code":"internal_error"}',
+      );
+      expect(e!.type, SseEventType.error);
+      expect(e.errorMessage, 'boom');
+      expect(e.errorCode, 'internal_error');
+    });
+
+    test('errorMessage is empty and errorCode null when keys absent', () {
+      final e = SseEvent.parse('event: error\ndata: {}');
+      expect(e!.errorMessage, '');
+      expect(e.errorCode, isNull);
+    });
+
     test('parses a warning event and exposes warningMessage', () {
-      const block =
-          'event: warning\ndata: {"message":"Title generation failed"}';
-      final event = SseEvent.parse(block);
-      expect(event, isNotNull);
-      expect(event!.type, SseEventType.warning);
-      expect(event.warningMessage, 'Title generation failed');
-    });
-
-    test('parses a connected event and exposes turnProcessId', () {
-      const block =
-          'event: connected\ndata: {"turn_process_id":"tp_abc123"}';
-      final event = SseEvent.parse(block);
-      expect(event, isNotNull);
-      expect(event!.type, SseEventType.connected);
-      expect(event.turnProcessId, 'tp_abc123');
-    });
-
-    test('warningMessage returns empty string when message key absent', () {
-      const block = 'event: warning\ndata: {}';
-      final event = SseEvent.parse(block);
-      expect(event!.warningMessage, '');
-    });
-
-    test('turnProcessId returns empty string when key absent', () {
-      const block = 'event: connected\ndata: {}';
-      final event = SseEvent.parse(block);
-      expect(event!.turnProcessId, '');
-    });
-
-    test('returns null for malformed block missing event line', () {
-      const block = 'data: {"foo":"bar"}';
-      expect(SseEvent.parse(block), isNull);
-    });
-
-    test('returns null for malformed block missing data line', () {
-      const block = 'event: done';
-      expect(SseEvent.parse(block), isNull);
+      final e = SseEvent.parse(
+        'event: warning\ndata: {"message":"Title generation failed"}',
+      );
+      expect(e!.type, SseEventType.warning);
+      expect(e.warningMessage, 'Title generation failed');
     });
 
     test('parses a title event and exposes titleText', () {
-      const block = 'event: title\ndata: {"title":"My Session"}';
-      final event = SseEvent.parse(block);
-      expect(event!.type, SseEventType.title);
-      expect(event.titleText, 'My Session');
+      final e = SseEvent.parse('event: title\ndata: {"title":"My Session"}');
+      expect(e!.type, SseEventType.title);
+      expect(e.titleText, 'My Session');
+    });
+
+    test('returns null for malformed block missing event line', () {
+      expect(SseEvent.parse('data: {"foo":"bar"}'), isNull);
+    });
+
+    test('returns null for malformed block missing data line', () {
+      expect(SseEvent.parse('event: done'), isNull);
     });
   });
 
   group('SseEvent.parseAll', () {
-    test('parses multiple events separated by double newlines', () {
-      const raw =
-          'event: agent_start\ndata: {}\n\n'
-          'event: warning\ndata: {"message":"oops"}\n\n'
-          'event: connected\ndata: {"turn_process_id":"tp_1"}\n\n';
+    test('parses multiple CAP frames separated by double newlines', () {
+      const raw = 'event: token\ndata: {"text":"a"}\n\n'
+          'event: token\ndata: {"text":"b"}\n\n'
+          'event: done\ndata: {"id":"t_1","session_id":"s_1","status":"completed"}\n\n';
       final events = SseEvent.parseAll(raw);
       expect(events.length, 3);
-      expect(events[0].type, SseEventType.agentStart);
-      expect(events[1].type, SseEventType.warning);
-      expect(events[2].type, SseEventType.connected);
+      expect(events[0].type, SseEventType.token);
+      expect(events[0].tokenText, 'a');
+      expect(events[1].tokenText, 'b');
+      expect(events[2].type, SseEventType.done);
     });
   });
 }

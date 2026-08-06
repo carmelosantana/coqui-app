@@ -1042,9 +1042,7 @@ class _ScheduleCard extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
                   child: Icon(
-                    schedule.isFilesystemSource
-                        ? Icons.folder_outlined
-                        : Icons.schedule_outlined,
+                    Icons.schedule_outlined,
                     size: 18,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1061,9 +1059,7 @@ class _ScheduleCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        schedule.hasDescription
-                            ? schedule.description!
-                            : schedule.prompt,
+                        schedule.action.summary,
                         style: theme.textTheme.bodySmall,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -1080,11 +1076,9 @@ class _ScheduleCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _TagChip(label: schedule.scheduleExpression),
-                _TagChip(label: schedule.role),
-                _TagChip(label: schedule.timezone),
-                _TagChip(label: schedule.sourceLabel),
-                _TagChip(label: '${schedule.runCount} runs'),
+                _TagChip(label: schedule.cron),
+                _TagChip(label: schedule.personaId),
+                _TagChip(label: schedule.action.kind),
               ],
             ),
           ],

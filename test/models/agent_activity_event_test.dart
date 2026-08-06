@@ -41,11 +41,25 @@ void main() {
       expect(activity!.type, AgentActivityType.start);
     });
 
-    test('error event creates error activity with detail', () {
-      final event = makeEvent('error', {'message': 'boom'});
+    test('live CAP error frame surfaces the {error} message as detail', () {
+      final event =
+          makeEvent('error', {'error': 'boom', 'code': 'internal_error'});
       final activity = AgentActivityEvent.fromSseEvent(event);
       expect(activity!.type, AgentActivityType.error);
       expect(activity.detail, 'boom');
+    });
+
+    test('stored/replayed error event surfaces the {message} detail', () {
+      // Raw stored turn-event shape returned by GET /turns/{id}/events.
+      final event = CoquiTurnEvent(
+        id: 2,
+        eventType: 'error',
+        data: const {'message': 'Internal error'},
+        createdAt: DateTime.parse('2026-04-21T10:00:00Z'),
+      );
+      final activity = AgentActivityEvent.fromTurnEvent(event);
+      expect(activity!.type, AgentActivityType.error);
+      expect(activity.detail, 'Internal error');
     });
 
     test('turn event maps replayable history to activity rows', () {

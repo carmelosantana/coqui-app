@@ -45,6 +45,7 @@ import 'package:coqui_app/Models/coqui_loop.dart';
 import 'package:coqui_app/Models/coqui_webhook.dart';
 import 'package:coqui_app/Models/coqui_webhook_delivery.dart';
 import 'package:coqui_app/Models/coqui_webhook_stats.dart';
+import 'package:coqui_app/Models/cursor_page.dart';
 import 'package:coqui_app/Models/sse_event.dart';
 
 class CoquiSessionMutationResult {
@@ -216,10 +217,7 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final sessions = body['sessions'] as List? ?? [];
-    return sessions
-        .map((s) => CoquiSession.fromJson(s as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiSession>.fromJson(body, CoquiSession.fromJson).data;
   }
 
   /// Create a new session with the given role.
@@ -240,7 +238,7 @@ class CoquiApiService {
         payload['confirm_close_active_group_session'] = true;
       }
     } else if (profile != null && profile.isNotEmpty) {
-      payload['profile'] = profile;
+      payload['persona_id'] = profile;
     }
     if (confirmCloseActiveProfileSession) {
       payload['confirm_close_active_profile_session'] = true;
@@ -273,7 +271,7 @@ class CoquiApiService {
       payload['members'] = members;
       payload['group_max_rounds'] = groupMaxRounds;
     } else if (profile != null && profile.isNotEmpty) {
-      payload['profile'] = profile;
+      payload['persona_id'] = profile;
     }
 
     final response = await http.post(
@@ -341,9 +339,9 @@ class CoquiApiService {
     if (modelRole != null) body['model_role'] = modelRole;
     if (groupMaxRounds != null) body['group_max_rounds'] = groupMaxRounds;
     if (clearProfile) {
-      body['profile'] = '';
+      body['persona_id'] = '';
     } else if (profile != null) {
-      body['profile'] = profile;
+      body['persona_id'] = profile;
     }
 
     final response = await http.patch(
@@ -853,7 +851,7 @@ class CoquiApiService {
   }) async {
     final params = <String, String>{};
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(
@@ -987,6 +985,95 @@ class CoquiApiService {
         .toList();
   }
 
+  /// Spawn a child agent run under a session.
+  ///
+  /// `POST /sessions/{id}/child-runs` with `{"role", "prompt"}` — the persona
+  /// is inherited from the session server-side. Returns 202 with the terminal
+  /// child-run object. The endpoint is gated: a session that is not a
+  /// full-access top-level orchestrator yields 403, surfaced as a
+  /// [CoquiException].
+  Future<CoquiChildRun> spawnChildRun(
+    String sessionId, {
+    required String role,
+    required String prompt,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/child-runs'),
+      headers: _headers,
+      body: jsonEncode({'role': role, 'prompt': prompt}),
+    );
+    final body = _parseResponse(response);
+    return CoquiChildRun.fromJson(body);
+  }
+
+  /// Get a single child-run by ID.
+  Future<CoquiChildRun> getChildRun(String sessionId, String childRunId) async {
+    final response = await http.get(
+      _url('/sessions/$sessionId/child-runs/$childRunId'),
+      headers: _headers,
+    );
+    final body = _parseResponse(response);
+    return CoquiChildRun.fromJson(body);
+  }
+
+  /// Stream a child run's lifecycle frames via SSE.
+  ///
+  /// `GET /sessions/{id}/child-runs/{childRunId}/events`. Children execute
+  /// synchronously, so the deterministic replay is `started` (`{child_run_id}`)
+  /// then a terminal `done` frame whose `data` is the full child-run object.
+  /// Frames are surfaced as [SseEvent]s (the `started` type is unknown to the
+  /// enum but its data still parses); a caller reads the terminal child-run
+  /// from the `done` frame via `CoquiChildRun.fromJson(event.data)`.
+  Stream<SseEvent> streamChildRunEvents(
+    String sessionId,
+    String childRunId,
+  ) async* {
+    final request = http.Request(
+      'GET',
+      _url('/sessions/$sessionId/child-runs/$childRunId/events'),
+    );
+    request.headers['Accept'] = 'text/event-stream';
+    if (_apiKey.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $_apiKey';
+    }
+
+    http.StreamedResponse response;
+    try {
+      response = await request.send();
+    } on http.ClientException catch (e) {
+      throw CoquiException.friendly(e);
+    }
+
+    if (response.statusCode != 200) {
+      await _throwStreamedError(response);
+    }
+
+    var buffer = '';
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      buffer += chunk;
+
+      while (buffer.contains('\n\n')) {
+        final index = buffer.indexOf('\n\n');
+        final block = buffer.substring(0, index).trim();
+        buffer = buffer.substring(index + 2);
+
+        if (block.isEmpty) continue;
+
+        final event = SseEvent.parse(block);
+        if (event != null) {
+          yield event;
+        }
+      }
+    }
+
+    if (buffer.trim().isNotEmpty) {
+      final event = SseEvent.parse(buffer.trim());
+      if (event != null) {
+        yield event;
+      }
+    }
+  }
+
   /// Derive a [MediaType] from a filename's extension for multipart uploads.
   ///
   /// Maps the extensions accepted by the server's [FileUploadStorage] allowed
@@ -1089,6 +1176,26 @@ class CoquiApiService {
         .toList();
   }
 
+  /// Answer a question raised during a turn.
+  ///
+  /// Posts to `/sessions/{id}/turns/{turnId}/answer` with the CAP answer
+  /// shape `{selected, text}` — [selected] is the list of chosen option
+  /// labels (empty for free-text-only answers) and [text] is the free-text
+  /// answer or null. Throws [CoquiException] on a catalog error.
+  Future<void> answerTurn(
+    String sessionId,
+    String turnId, {
+    List<String> selected = const [],
+    String? text,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/turns/$turnId/answer'),
+      headers: _headers,
+      body: jsonEncode({'selected': selected, 'text': text}),
+    );
+    _parseResponse(response);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(
@@ -1097,22 +1204,19 @@ class CoquiApiService {
     );
     final body = _parseResponse(response);
 
-    final roles = body['roles'] as List? ?? [];
-    return roles
-        .map((r) => CoquiRole.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiRole>.fromJson(body, CoquiRole.fromJson).data;
   }
 
   /// Get available personality profiles with descriptions.
   Future<List<CoquiProfile>> getProfiles() async {
     final response = await http.get(
-      _url('/profiles'),
+      _url('/personas'),
       headers: _headers,
     );
     final body = _parseResponse(response);
 
-    final defaultProfile = body['default_profile'] as String?;
-    final profiles = body['profiles'] as List? ?? [];
+    final defaultProfile = body['default_persona'] as String?;
+    final profiles = body['data'] as List? ?? [];
     return profiles
         .map((profile) => CoquiProfile.fromJson(
               profile as Map<String, dynamic>,
@@ -1124,7 +1228,7 @@ class CoquiApiService {
   /// Get the curated preference editor schema for profile management.
   Future<CoquiProfilePreferenceSchema> getProfilePreferenceSchema() async {
     final response = await http.get(
-      _url('/config/profile-preferences/schema'),
+      _url('/config/persona-preferences/schema'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1134,7 +1238,7 @@ class CoquiApiService {
   /// Get a single profile with full detail fields.
   Future<CoquiProfile> getProfile(String name) async {
     final response = await http.get(
-      _url('/profiles/$name'),
+      _url('/personas/$name'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1164,7 +1268,7 @@ class CoquiApiService {
     }
 
     final response = await http.post(
-      _url('/profiles'),
+      _url('/personas'),
       headers: _headers,
       body: jsonEncode(payload),
     );
@@ -1173,6 +1277,9 @@ class CoquiApiService {
   }
 
   /// Update a profile's editable metadata.
+  ///
+  /// When [version] is supplied it is sent as the CAP `If-Match` precondition
+  /// header; the server returns 409 `version_conflict` if the persona changed.
   Future<CoquiProfile> updateProfile(
     String name, {
     String? description,
@@ -1181,6 +1288,7 @@ class CoquiApiService {
     Map<String, dynamic>? preferences,
     bool clearBackstory = false,
     bool clearPreferences = false,
+    int? version,
   }) async {
     final payload = <String, dynamic>{};
     if (description != null) {
@@ -1201,8 +1309,8 @@ class CoquiApiService {
     }
 
     final response = await http.patch(
-      _url('/profiles/$name'),
-      headers: _headers,
+      _url('/personas/$name'),
+      headers: _ifMatchHeaders(version),
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
@@ -1210,18 +1318,30 @@ class CoquiApiService {
   }
 
   /// Delete a non-default profile.
-  Future<void> deleteProfile(String name) async {
+  ///
+  /// When [version] is supplied it is sent as the CAP `If-Match` precondition
+  /// header; the server returns 409 `version_conflict` if the persona changed.
+  Future<void> deleteProfile(String name, {int? version}) async {
     final response = await http.delete(
-      _url('/profiles/$name'),
-      headers: _headers,
+      _url('/personas/$name'),
+      headers: _ifMatchHeaders(version),
     );
     _parseResponse(response);
+  }
+
+  /// Base JSON headers, optionally carrying an `If-Match` precondition.
+  Map<String, String> _ifMatchHeaders(int? version) {
+    final headers = Map<String, String>.from(_headers);
+    if (version != null) {
+      headers['If-Match'] = version.toString();
+    }
+    return headers;
   }
 
   /// Get backstory inspection metadata through the profile-scoped route.
   Future<CoquiBackstoryInspection> inspectProfileBackstory(String name) async {
     final response = await http.get(
-      _url('/profiles/$name/backstory'),
+      _url('/personas/$name/backstory'),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1234,7 +1354,7 @@ class CoquiApiService {
     required String path,
   }) async {
     final response = await http.get(
-      _url('/profiles/$profileName/backstory/entries', {'path': path}),
+      _url('/personas/$profileName/backstory/entries', {'path': path}),
       headers: _headers,
     );
     final body = _parseResponse(response);
@@ -1247,7 +1367,7 @@ class CoquiApiService {
     required String path,
   }) async {
     final response = await http.post(
-      _url('/profiles/$profileName/backstory/folders'),
+      _url('/personas/$profileName/backstory/folders'),
       headers: _headers,
       body: jsonEncode({'path': path}),
     );
@@ -1264,7 +1384,7 @@ class CoquiApiService {
     required String content,
   }) async {
     final response = await http.put(
-      _url('/profiles/$profileName/backstory/entries'),
+      _url('/personas/$profileName/backstory/entries'),
       headers: _headers,
       body: jsonEncode({
         'path': path,
@@ -1284,7 +1404,7 @@ class CoquiApiService {
   }) async {
     final request = http.Request(
       'DELETE',
-      _url('/profiles/$profileName/backstory/entries'),
+      _url('/personas/$profileName/backstory/entries'),
     )
       ..headers.addAll(_headers)
       ..body = jsonEncode({'path': path});
@@ -1731,10 +1851,7 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final artifacts = body['artifacts'] as List? ?? [];
-    return artifacts
-        .map((item) => CoquiArtifact.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return CursorPage<CoquiArtifact>.fromJson(body, CoquiArtifact.fromJson).data;
   }
 
   Future<CoquiArtifact> getArtifact(String sessionId, String artifactId) async {
@@ -1919,7 +2036,7 @@ class CoquiApiService {
       params['role'] = role;
     }
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(
@@ -1955,7 +2072,7 @@ class CoquiApiService {
       params['role'] = role;
     }
     if (profile != null && profile.isNotEmpty) {
-      params['profile'] = profile;
+      params['persona'] = profile;
     }
 
     final response = await http.get(
@@ -2336,9 +2453,8 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final schedules = (body['schedules'] as List? ?? [])
-        .map((item) => CoquiSchedule.fromJson(item as Map<String, dynamic>))
-        .toList();
+    final schedules =
+        CursorPage<CoquiSchedule>.fromJson(body, CoquiSchedule.fromJson).data;
 
     return (
       schedules: schedules,
@@ -2357,28 +2473,23 @@ class CoquiApiService {
     return CoquiSchedule.fromJson(body);
   }
 
+  /// Create a schedule.
+  ///
+  /// Sends the CAP body `{name, cron, persona_id, action:{kind, …}}` and
+  /// parses the bare `toWire` object returned with HTTP 201 (not nested under
+  /// `schedule`).
   Future<CoquiSchedule> createSchedule({
     required String name,
-    required String scheduleExpression,
-    required String prompt,
-    String role = 'orchestrator',
-    String timezone = 'UTC',
-    int maxIterations = 48,
-    int maxFailures = 3,
-    String? description,
+    required String cron,
+    required String personaId,
+    required ScheduleAction action,
   }) async {
     final payload = <String, dynamic>{
       'name': name,
-      'schedule_expression': scheduleExpression,
-      'prompt': prompt,
-      'role': role,
-      'timezone': timezone,
-      'max_iterations': maxIterations,
-      'max_failures': maxFailures,
+      'cron': cron,
+      'persona_id': personaId,
+      'action': action.toJson(),
     };
-    if (description != null && description.isNotEmpty) {
-      payload['description'] = description;
-    }
 
     final response = await http.post(
       _url('/schedules'),
@@ -2386,31 +2497,25 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    return CoquiSchedule.fromJson(body);
   }
 
+  /// Update a schedule with any subset of `{name, cron, persona_id, action,
+  /// status}`. Parses the bare `toWire` object in the response.
   Future<CoquiSchedule> updateSchedule(
     String id, {
     String? name,
-    String? description,
-    String? scheduleExpression,
-    String? prompt,
-    String? role,
-    String? timezone,
-    int? maxIterations,
-    int? maxFailures,
+    String? cron,
+    String? personaId,
+    ScheduleAction? action,
+    String? status,
   }) async {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name;
-    if (description != null) payload['description'] = description;
-    if (scheduleExpression != null) {
-      payload['schedule_expression'] = scheduleExpression;
-    }
-    if (prompt != null) payload['prompt'] = prompt;
-    if (role != null) payload['role'] = role;
-    if (timezone != null) payload['timezone'] = timezone;
-    if (maxIterations != null) payload['max_iterations'] = maxIterations;
-    if (maxFailures != null) payload['max_failures'] = maxFailures;
+    if (cron != null) payload['cron'] = cron;
+    if (personaId != null) payload['persona_id'] = personaId;
+    if (action != null) payload['action'] = action.toJson();
+    if (status != null) payload['status'] = status;
 
     final response = await http.patch(
       _url('/schedules/$id'),
@@ -2418,7 +2523,7 @@ class CoquiApiService {
       body: jsonEncode(payload),
     );
     final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    return CoquiSchedule.fromJson(body);
   }
 
   Future<void> deleteSchedule(String id) async {
@@ -2429,34 +2534,46 @@ class CoquiApiService {
     _parseResponse(response);
   }
 
+  /// Enable a schedule, then re-fetch the canonical CAP object.
+  ///
+  /// The `/enable` endpoint returns `{"schedule": <raw DB row>}` — a `SELECT *`
+  /// row carrying flat `enabled`/`action_kind` columns, not the CAP `status`
+  /// string or nested `action` union. Parsing that raw shape would corrupt the
+  /// DTO, so we discard it and re-fetch the clean bare `toWire` object via
+  /// [getSchedule].
   Future<CoquiSchedule> enableSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/enable'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
+  /// Disable a schedule, then re-fetch the canonical CAP object. See
+  /// [enableSchedule] for why the raw `{"schedule": …}` row is not parsed.
   Future<CoquiSchedule> disableSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/disable'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
+  /// Trigger a schedule run, then re-fetch the canonical CAP object. The
+  /// method's contract is to return the updated schedule; see [enableSchedule]
+  /// for why the raw `{"schedule": …}` row is not parsed.
   Future<CoquiSchedule> triggerSchedule(String id) async {
     final response = await http.post(
       _url('/schedules/$id/trigger'),
       headers: _headers,
       body: jsonEncode(<String, dynamic>{}),
     );
-    final body = _parseResponse(response);
-    return CoquiSchedule.fromJson(body['schedule'] as Map<String, dynamic>);
+    _parseResponse(response);
+    return getSchedule(id);
   }
 
   // ── Loops ──────────────────────────────────────────────────────────
@@ -2490,12 +2607,10 @@ class CoquiApiService {
       headers: _headers,
     );
     final body = _parseResponse(response);
-    final definitions = body['definitions'] as List? ?? [];
-    return definitions
-        .map(
-          (item) => CoquiLoopDefinition.fromJson(item as Map<String, dynamic>),
-        )
-        .toList();
+    return CursorPage<CoquiLoopDefinition>.fromJson(
+      body,
+      CoquiLoopDefinition.fromJson,
+    ).data;
   }
 
   Future<CoquiLoopDetail> createLoop({
@@ -2824,7 +2939,7 @@ class CoquiApiService {
     };
     if (title != null) payload['title'] = title;
     if (parentSessionId != null) payload['parent_session_id'] = parentSessionId;
-    if (profile != null && profile.isNotEmpty) payload['profile'] = profile;
+    if (profile != null && profile.isNotEmpty) payload['persona'] = profile;
 
     final response = await http.post(
       _url('/tasks'),

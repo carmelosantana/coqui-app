@@ -112,7 +112,16 @@ class AgentActivityEvent {
       SseEventType.error => AgentActivityEvent(
           type: AgentActivityType.error,
           label: 'Error',
-          detail: data['message'] as String? ?? '',
+          // Two current wire shapes funnel through this shared branch:
+          //  - live CAP `error` frame `{error, code}` (via fromSseEvent), and
+          //  - the stored/replayed turn error event `{message}` (via
+          //    fromTurnEvent → GET /turns/{id}/events, which returns raw stored
+          //    event data with no CAP remap — TurnProcessObserver / TurnRunCommand
+          //    persist the message under `message`).
+          // Prefer the CAP key, fall back to the stored key. This is NOT a legacy
+          // fallback: both keys are emitted by the current server, on different
+          // wires, and both legitimately reach this one construction path.
+          detail: (data['error'] as String?) ?? (data['message'] as String?) ?? '',
           timestamp: timestamp,
         ),
       SseEventType.warning => AgentActivityEvent(
@@ -188,8 +197,9 @@ class AgentActivityEvent {
           timestamp: timestamp,
         ),
       SseEventType.textDelta || SseEventType.reasoning => null,
+      SseEventType.token ||
+      SseEventType.question ||
       SseEventType.complete ||
-      SseEventType.connected ||
       SseEventType.unknown => null,
       _ => AgentActivityEvent(
           type: AgentActivityType.info,

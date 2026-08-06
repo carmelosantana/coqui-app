@@ -62,7 +62,7 @@ class _ScheduleDetailSheetState extends State<ScheduleDetailSheet> {
   Future<void> _toggleEnabled() async {
     final updated = await context
         .read<ScheduleProvider>()
-        .setScheduleEnabled(_schedule.id, !_schedule.enabled);
+        .setScheduleEnabled(_schedule.id, !_schedule.isEnabled);
     if (!mounted || updated == null) return;
     setState(() => _schedule = updated);
   }
@@ -125,7 +125,7 @@ class _ScheduleDetailSheetState extends State<ScheduleDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMutable = !_schedule.isFilesystemSource;
+    const isMutable = true;
     return DraggableScrollableSheet(
       initialChildSize: 0.74,
       minChildSize: 0.45,
@@ -181,9 +181,9 @@ class _ScheduleDetailSheetState extends State<ScheduleDetailSheet> {
                   ),
                   IconButton(
                     onPressed: _toggleEnabled,
-                    tooltip: _schedule.enabled ? 'Disable' : 'Enable',
+                    tooltip: _schedule.isEnabled ? 'Disable' : 'Enable',
                     icon: Icon(
-                      _schedule.enabled
+                      _schedule.isEnabled
                           ? Icons.pause_circle_outline
                           : Icons.play_circle_outline,
                     ),
@@ -210,26 +210,9 @@ class _ScheduleDetailSheetState extends State<ScheduleDetailSheet> {
                 controller: scrollController,
                 padding: const EdgeInsets.all(20),
                 children: [
-                  _InfoRow(label: 'Source', value: _schedule.sourceLabel),
-                  _InfoRow(
-                      label: 'Expression', value: _schedule.scheduleExpression),
-                  _InfoRow(label: 'Role', value: _schedule.role),
-                  _InfoRow(label: 'Timezone', value: _schedule.timezone),
-                  _InfoRow(
-                    label: 'Max iterations',
-                    value: '${_schedule.maxIterations}',
-                  ),
-                  _InfoRow(
-                    label: 'Failure limit',
-                    value: '${_schedule.maxFailures}',
-                  ),
-                  _InfoRow(label: 'Runs', value: '${_schedule.runCount}'),
-                  _InfoRow(
-                    label: 'Failures',
-                    value: '${_schedule.failureCount}',
-                  ),
-                  if (_schedule.createdBy?.isNotEmpty == true)
-                    _InfoRow(label: 'Created by', value: _schedule.createdBy!),
+                  _InfoRow(label: 'Cron', value: _schedule.cron),
+                  _InfoRow(label: 'Persona', value: _schedule.personaId),
+                  _InfoRow(label: 'Action', value: _schedule.action.kind),
                   if (_schedule.nextRunAt != null)
                     _InfoRow(
                       label: 'Next run',
@@ -240,27 +223,11 @@ class _ScheduleDetailSheetState extends State<ScheduleDetailSheet> {
                       label: 'Last run',
                       value: _formatDateTime(_schedule.lastRunAt!),
                     ),
-                  if (_schedule.lastStatus?.isNotEmpty == true)
-                    _InfoRow(
-                        label: 'Last status', value: _schedule.lastStatus!),
-                  if (_schedule.isFilesystemSource) ...[
-                    const SizedBox(height: 16),
-                    _SectionLabel(label: 'Read-only source'),
-                    _ContentCard(
-                      text: _schedule.sourcePath ??
-                          'This schedule is backed by a workspace JSON file.',
-                      subtitle:
-                          'Edit or delete it in the workspace file instead of from the app.',
-                    ),
-                  ],
-                  if (_schedule.hasDescription) ...[
-                    const SizedBox(height: 16),
-                    _SectionLabel(label: 'Description'),
-                    _ContentCard(text: _schedule.description!),
-                  ],
                   const SizedBox(height: 16),
-                  _SectionLabel(label: 'Prompt'),
-                  _ContentCard(text: _schedule.prompt),
+                  _SectionLabel(
+                    label: _schedule.action.isLoop ? 'Loop definition' : 'Prompt',
+                  ),
+                  _ContentCard(text: _schedule.action.summary),
                   const SizedBox(height: 32),
                 ],
               ),
@@ -329,9 +296,8 @@ class _SectionLabel extends StatelessWidget {
 
 class _ContentCard extends StatelessWidget {
   final String text;
-  final String? subtitle;
 
-  const _ContentCard({required this.text, this.subtitle});
+  const _ContentCard({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -344,19 +310,7 @@ class _ContentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SelectableText(text),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              subtitle!,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ],
-      ),
+      child: SelectableText(text),
     );
   }
 }
