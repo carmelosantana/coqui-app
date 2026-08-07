@@ -126,6 +126,12 @@ class ChatProvider extends ChangeNotifier {
   Map<String, dynamic>? get pendingQuestion =>
       _sessionPendingQuestions[currentSession?.id];
 
+  /// Clear the pending question for [sessionId] after it has been answered.
+  void clearPendingQuestion(String sessionId) {
+    _sessionPendingQuestions[sessionId] = null;
+    notifyListeners();
+  }
+
   // ── Error state ────────────────────────────────────────────────────
 
   final Map<String, CoquiException> _sessionErrors = {};

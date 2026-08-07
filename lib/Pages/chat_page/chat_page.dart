@@ -192,6 +192,8 @@ class _ChatPageState extends State<ChatPage> {
         turnData: chatProvider.lastCompletedTurn,
         turnSummary: chatProvider.lastTurnSummary,
         isStreaming: chatProvider.isCurrentSessionStreaming,
+        pendingQuestion: chatProvider.pendingQuestion,
+        sessionId: chatProvider.currentSession?.id,
       );
     }
   }
