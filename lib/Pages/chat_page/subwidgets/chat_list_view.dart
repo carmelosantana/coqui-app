@@ -29,6 +29,11 @@ class ChatListView extends StatefulWidget {
   /// tool results to tool calls.
   final List<CoquiMessage> allMessages;
 
+  /// Called with this list's [ScrollController] once it is available, so an
+  /// ancestor (the composer's "answer needed" pill) can scroll the list down
+  /// to the [QuestionCard]. The controller is owned by this widget's state.
+  final ValueChanged<ScrollController>? onScrollControllerReady;
+
   const ChatListView({
     super.key,
     required this.messages,
@@ -42,6 +47,7 @@ class ChatListView extends StatefulWidget {
     this.allMessages = const [],
     this.pendingQuestion,
     this.sessionId,
+    this.onScrollControllerReady,
   });
 
   @override
@@ -61,6 +67,10 @@ class _ChatListViewState extends State<ChatListView> {
     _scrollController.addListener(() {
       _updateScrollToBottomButtonVisibility();
     });
+
+    // Surface the controller so the composer's pending-answer pill can scroll
+    // this list to the QuestionCard on tap.
+    widget.onScrollControllerReady?.call(_scrollController);
   }
 
   @override
