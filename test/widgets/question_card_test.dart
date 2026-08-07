@@ -229,6 +229,82 @@ void main() {
     expect(submit.onPressed, isNotNull);
   });
 
+  testWidgets(
+    'replacing the pending question (new question_id) rebuilds fresh state',
+    (tester) async {
+      // Mirror how ChatListView constructs the card: keyed by question_id so a
+      // replacement question forces a fresh State instead of reusing the first
+      // question's stale options/selection.
+      Future<void> pumpKeyed(Map<String, dynamic> question) async {
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              Provider<CoquiApiService>.value(value: apiService),
+              ChangeNotifierProvider<ChatProvider>.value(value: chatProvider),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: QuestionCard(
+                  key: ValueKey(question['question_id']),
+                  question: question,
+                  sessionId: 'sess1',
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+      }
+
+      // Question A: two options with a pre-selected suggestion.
+      await pumpKeyed({
+        'question_id': 'qA',
+        'prompt': 'Which environment?',
+        'options': ['alpha', 'beta'],
+        'suggested': 'alpha',
+      });
+      expect(find.text('alpha'), findsOneWidget);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'alpha'))
+            .selected,
+        isTrue,
+      );
+
+      // Question B replaces A before A is answered — different question_id and
+      // a different option set, with no suggestion.
+      await pumpKeyed({
+        'question_id': 'qB',
+        'prompt': 'Which region?',
+        'options': ['gamma', 'delta'],
+      });
+
+      // The new options render and the stale ones are gone.
+      expect(find.text('gamma'), findsOneWidget);
+      expect(find.text('delta'), findsOneWidget);
+      expect(find.text('alpha'), findsNothing);
+      expect(find.text('beta'), findsNothing);
+
+      // No stale selection carried over from A.
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'gamma'))
+            .selected,
+        isFalse,
+      );
+
+      // Answering B posts B's question_id with a B option (never A's).
+      await tester.tap(find.text('gamma'));
+      await tester.pump();
+      await tester.tap(find.text('Submit'));
+      await tester.pump();
+
+      final call = apiService.answerQuestionCalls.single;
+      expect(call['questionId'], 'qB');
+      expect(call['selected'], ['gamma']);
+    },
+  );
+
   testWidgets('pre-selects the suggested option when it matches', (
     tester,
   ) async {

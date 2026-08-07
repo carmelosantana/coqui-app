@@ -158,7 +158,13 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildChatBody(ChatProvider chatProvider) {
-    if (chatProvider.displayMessages.isEmpty) {
+    // When a structured question is pending we must render the [ChatListView]
+    // even if the message list is momentarily empty (e.g. switching into a
+    // session whose messages are still loading): the [QuestionCard] lives at
+    // the tail of that list, and the composer's "answer needed" pill has
+    // nothing to scroll to — and no answer affordance shows — otherwise.
+    if (chatProvider.displayMessages.isEmpty &&
+        chatProvider.pendingQuestion == null) {
       if (chatProvider.currentSession == null) {
         final instanceProvider =
             Provider.of<InstanceProvider>(context, listen: false);

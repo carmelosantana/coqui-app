@@ -10,6 +10,7 @@ import 'package:coqui_app/Models/coqui_message.dart';
 import 'package:coqui_app/Models/coqui_session.dart';
 import 'package:coqui_app/Pages/chat_page/chat_page.dart';
 import 'package:coqui_app/Pages/chat_page/subwidgets/chat_text_field.dart';
+import 'package:coqui_app/Pages/chat_page/subwidgets/question_card.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
@@ -40,6 +41,11 @@ class _FakeChatProvider extends ChatProvider {
 
   Map<String, dynamic>? _pending;
 
+  /// When true, [displayMessages] is empty — used to reproduce the "session
+  /// active but messages still loading" frame where the answer card must still
+  /// render because a question is pending.
+  bool emptyMessages = false;
+
   void setPending(Map<String, dynamic>? question) {
     _pending = question;
     notifyListeners();
@@ -60,13 +66,15 @@ class _FakeChatProvider extends ChatProvider {
   CoquiSession? get currentSession => _session;
 
   @override
-  List<CoquiMessage> get displayMessages => [
-        CoquiMessage(
-          id: 'm1',
-          content: 'Hello there',
-          role: CoquiMessageRole.assistant,
-        ),
-      ];
+  List<CoquiMessage> get displayMessages => emptyMessages
+      ? const []
+      : [
+          CoquiMessage(
+            id: 'm1',
+            content: 'Hello there',
+            role: CoquiMessageRole.assistant,
+          ),
+        ];
 
   @override
   List<CoquiMessage> get messages => displayMessages;
@@ -237,6 +245,32 @@ void main() {
       final send = sendButton(tester);
       expect(send, isNotNull);
       expect(send!.onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'answer card renders when a question is pending and messages are empty',
+    (tester) async {
+      // Reproduce the reachable frame: an active session with a stored pending
+      // question while its messages are still loading (empty for a frame).
+      chatProvider.emptyMessages = true;
+      chatProvider.setPending({
+        'question_id': 'q1',
+        'prompt': 'Describe the issue',
+      });
+
+      await pumpComposer(tester);
+
+      // The QuestionCard must render (so the pill's scroll-tap has a target and
+      // the user has a visible answer affordance), not the empty placeholder.
+      expect(find.byType(QuestionCard), findsOneWidget);
+      expect(find.text('No messages yet!'), findsNothing);
+
+      // Pill is visible and send stays blocked until the question is answered.
+      expect(find.text('1 answer needed'), findsOneWidget);
+      final send = sendButton(tester);
+      expect(send, isNotNull);
+      expect(send!.onPressed, isNull);
     },
   );
 }

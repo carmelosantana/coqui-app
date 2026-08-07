@@ -111,6 +111,10 @@ class _ChatListViewState extends State<ChatListView> {
             if (widget.pendingQuestion != null && widget.sessionId != null)
               SliverToBoxAdapter(
                 child: QuestionCard(
+                  // Key by question_id (CAP guarantees its presence) so a
+                  // replacement question forces a fresh State instead of
+                  // reusing stale options/selection from the prior question.
+                  key: ValueKey(widget.pendingQuestion!['question_id']),
                   question: widget.pendingQuestion!,
                   sessionId: widget.sessionId!,
                 ),
