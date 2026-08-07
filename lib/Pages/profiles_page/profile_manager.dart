@@ -602,14 +602,17 @@ class _ProfileManagerState extends State<ProfileManager> {
                             ...section.fields.map(
                               (field) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
-                                child: ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(field.label),
-                                  subtitle: Text(
-                                    _formatPreferenceDisplayValue(
-                                      _resolvePreferenceValue(
-                                        preferenceValues,
-                                        field.storagePath,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(field.label),
+                                    subtitle: Text(
+                                      _formatPreferenceDisplayValue(
+                                        _resolvePreferenceValue(
+                                          preferenceValues,
+                                          field.storagePath,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -730,15 +733,18 @@ class _ProfileManagerState extends State<ProfileManager> {
               ...unsupportedFiles.map(
                 (file) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    tileColor:
-                        Theme.of(context).colorScheme.surfaceContainerLowest,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      tileColor:
+                          Theme.of(context).colorScheme.surfaceContainerLowest,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      leading: const Icon(Icons.warning_amber_outlined),
+                      title: Text(file['relative_path'] as String? ?? ''),
+                      subtitle: Text(file['reason'] as String? ?? 'Unsupported'),
                     ),
-                    leading: const Icon(Icons.warning_amber_outlined),
-                    title: Text(file['relative_path'] as String? ?? ''),
-                    subtitle: Text(file['reason'] as String? ?? 'Unsupported'),
                   ),
                 ),
               ),
@@ -1113,11 +1119,10 @@ class _ProfileManagerState extends State<ProfileManager> {
     List<Map<String, dynamic>> folders,
     String selectedFolder,
   ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1169,13 +1174,13 @@ class _ProfileManagerState extends State<ProfileManager> {
   ) {
     final breadcrumbs = _backstoryBreadcrumbs(selectedFolder);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
@@ -1287,6 +1292,7 @@ class _ProfileManagerState extends State<ProfileManager> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
