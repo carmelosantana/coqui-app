@@ -156,9 +156,12 @@ class _QuestionCardState extends State<QuestionCard> {
                       selected: _selectedLabel == label,
                       onSelected: _submitting
                           ? null
-                          : (chosen) => setState(
-                                () => _selectedLabel = chosen ? label : null,
-                              ),
+                          : (chosen) => setState(() {
+                                _selectedLabel = chosen ? label : null;
+                                // Choosing a chip clears any free text so the
+                                // answer stays single-valued (CAP contract).
+                                if (chosen) _textController.clear();
+                              }),
                     );
                   }).toList(),
                 ),

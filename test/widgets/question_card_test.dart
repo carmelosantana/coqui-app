@@ -34,6 +34,23 @@ class _RecordingApiService extends CoquiApiService {
   }
 }
 
+/// Spy that records [clearPendingQuestion] calls so the failure branch can be
+/// asserted (the pending question must be left intact on error).
+class _SpyChatProvider extends ChatProvider {
+  _SpyChatProvider({
+    required super.apiService,
+    required super.databaseService,
+  });
+
+  final List<String> clearPendingQuestionCalls = [];
+
+  @override
+  void clearPendingQuestion(String sessionId) {
+    clearPendingQuestionCalls.add(sessionId);
+    super.clearPendingQuestion(sessionId);
+  }
+}
+
 class _NoopDatabaseService extends DatabaseService {
   @override
   Future<void> open(String databaseFile) async {}
@@ -49,11 +66,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late _RecordingApiService apiService;
-  late ChatProvider chatProvider;
+  late _SpyChatProvider chatProvider;
 
   setUp(() {
     apiService = _RecordingApiService();
-    chatProvider = ChatProvider(
+    chatProvider = _SpyChatProvider(
       apiService: apiService,
       databaseService: _NoopDatabaseService(),
     );
@@ -160,6 +177,56 @@ void main() {
       find.widgetWithText(FilledButton, 'Submit'),
     );
     expect(enabled.onPressed, isNotNull);
+  });
+
+  testWidgets('choosing a chip clears any typed free text', (tester) async {
+    await pumpCard(tester, {
+      'question_id': 'q1',
+      'prompt': 'Which environment?',
+      'options': ['staging', 'production'],
+    });
+
+    await tester.enterText(find.byType(TextField), 'custom env');
+    await tester.pump();
+
+    await tester.tap(find.text('staging'));
+    await tester.pump();
+
+    await tester.tap(find.text('Submit'));
+    await tester.pump();
+
+    // Single-value contract: chip wins, free text is cleared, so text is null.
+    final call = apiService.answerQuestionCalls.single;
+    expect(call['selected'], ['staging']);
+    expect(call['text'], isNull);
+  });
+
+  testWidgets('failed submit keeps pending question and shows a SnackBar', (
+    tester,
+  ) async {
+    apiService.shouldThrow = true;
+
+    await pumpCard(tester, {
+      'question_id': 'q2',
+      'prompt': 'Describe the issue',
+    });
+
+    await tester.enterText(find.byType(TextField), 'it broke');
+    await tester.pump();
+
+    await tester.tap(find.text('Submit'));
+    await tester.pump();
+
+    expect(apiService.answerQuestionCalls, hasLength(1));
+    // Pending question left intact: clearPendingQuestion was never called.
+    expect(chatProvider.clearPendingQuestionCalls, isEmpty);
+    // Failure SnackBar is shown.
+    expect(find.text('Could not send your answer.'), findsOneWidget);
+    // Submit is re-enabled so the user can retry.
+    final submit = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Submit'),
+    );
+    expect(submit.onPressed, isNotNull);
   });
 
   testWidgets('pre-selects the suggested option when it matches', (
