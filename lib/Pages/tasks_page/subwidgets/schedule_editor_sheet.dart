@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:coqui_app/Models/coqui_role.dart';
+import 'package:coqui_app/Models/coqui_profile.dart';
 import 'package:coqui_app/Models/coqui_schedule.dart';
-import 'package:coqui_app/Providers/role_provider.dart';
+import 'package:coqui_app/Providers/profile_provider.dart';
 import 'package:coqui_app/Providers/schedule_provider.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
 
@@ -21,9 +21,7 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
   final _cronController = TextEditingController();
   final _promptController = TextEditingController();
 
-  // CAP `persona_id`. NOTE: the picker below still lists roles via
-  // RoleProvider; migrating it to a persona picker is out of scope for the
-  // B4 wire-boundary reshape (see task report concern).
+  // CAP `persona_id`.
   String _selectedPersona = 'orchestrator';
 
   bool get _isEditing => widget.schedule != null;
@@ -42,9 +40,9 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final roleProvider = context.read<RoleProvider>();
-      if (roleProvider.roles.isEmpty && !roleProvider.isLoading) {
-        roleProvider.fetchRoles();
+      final profileProvider = context.read<ProfileProvider>();
+      if (profileProvider.profiles.isEmpty && !profileProvider.isLoading) {
+        profileProvider.fetchProfiles();
       }
     });
   }
@@ -58,24 +56,24 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
   }
 
   Future<void> _pickPersona() async {
-    final roleProvider = context.read<RoleProvider>();
-    final roles = roleProvider.roles;
-    final current = roles.cast<CoquiRole?>().firstWhere(
-          (role) => role?.name == _selectedPersona,
-          orElse: () => CoquiRole(name: _selectedPersona, model: ''),
+    final profileProvider = context.read<ProfileProvider>();
+    final profiles = profileProvider.profiles;
+    final current = profiles.cast<CoquiProfile?>().firstWhere(
+          (profile) => profile?.name == _selectedPersona,
+          orElse: () => CoquiProfile(name: _selectedPersona),
         );
 
-    final selectedRole = await showSelectionBottomSheet<CoquiRole>(
+    final selectedProfile = await showSelectionBottomSheet<CoquiProfile>(
       context: context,
       header: const Text('Schedule Persona'),
       fetchItems: () async {
-        if (roleProvider.roles.isEmpty) {
-          await roleProvider.fetchRoles();
+        if (profileProvider.profiles.isEmpty) {
+          await profileProvider.fetchProfiles();
         }
-        return roleProvider.roles;
+        return profileProvider.profiles;
       },
       currentSelection: current,
-      itemBuilder: (role, selected, onSelected) {
+      itemBuilder: (profile, selected, onSelected) {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(
@@ -83,15 +81,18 @@ class _ScheduleEditorSheetState extends State<ScheduleEditorSheet> {
                 ? Icons.radio_button_checked
                 : Icons.radio_button_unchecked,
           ),
-          onTap: () => onSelected(role),
-          title: Text(role.label),
-          subtitle: role.description.isNotEmpty ? Text(role.description) : null,
+          onTap: () => onSelected(profile),
+          title: Text(
+            profile.displayName.isNotEmpty ? profile.displayName : profile.name,
+          ),
+          subtitle:
+              profile.description.isNotEmpty ? Text(profile.description) : null,
         );
       },
     );
 
-    if (!mounted || selectedRole == null) return;
-    setState(() => _selectedPersona = selectedRole.name);
+    if (!mounted || selectedProfile == null) return;
+    setState(() => _selectedPersona = selectedProfile.name);
   }
 
   Future<void> _submit() async {
