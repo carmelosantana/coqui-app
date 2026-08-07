@@ -406,6 +406,7 @@ jobs:
           cp -v artifacts/windows-zip/*.zip release/ || echo "Windows zip not found"
           cp -v artifacts/macos-dmg/*.dmg release/ 2>/dev/null || echo "macOS DMG not found (upload manually)"
           cp -v artifacts/ios-ipa/*.ipa release/ 2>/dev/null || echo "iOS IPA not found (upload manually)"
+          tar -czf "release/Coqui-${{ steps.version.outputs.version }}-web.tar.gz" -C artifacts/web-build . || echo "Web build not found"
 
       - name: Generate checksums
         working-directory: release
@@ -423,6 +424,7 @@ jobs:
             release/Coqui-${{ steps.version.outputs.version }}-android.apk
             release/Coqui-${{ steps.version.outputs.version }}-linux-x64.tar.gz
             release/Coqui-${{ steps.version.outputs.version }}-windows-x64.zip
+            release/Coqui-${{ steps.version.outputs.version }}-web.tar.gz
             release/SHA256SUMS.txt
 
   # ── Vercel Deploy ───────────────────────────────────────────────────
