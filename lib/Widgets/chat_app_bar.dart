@@ -8,10 +8,13 @@ import 'package:coqui_app/Models/coqui_session_file.dart';
 import 'package:coqui_app/Pages/work_page/work_navigation.dart';
 import 'package:coqui_app/Providers/chat_provider.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
+import 'package:coqui_app/Providers/role_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
 import 'package:coqui_app/Theme/coqui_typography.dart';
 import 'package:coqui_app/Utils/server_restart_prompt.dart';
 import 'package:coqui_app/Widgets/bottom_sheet_header.dart';
+import 'package:coqui_app/Widgets/child_run_live_detail.dart';
+import 'package:coqui_app/Widgets/child_run_spawn_sheet.dart';
 import 'package:coqui_app/Widgets/profile_picker_dialog.dart';
 import 'package:coqui_app/Widgets/role_list_tile.dart';
 import 'package:coqui_app/Widgets/selection_bottom_sheet.dart';
@@ -697,6 +700,40 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
     }
   }
 
+  Future<void> _openSpawnForm() async {
+    final api = context.read<CoquiApiService>();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => Provider<CoquiApiService>.value(
+        value: api,
+        child: ChangeNotifierProvider<RoleProvider>(
+          create: (_) => RoleProvider(apiService: api),
+          child: ChildRunSpawnSheet(
+            sessionId: widget.sessionId,
+            onSpawned: _load,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openRunDetail(CoquiChildRun run) {
+    final api = context.read<CoquiApiService>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<CoquiApiService>.value(
+          value: api,
+          child: ChildRunLiveDetail(
+            sessionId: widget.sessionId,
+            childRun: run,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -708,9 +745,21 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
       builder: (context, scrollController) {
         return Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 12, bottom: 8),
-              child: BottomSheetHeader(title: 'Child Runs'),
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Row(
+                children: [
+                  const Expanded(child: BottomSheetHeader(title: 'Child Runs')),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: IconButton(
+                      tooltip: 'Spawn child run',
+                      icon: const Icon(Icons.add),
+                      onPressed: _openSpawnForm,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const Divider(height: 1),
             Expanded(
@@ -739,49 +788,67 @@ class _ChildRunsSheetState extends State<_ChildRunsSheet> {
                                   const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final run = _runs[index];
-                                return Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: theme
-                                        .colorScheme.surfaceContainerHighest,
+                                return Material(
+                                  type: MaterialType.transparency,
+                                  child: InkWell(
                                     borderRadius: BorderRadius.circular(12),
-                                    border:
-                                        Border.all(color: theme.dividerColor),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${run.role} · ${run.status}',
-                                        style: theme.textTheme.titleSmall,
+                                    onTap: () => _openRunDetail(run),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme
+                                            .surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: theme.dividerColor),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        run.model ?? 'inherit',
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                          color: theme
-                                              .colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        run.promptPreview,
-                                        style: theme.textTheme.bodySmall,
-                                      ),
-                                      if ((run.result ?? '').isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          run.resultPreview,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                            color: theme
-                                                .colorScheme.onSurfaceVariant,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${run.role} · ${run.status}',
+                                                  style: theme
+                                                      .textTheme.titleSmall,
+                                                ),
+                                              ),
+                                              if (run.status == 'running')
+                                                const Icon(
+                                                    Icons.stream, size: 16),
+                                            ],
                                           ),
-                                        ),
-                                      ],
-                                    ],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            run.model ?? 'inherit',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: theme
+                                                  .colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            run.promptPreview,
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                          if ((run.result ?? '')
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              run.resultPreview,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 );
                               },
