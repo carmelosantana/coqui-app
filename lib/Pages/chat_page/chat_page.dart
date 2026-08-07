@@ -75,6 +75,11 @@ class _ChatPageState extends State<ChatPage> {
   var _crossFadeState = CrossFadeState.showFirst;
   double _scale = 1.0;
 
+  /// The active [ChatListView]'s scroll controller, surfaced so the pending
+  /// "answer needed" pill can scroll down to the QuestionCard on tap. Owned by
+  /// the list's state, so this is only a borrowed reference.
+  ScrollController? _chatListScrollController;
+
   @override
   void initState() {
     super.initState();
@@ -125,6 +130,8 @@ class _ChatPageState extends State<ChatPage> {
             _buildFileChipsRow(chatProvider),
             if (chatProvider.isCurrentSessionReadOnly)
               _buildClosedSessionNotice(chatProvider),
+            if (chatProvider.pendingQuestion != null)
+              ComposerAnswerPill(onTap: _scrollPendingQuestionIntoView),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: ChatTextField(
@@ -151,7 +158,13 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildChatBody(ChatProvider chatProvider) {
-    if (chatProvider.displayMessages.isEmpty) {
+    // When a structured question is pending we must render the [ChatListView]
+    // even if the message list is momentarily empty (e.g. switching into a
+    // session whose messages are still loading): the [QuestionCard] lives at
+    // the tail of that list, and the composer's "answer needed" pill has
+    // nothing to scroll to — and no answer affordance shows — otherwise.
+    if (chatProvider.displayMessages.isEmpty &&
+        chatProvider.pendingQuestion == null) {
       if (chatProvider.currentSession == null) {
         final instanceProvider =
             Provider.of<InstanceProvider>(context, listen: false);
@@ -192,6 +205,10 @@ class _ChatPageState extends State<ChatPage> {
         turnData: chatProvider.lastCompletedTurn,
         turnSummary: chatProvider.lastTurnSummary,
         isStreaming: chatProvider.isCurrentSessionStreaming,
+        pendingQuestion: chatProvider.pendingQuestion,
+        sessionId: chatProvider.currentSession?.id,
+        onScrollControllerReady: (controller) =>
+            _chatListScrollController = controller,
       );
     }
   }
@@ -387,6 +404,17 @@ class _ChatPageState extends State<ChatPage> {
         onPressed: () {
           chatProvider.cancelCurrentStreaming();
         },
+      );
+    }
+
+    // While a structured question is outstanding the turn is blocked on the
+    // user's answer, so the normal send affordance is shown greyed and inert.
+    if (chatProvider.pendingQuestion != null) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_upward_rounded),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+        tooltip: 'Answer the question above to continue',
+        onPressed: null,
       );
     }
 
@@ -594,9 +622,23 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _handleOnEditingComplete(ChatProvider chatProvider) async {
     if (_hasText.value &&
         !chatProvider.isCurrentSessionStreaming &&
-        !chatProvider.isCurrentSessionReadOnly) {
+        !chatProvider.isCurrentSessionReadOnly &&
+        chatProvider.pendingQuestion == null) {
       await _handleSendButton(chatProvider);
     }
+  }
+
+  /// Scroll the active chat list down to the pending [QuestionCard]. The list
+  /// is reverse-ordered, so its "bottom" (nearest the composer) is offset 0.
+  void _scrollPendingQuestionIntoView() {
+    final controller = _chatListScrollController;
+    if (controller == null || !controller.hasClients) return;
+
+    controller.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _showRoleSelectionBottomSheet(BuildContext context) async {

@@ -84,6 +84,10 @@ dev_dependencies:
   # Testing framework
   test: ^1.25.7
 
+  # Directly referenced in widget tests to stub the path_provider platform
+  # channel; pinned to the version already resolved transitively in the lock.
+  path_provider_platform_interface: 2.1.2
+
   # Create custom icons for Android and iOS
   flutter_launcher_icons: ^0.14.1
 

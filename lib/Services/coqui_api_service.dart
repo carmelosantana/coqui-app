@@ -1196,6 +1196,24 @@ class CoquiApiService {
     _parseResponse(response);
   }
 
+  /// Answer a structured question by its correlation id (question-scoped route,
+  /// `questions` profile). Preferred over [answerTurn] from the SSE `question`
+  /// flow: the client holds the `question_id` but not the in-flight turnId.
+  /// Body is the CAP `{selected, text}` shape (schema QuestionResponse).
+  Future<void> answerQuestion(
+    String sessionId,
+    String questionId, {
+    List<String> selected = const [],
+    String? text,
+  }) async {
+    final response = await http.post(
+      _url('/sessions/$sessionId/questions/$questionId/answer'),
+      headers: _headers,
+      body: jsonEncode({'selected': selected, 'text': text}),
+    );
+    _parseResponse(response);
+  }
+
   /// Get available roles with full metadata.
   Future<List<CoquiRole>> getRoles() async {
     final response = await http.get(

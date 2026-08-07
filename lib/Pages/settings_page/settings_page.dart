@@ -33,8 +33,6 @@ class _SettingsPageContent extends StatelessWidget {
       children: const [
         ThemesSettings(),
         SizedBox(height: 16),
-        HostedBanner(),
-        SizedBox(height: 16),
         InstanceSettings(),
         SizedBox(height: 16),
         GeneralSettings(),

@@ -5,6 +5,7 @@ import 'package:coqui_app/Models/coqui_turn.dart';
 import 'package:coqui_app/Widgets/turn_inspection_widgets.dart';
 
 import 'chat_bubble/chat_bubble.dart';
+import 'question_card.dart';
 import 'package:coqui_app/Utils/observe_size.dart';
 import 'package:coqui_app/Utils/retained_position_scroll_physics.dart';
 
@@ -18,9 +19,20 @@ class ChatListView extends StatefulWidget {
   final String? turnSummary;
   final bool isStreaming;
 
+  /// Unanswered structured question projection for the active session, or null.
+  final Map<String, dynamic>? pendingQuestion;
+
+  /// Active session id, used to scope the answer submitted from [QuestionCard].
+  final String? sessionId;
+
   /// Full unfiltered message list (includes tool-role messages) for matching
   /// tool results to tool calls.
   final List<CoquiMessage> allMessages;
+
+  /// Called with this list's [ScrollController] once it is available, so an
+  /// ancestor (the composer's "answer needed" pill) can scroll the list down
+  /// to the [QuestionCard]. The controller is owned by this widget's state.
+  final ValueChanged<ScrollController>? onScrollControllerReady;
 
   const ChatListView({
     super.key,
@@ -33,6 +45,9 @@ class ChatListView extends StatefulWidget {
     this.turnSummary,
     this.isStreaming = false,
     this.allMessages = const [],
+    this.pendingQuestion,
+    this.sessionId,
+    this.onScrollControllerReady,
   });
 
   @override
@@ -52,6 +67,10 @@ class _ChatListViewState extends State<ChatListView> {
     _scrollController.addListener(() {
       _updateScrollToBottomButtonVisibility();
     });
+
+    // Surface the controller so the composer's pending-answer pill can scroll
+    // this list to the QuestionCard on tap.
+    widget.onScrollControllerReady?.call(_scrollController);
   }
 
   @override
@@ -85,6 +104,20 @@ class _ChatListViewState extends State<ChatListView> {
             if (widget.bottomPadding != null)
               SliverPadding(
                 padding: EdgeInsets.only(bottom: widget.bottomPadding!),
+              ),
+            // Inline answer card for an unanswered structured question. Placed
+            // near the bottom (reverse list) so it appears where the agent
+            // asked, closest to the composer.
+            if (widget.pendingQuestion != null && widget.sessionId != null)
+              SliverToBoxAdapter(
+                child: QuestionCard(
+                  // Key by question_id (CAP guarantees its presence) so a
+                  // replacement question forces a fresh State instead of
+                  // reusing stale options/selection from the prior question.
+                  key: ValueKey(widget.pendingQuestion!['question_id']),
+                  question: widget.pendingQuestion!,
+                  sessionId: widget.sessionId!,
+                ),
               ),
             if (widget.error != null)
               SliverToBoxAdapter(
