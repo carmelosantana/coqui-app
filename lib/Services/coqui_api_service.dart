@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:coqui_app/Models/coqui_artifact.dart';
@@ -103,6 +103,11 @@ class CoquiApiService {
       queryParameters: queryParams,
     );
   }
+
+  /// Test seam over [_url] so URL composition can be asserted directly.
+  @visibleForTesting
+  Uri apiUri(String path, [Map<String, String>? queryParams]) =>
+      _url(path, queryParams);
 
   /// Standard headers for JSON requests with auth.
   Map<String, String> get _headers {
