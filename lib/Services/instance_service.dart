@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
+import 'package:coqui_app/Models/runtime_config.dart';
 
 /// Manages Coqui server instances in Hive local storage.
 ///
@@ -10,8 +11,16 @@ class InstanceService {
   static const String _boxName = 'instances';
   static const String defaultInstanceName = 'Local Coqui';
   static const String defaultInstanceUrl = 'http://localhost:3300';
+  static const String bundledInstanceName = 'This Server';
   static const Duration _lockRetryDelay = Duration(milliseconds: 250);
   static const int _lockRetryAttempts = 20;
+
+  /// Per-deployment runtime config. Defaults to
+  /// [RuntimeConfig.notBundled] so native, dev, and hosted builds keep the
+  /// localhost default.
+  final RuntimeConfig runtimeConfig;
+
+  InstanceService({this.runtimeConfig = RuntimeConfig.notBundled});
 
   late Box _box;
   bool _initialized = false;
@@ -55,16 +64,31 @@ class InstanceService {
         HiveError('Failed to open $_boxName after lock retry attempts.');
   }
 
-  /// Seed a localhost default instance when the user has none configured yet.
+  /// Seed the app's single default instance when the user has none yet.
+  ///
+  /// In a bundled deployment (a container serving both the web UI and its own
+  /// Coqui server) that default is the same origin the page was loaded from,
+  /// so the app connects with no manual server entry. Everywhere else it is
+  /// the unchanged localhost default.
   Future<void> ensureDefaultInstance() async {
     if (getInstances().isNotEmpty) return;
 
-    final instance = CoquiInstance(
-      name: defaultInstanceName,
-      baseUrl: defaultInstanceUrl,
-      apiKey: '',
-      isActive: true,
-    );
+    final bundledBaseUrl = runtimeConfig.bundled ? runtimeConfig.baseUrl : null;
+
+    final instance = bundledBaseUrl != null
+        ? CoquiInstance(
+            name: bundledInstanceName,
+            baseUrl: bundledBaseUrl,
+            apiKey: '',
+            apiVersion: runtimeConfig.apiVersion,
+            isActive: true,
+          )
+        : CoquiInstance(
+            name: defaultInstanceName,
+            baseUrl: defaultInstanceUrl,
+            apiKey: '',
+            isActive: true,
+          );
 
     await _box.put(instance.id, instance.toMap());
   }

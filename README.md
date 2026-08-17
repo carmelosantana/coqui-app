@@ -50,6 +50,8 @@ flutter run
 1. Open **Settings**, add your Coqui server URL and API key, and test the connection.
 2. Start a new chat by selecting a role.
 
+If you are running the app from the [Docker container deploy](#docker-deployment), skip the **Settings** step — the app auto-connects to the Coqui server bundled alongside it.
+
 ### Desktop Local Server
 
 - macOS and Linux: use the **Local Server** page to install Coqui into `~/.coqui`, manage the local API process, and sync the app with `~/.coqui/.workspace/.env`.
@@ -102,6 +104,16 @@ make docker-web-start    # → http://localhost:8080
 # Custom port
 COQUI_WEB_PORT=3000 docker compose -f compose.web.yaml up -d
 ```
+
+#### Same-Origin Auto-Connect
+
+When the app and a Coqui server are served from the same origin — the single-container deploy built by [coqui-installer](https://github.com/carmelosantana/coqui-installer) — no manual server entry is needed. At boot the app fetches `/config.json` from the serving origin; if that origin answers with the bundled contract, the app seeds a same-origin **This Server** instance and connects to it automatically.
+
+```json
+{"bundled": true, "apiBaseUrl": "/api/v1"}
+```
+
+`coqui-installer` is the other party to that contract: its Caddy config serves the file in front of the co-located Coqui server. When the origin serves no `config.json` — the hosted [app.coquibot.ai](https://app.coquibot.ai) build and every static host above — nothing changes, and the normal "add your server in **Settings**" flow applies.
 
 ### Vercel / Static Hosting
 
