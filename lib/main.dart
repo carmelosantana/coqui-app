@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:coqui_app/Constants/constants.dart';
+import 'package:coqui_app/Models/runtime_config.dart';
 import 'package:coqui_app/Pages/channels_page/channels_page.dart';
 import 'package:coqui_app/Pages/commands_help_page/commands_help_page.dart';
 import 'package:coqui_app/Pages/config_page/config_page.dart';
@@ -70,11 +71,15 @@ Future<void> _initializeApp() async {
 
   await _openSettingsBoxWithRecovery();
 
+  // Per-deployment runtime config. Web only; every failure resolves to
+  // RuntimeConfig.notBundled, which is the app's normal behavior.
+  final runtimeConfig = await RuntimeConfigService().load();
+
   // Create services
   final apiService = CoquiApiService();
   final appRestartService = AppRestartService();
   final databaseService = DatabaseService();
-  final instanceService = InstanceService();
+  final instanceService = InstanceService(runtimeConfig: runtimeConfig);
   final localDataResetService = LocalDataResetService(
     databaseService: databaseService,
     instanceService: instanceService,
@@ -91,6 +96,7 @@ Future<void> _initializeApp() async {
         Provider.value(value: databaseService),
         Provider.value(value: instanceService),
         Provider.value(value: localDataResetService),
+        Provider<RuntimeConfig>.value(value: runtimeConfig),
         ChangeNotifierProvider(
           create: (_) => InstanceProvider(
             instanceService: instanceService,
