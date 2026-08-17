@@ -30,6 +30,17 @@ void main() {
       expect(RuntimeConfig.apiVersionFromBase('/api'), 'v1');
       expect(RuntimeConfig.apiVersionFromBase('/gateway/v9'), 'v1');
     });
+
+    test('rejects a segment that is not a version', () {
+      // `..` is the dangerous one: Uri.replace normalizes dot segments away,
+      // so an unvalidated `..` strips the whole /api/<version> prefix and
+      // every request lands in the SPA catch-all.
+      expect(RuntimeConfig.apiVersionFromBase('/api/..'), 'v1');
+      expect(RuntimeConfig.apiVersionFromBase('/api/.'), 'v1');
+      expect(RuntimeConfig.apiVersionFromBase('/api/admin'), 'v1');
+      expect(RuntimeConfig.apiVersionFromBase('/api/v1beta'), 'v1');
+      expect(RuntimeConfig.apiVersionFromBase('/api/V1'), 'v1');
+    });
   });
 
   group('RuntimeConfig.fromResponseBody', () {

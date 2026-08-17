@@ -52,6 +52,11 @@ class RuntimeConfig {
   ///
   /// Anything else — absent, malformed, or a different mount point — falls
   /// back to `v1`, the same-origin default.
+  ///
+  /// The segment itself must look like a version. An unvalidated segment is
+  /// not merely cosmetic: `..` is normalized away by [Uri.replace], which
+  /// would silently strip the `/api/<version>` prefix off every request and
+  /// route it into the SPA catch-all instead.
   static String apiVersionFromBase(Object? apiBaseUrl) {
     if (apiBaseUrl is! String) return 'v1';
 
@@ -59,6 +64,7 @@ class RuntimeConfig {
         apiBaseUrl.split('/').where((segment) => segment.isNotEmpty).toList();
     if (segments.length < 2 || segments.first != 'api') return 'v1';
 
-    return segments[1];
+    final version = segments[1];
+    return RegExp(r'^v\d+$').hasMatch(version) ? version : 'v1';
   }
 }

@@ -32,13 +32,14 @@ class _FakeInstanceService extends InstanceService {
 }
 
 class _FakeInstanceProvider extends InstanceProvider {
-  _FakeInstanceProvider({required this.supported})
+  _FakeInstanceProvider({required this.supported, this.restarting = false})
       : super(
           instanceService: _FakeInstanceService(),
           apiService: CoquiApiService(),
         );
 
   final bool supported;
+  final bool restarting;
   int restartCalls = 0;
 
   @override
@@ -58,7 +59,7 @@ class _FakeInstanceProvider extends InstanceProvider {
   bool get restartRequired => false;
 
   @override
-  bool get isRestarting => false;
+  bool get isRestarting => restarting;
 
   @override
   bool? get isOnline => true;
@@ -79,6 +80,7 @@ Future<void> _pumpSettings(
   WidgetTester tester, {
   required RuntimeConfig runtimeConfig,
   required _FakeInstanceProvider provider,
+  bool settle = true,
 }) async {
   addTearDown(provider.dispose);
 
@@ -95,7 +97,13 @@ Future<void> _pumpSettings(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  // The restarting state renders an indeterminate spinner, which never
+  // settles — pump a single frame for that case instead.
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
 
   // InstanceProvider's constructor starts a periodic health timer. Cancel it
   // inside the test body so the pending-timer invariant check passes — the
@@ -154,6 +162,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(provider.restartCalls, 1);
+    // The modal progress dialog must be gone, and the success SnackBar shown.
+    expect(
+      find.text(
+        'Restarting the API server and waiting for it to come back online...',
+      ),
+      findsNothing,
+    );
+    expect(find.text('API restarted and is back online.'), findsOneWidget);
+  });
+
+  testWidgets('a restart already in flight renders as busy and cannot re-fire',
+      (tester) async {
+    final provider = _FakeInstanceProvider(supported: true, restarting: true);
+
+    await _pumpSettings(
+      tester,
+      runtimeConfig: const RuntimeConfig(
+        bundled: true,
+        baseUrl: 'http://coqui.example:8080',
+      ),
+      provider: provider,
+      settle: false,
+    );
+
+    expect(find.text('Restarting server'), findsOneWidget);
+    expect(find.text('Restart server'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(ListTile),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Restarting server'));
+    await tester.pump();
+
+    expect(find.text('Restart this server?'), findsNothing);
+    expect(provider.restartCalls, 0);
   });
 
   testWidgets('cancelling the confirmation does not restart', (tester) async {

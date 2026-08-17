@@ -57,32 +57,37 @@ Future<void> restartServerFromPrompt(
 }) async {
   final instanceProvider = context.read<InstanceProvider>();
   final messenger = ScaffoldMessenger.of(context);
+  // Captured up front so the progress dialog can still be dismissed after the
+  // calling subtree unmounts, and tracked by its own lifetime so a dialog the
+  // user already dismissed never pops the caller's route instead.
+  final navigator = Navigator.of(context, rootNavigator: true);
+  var dialogOpen = true;
 
-  showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => const AlertDialog(
-      content: Row(
-        children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Text('Restarting the API server and waiting for it to come back online...'),
-          ),
-        ],
+  unawaited(
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Text('Restarting the API server and waiting for it to come back online...'),
+            ),
+          ],
+        ),
       ),
-    ),
+    ).whenComplete(() => dialogOpen = false),
   );
 
   try {
     final success = await instanceProvider.requestServerRestart();
-    if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
+    if (dialogOpen) navigator.pop();
 
     if (!context.mounted) return;
 
@@ -104,8 +109,9 @@ Future<void> restartServerFromPrompt(
       ),
     );
   } catch (error) {
+    if (dialogOpen) navigator.pop();
+
     if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
       messenger.showSnackBar(
         SnackBar(content: Text(CoquiException.friendly(error).message)),
       );

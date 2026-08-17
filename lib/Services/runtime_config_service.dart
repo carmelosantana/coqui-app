@@ -14,7 +14,7 @@ import 'package:coqui_app/Platform/platform_info.dart';
 class RuntimeConfigService {
   static const String configPath = '/config.json';
 
-  final http.Client _client;
+  http.Client? _client;
   final Duration _timeout;
   final bool _isWeb;
   final String Function() _originResolver;
@@ -24,10 +24,14 @@ class RuntimeConfigService {
     Duration timeout = const Duration(seconds: 3),
     bool? isWeb,
     String Function()? originResolver,
-  })  : _client = client ?? http.Client(),
+  })  : _client = client,
         _timeout = timeout,
         _isWeb = isWeb ?? PlatformInfo.isWeb,
         _originResolver = originResolver ?? _pageOrigin;
+
+  /// The injected client, or one created on first use. [load] short-circuits
+  /// on native builds before touching this, so they allocate nothing.
+  http.Client get _http => _client ??= http.Client();
 
   static String _pageOrigin() => Uri.base.origin;
 
@@ -36,6 +40,8 @@ class RuntimeConfigService {
 
     final String origin;
     try {
+      // Deliberately bare: a non-http origin makes `Uri.base.origin` throw a
+      // StateError, which is an Error, not an Exception.
       origin = _originResolver();
     } catch (_) {
       return RuntimeConfig.notBundled;
@@ -43,12 +49,15 @@ class RuntimeConfigService {
 
     try {
       final response =
-          await _client.get(Uri.parse('$origin$configPath')).timeout(_timeout);
+          await _http.get(Uri.parse('$origin$configPath')).timeout(_timeout);
 
       if (response.statusCode != 200) return RuntimeConfig.notBundled;
 
       return RuntimeConfig.fromResponseBody(response.body, origin: origin);
-    } catch (_) {
+    } on Exception catch (_) {
+      // Covers every spec'd failure mode (ClientException, TimeoutException,
+      // FormatException) while letting a genuine programming Error surface
+      // instead of masquerading as "not bundled".
       return RuntimeConfig.notBundled;
     }
   }

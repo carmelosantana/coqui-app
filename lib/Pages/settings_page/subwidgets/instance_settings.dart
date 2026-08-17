@@ -64,11 +64,15 @@ class _InstanceSettingsState extends State<InstanceSettings> {
                   },
                 );
               }),
-            if (showBundledRestart)
+            if (showBundledRestart) ...[
+              // Separates the action from the configured-server rows above so
+              // it does not read as one more server.
+              const Divider(height: 24),
               _BundledRestartTile(
                 isRestarting: instanceProvider.isRestarting,
                 onRestart: () => _confirmRestart(context),
               ),
+            ],
           ],
         );
       },
