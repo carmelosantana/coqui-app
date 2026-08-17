@@ -4,8 +4,10 @@ import 'package:uuid/uuid.dart';
 import 'package:coqui_app/Models/coqui_exception.dart';
 import 'package:coqui_app/Models/coqui_instance.dart';
 import 'package:coqui_app/Models/request_state.dart';
+import 'package:coqui_app/Models/runtime_config.dart';
 import 'package:coqui_app/Providers/instance_provider.dart';
 import 'package:coqui_app/Services/coqui_api_service.dart';
+import 'package:coqui_app/Utils/server_restart_prompt.dart';
 
 class InstanceSettings extends StatefulWidget {
   const InstanceSettings({super.key});
@@ -17,8 +19,13 @@ class InstanceSettings extends StatefulWidget {
 class _InstanceSettingsState extends State<InstanceSettings> {
   @override
   Widget build(BuildContext context) {
+    final runtimeConfig = context.watch<RuntimeConfig>();
+
     return Consumer<InstanceProvider>(
       builder: (context, instanceProvider, _) {
+        final showBundledRestart =
+            runtimeConfig.bundled && instanceProvider.restartState.supported;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -57,6 +64,11 @@ class _InstanceSettingsState extends State<InstanceSettings> {
                   },
                 );
               }),
+            if (showBundledRestart)
+              _BundledRestartTile(
+                isRestarting: instanceProvider.isRestarting,
+                onRestart: () => _confirmRestart(context),
+              ),
           ],
         );
       },
@@ -107,6 +119,35 @@ class _InstanceSettingsState extends State<InstanceSettings> {
     if (confirmed != true) return;
     if (!mounted) return;
     await instanceProvider.removeInstance(instance.id);
+  }
+
+  Future<void> _confirmRestart(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restart this server?'),
+        content: const Text(
+          'The Coqui server running alongside this app will restart. '
+          'The app reconnects automatically once it is back online.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Restart'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    await restartServerFromPrompt(context);
   }
 }
 
@@ -337,5 +378,42 @@ class _InstanceFormDialogState extends State<_InstanceFormDialog> {
     );
 
     Navigator.pop(context, instance);
+  }
+}
+
+/// On-demand restart for a bundled deployment's co-located server.
+///
+/// Only rendered when the deployment is bundled *and* the server reports that
+/// restart is supported (i.e. it is launcher-managed).
+class _BundledRestartTile extends StatelessWidget {
+  final bool isRestarting;
+  final VoidCallback onRestart;
+
+  const _BundledRestartTile({
+    required this.isRestarting,
+    required this.onRestart,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      leading: isRestarting
+          ? SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
+            )
+          : const Icon(Icons.restart_alt),
+      title: Text(isRestarting ? 'Restarting server' : 'Restart server'),
+      subtitle: const Text(
+        'Restart the Coqui server running alongside this app.',
+      ),
+      onTap: isRestarting ? null : onRestart,
+    );
   }
 }
