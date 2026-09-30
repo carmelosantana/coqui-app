@@ -67,3 +67,7 @@ android/app/*.jks
 *.p12
 .vercel
 .env*.local
+
+# Local agent worktrees and e2e secrets
+/.worktrees/
+/scripts/e2e/.env
