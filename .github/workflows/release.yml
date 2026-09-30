@@ -123,53 +123,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Import Apple certificate
-        env:
-          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          CERT_PATH="$RUNNER_TEMP/certificate.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-
-          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
-
-          if ! openssl pkcs12 -legacy -in "$CERT_PATH" -info -noout -passin "pass:$CERTIFICATE_PASSWORD" >/dev/null 2>&1; then
-            echo "Decoded MACOS_CERTIFICATE_P12 is not a valid PKCS#12 bundle or the password is incorrect." >&2
-            exit 1
-          fi
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-      - name: Build macOS release
+      # NOTE: Apple code signing is temporarily disabled. The macOS Release
+      # config in macos/Runner.xcodeproj is set to ad-hoc signing ("-"), which
+      # builds without any certificate. The resulting .app/.dmg is UNSIGNED and
+      # will be blocked by Gatekeeper. Re-enable real Developer ID signing +
+      # notarization (cert import, Determine signing identity, --notarize) once
+      # the Apple certificates are re-provisioned. See task follow-up.
+      - name: Build macOS release (unsigned / ad-hoc)
         run: flutter build macos --release
 
-      - name: Determine signing identity
-        id: identity
-        run: |
-          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/app-signing.keychain-db" | grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          if [[ -z "$IDENTITY" ]]; then
-            echo "Developer ID Application identity not found in CI keychain" >&2
-            exit 1
-          fi
-          echo "name=${IDENTITY}" >> "$GITHUB_OUTPUT"
-
-      - name: Package DMG
-        env:
-          CODESIGN_IDENTITY: ${{ steps.identity.outputs.name }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Package DMG (unsigned)
         run: |
           ./scripts/package-macos.sh \
             --version "${{ steps.version.outputs.version }}" \
-            --notarize
+            --no-sign
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -177,10 +144,6 @@ jobs:
           name: macos-dmg
           path: build/macos/Coqui-${{ steps.version.outputs.version }}-macos-arm64.dmg
           if-no-files-found: error
-
-      - name: Cleanup keychain
-        if: always()
-        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
 
   # ── iOS ─────────────────────────────────────────────────────────────
   build-ios:
@@ -208,60 +171,36 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Import Apple certificate
-        env:
-          CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      # NOTE: Apple code signing is temporarily disabled. We build an UNSIGNED
+      # .app (flutter build ios --no-codesign) and hand-package it into an
+      # unsigned .ipa (Payload/ layout). This IPA cannot be installed on a
+      # device or submitted to the App Store — it only proves the app compiles
+      # and produces an artifact. Re-enable signing (cert import + provisioning
+      # profile + `flutter build ipa --export-options-plist`) once the Apple
+      # certificates / profiles are re-provisioned. See task follow-up.
+      - name: Build iOS app (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
         run: |
-          CERT_PATH="$RUNNER_TEMP/certificate.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-
-          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
-
-          if ! openssl pkcs12 -legacy -in "$CERT_PATH" -info -noout -passin "pass:$CERTIFICATE_PASSWORD" >/dev/null 2>&1; then
-            echo "Decoded APPLE_CERTIFICATE_P12 is not a valid PKCS#12 bundle or the password is incorrect." >&2
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "Expected unsigned app not found at $APP_PATH" >&2
             exit 1
           fi
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-      - name: Install iOS provisioning profile
-        env:
-          PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
-        run: |
-          PP_PATH="$RUNNER_TEMP/ios_profile.mobileprovision"
-          echo "$PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
-
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      - name: Build IPA
-        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
-
-      - name: Rename IPA
-        run: |
-          IPA_FILE=$(find build/ios/ipa -name "*.ipa" -type f | head -1)
-          if [[ -n "$IPA_FILE" ]]; then
-            mv "$IPA_FILE" "build/ios/ipa/Coqui-${{ steps.version.outputs.version }}-ios.ipa"
-          fi
+          OUT_DIR="build/ios/ipa"
+          rm -rf "$OUT_DIR/Payload"
+          mkdir -p "$OUT_DIR/Payload"
+          cp -R "$APP_PATH" "$OUT_DIR/Payload/"
+          ( cd "$OUT_DIR" && zip -qr "Coqui-${{ steps.version.outputs.version }}-ios-unsigned.ipa" Payload )
+          rm -rf "$OUT_DIR/Payload"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: build/ios/ipa/Coqui-${{ steps.version.outputs.version }}-ios.ipa
+          path: build/ios/ipa/Coqui-${{ steps.version.outputs.version }}-ios-unsigned.ipa
           if-no-files-found: error
-
-      - name: Cleanup keychain
-        if: always()
-        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
 
   # ── Linux ───────────────────────────────────────────────────────────
   build-linux:
